@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
+import aprendizado
 import config
 import saude
 import tarefas
@@ -47,6 +48,7 @@ def classificar(agente_id: str, texto: str) -> Dificuldade:
         dificuldade = Dificuldade.media
     else:
         dificuldade = Dificuldade.simples
+    dificuldade = Dificuldade(aprendizado.ajustar(agente_id, dificuldade.value, texto))  # aprende com o histórico
     piso = PISO_DIFICULDADE.get(agente_id, Dificuldade.simples)
     return max(dificuldade, piso, key=_ORDEM.index)
 

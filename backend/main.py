@@ -9,6 +9,7 @@ from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconne
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import aprendizado
 import config
 import diretora
 import orquestrador
@@ -16,7 +17,7 @@ import saude
 import tarefas
 from auth import autenticar, criar_token, validar_token
 from conexoes import gerenciador
-from estado import Status, buscar_agente, pode_acessar, snapshot
+from estado import Status, andar_do_agente, buscar_agente, pode_acessar, snapshot
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("veraneio")
@@ -27,6 +28,7 @@ TAMANHO_MAX_TEXTO = 4000
 @asynccontextmanager
 async def ciclo_de_vida(_: FastAPI):
     tarefas.iniciar()
+    aprendizado.carregar()
     diretora.vincular_loop(asyncio.get_running_loop())
     fila = asyncio.create_task(orquestrador.processar_fila())
     yield
@@ -68,9 +70,16 @@ def listar_tarefas(authorization: str = Header("")):
                 "pausado": tarefas.orcamento_pausado(),  # Claude pausado; a fila segue em contingência
             },
             "modelos_fora": saude.resumo(),
+            "aprendizado": aprendizado.resumo(_nome_do_agente),
         },
         "tarefas": [_tarefa_publica(linha) for linha in tarefas.listar(filtro)],
     }
+
+
+def _nome_do_agente(agente_id: str) -> str:
+    andar = andar_do_agente(agente_id)
+    agente = buscar_agente(andar, agente_id) if andar else None
+    return agente.nome if agente else agente_id
 
 
 def _tarefa_publica(linha) -> dict:

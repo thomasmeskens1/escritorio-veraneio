@@ -8,6 +8,7 @@ import asyncio
 import logging
 import time
 
+import aprendizado
 import diretora
 import saude
 import tarefas
@@ -110,6 +111,8 @@ def _mensagem(linha) -> dict:
 async def _entregar(linha) -> None:
     if await gerenciador.enviar_para_usuario(linha["usuario"], _mensagem(linha)):
         tarefas.atualizar(linha["id"], entregue=1)
+    if linha["status"] in ("concluida", "falhou"):
+        _em_segundo_plano(aprendizado.talvez_treinar())
 
 
 async def entregar_pendentes(login: str) -> None:
