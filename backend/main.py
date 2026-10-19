@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 import config
 import orquestrador
+import saude
 import tarefas
 from auth import autenticar, criar_token, validar_token
 from conexoes import gerenciador
@@ -62,8 +63,9 @@ def listar_tarefas(authorization: str = Header("")):
                 "gasto_mes_usd": round(tarefas.gasto_mes_usd(), 4),
                 "credito_mensal_usd": config.CREDITO_MENSAL_ANTHROPIC_USD,
                 "liberado_ate_hoje_usd": round(tarefas.liberado_ate_hoje_usd(), 2),
-                "pausado": tarefas.orcamento_pausado(),
+                "pausado": tarefas.orcamento_pausado(),  # Claude pausado; a fila segue em contingência
             },
+            "modelos_fora": saude.resumo(),
         },
         "tarefas": [_tarefa_publica(linha) for linha in tarefas.listar(filtro)],
     }

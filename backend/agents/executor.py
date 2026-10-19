@@ -51,9 +51,9 @@ def _agente(agente_id: str, llm: LLM, delegar: bool = False) -> Agent:
                  max_retry_limit=0, verbose=False)
 
 
-def _montar_crew(agente_id: str, texto: str, etapa: Etapa) -> Crew:
+def _montar_crew(agente_id: str, texto: str, etapa: Etapa, historico: list) -> Crew:
     llm = _llm(etapa.modelo, etapa.limite_s)
-    descricao = descricao_tarefa(agente_id, texto)
+    descricao = descricao_tarefa(agente_id, texto, historico)
 
     if agente_id == "gestor":
         # Com o Claude, só o Gestor usa o modelo forte; a equipe usa o padrão, bem mais barato.
@@ -74,13 +74,13 @@ def _descartar_erro(futuro: asyncio.Future) -> None:
         futuro.exception()  # evita aviso de exceção não lida após o tempo limite
 
 
-async def executar(agente_id: str, texto: str, etapa: Etapa) -> Resultado:
+async def executar(agente_id: str, texto: str, etapa: Etapa, historico: list = ()) -> Resultado:
     """Roda a Crew numa thread. Estourando o limite, levanta TimeoutError (a thread termina sozinha,
     limitada pelo timeout do LLM, e só então libera o modelo local)."""
     local = etapa.modelo.startswith("ollama/")
     if local and _trava_local.locked():
         raise LocalOcupado
-    crew = _montar_crew(agente_id, texto, etapa)
+    crew = _montar_crew(agente_id, texto, etapa, historico)
 
     if local:
         await _trava_local.acquire()

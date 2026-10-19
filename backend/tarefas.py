@@ -2,7 +2,7 @@
 
 import calendar
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import config
 
@@ -25,16 +25,24 @@ CREATE TABLE IF NOT EXISTS tarefas (
     motivo TEXT,
     entregue INTEGER NOT NULL DEFAULT 0,
     criada_em TEXT NOT NULL,
-    concluida_em TEXT
+    concluida_em TEXT,
+    tentativas_fila INTEGER NOT NULL DEFAULT 0,
+    proxima_tentativa TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tarefas_status ON tarefas(status);
 """
 
+# Colunas adicionadas depois da primeira versão do banco (migração simples).
+_COLUNAS_NOVAS = {"tentativas_fila": "INTEGER NOT NULL DEFAULT 0", "proxima_tentativa": "TEXT"}
+
+MAX_TENTATIVAS_FILA = 6
+INTERVALO_REAGENDAMENTO = timedelta(minutes=30)
+
 _conexao: sqlite3.Connection | None = None
 
 
-def _agora() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+def _agora(depois: timedelta = timedelta()) -> str:
+    return (datetime.now(timezone.utc) + depois).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _db() -> sqlite3.Connection:
@@ -44,6 +52,10 @@ def _db() -> sqlite3.Connection:
         _conexao = sqlite3.connect(config.ARQUIVO_BANCO, check_same_thread=False)
         _conexao.row_factory = sqlite3.Row
         _conexao.executescript(_ESQUEMA)
+        existentes = {linha["name"] for linha in _conexao.execute("PRAGMA table_info(tarefas)")}
+        for coluna, tipo in _COLUNAS_NOVAS.items():
+            if coluna not in existentes:
+                _conexao.execute(f"ALTER TABLE tarefas ADD COLUMN {coluna} {tipo}")
     return _conexao
 
 
@@ -83,7 +95,31 @@ def obter(tarefa_id: int) -> sqlite3.Row:
 
 
 def proximas_adiadas() -> list[sqlite3.Row]:
-    return _db().execute("SELECT * FROM tarefas WHERE status = 'adiada' ORDER BY id").fetchall()
+    """Adiadas prontas para tentar agora (respeita o reagendamento)."""
+    return _db().execute(
+        "SELECT * FROM tarefas WHERE status = 'adiada' AND (proxima_tentativa IS NULL OR proxima_tentativa <= ?) "
+        "ORDER BY id", (_agora(),),
+    ).fetchall()
+
+
+def reagendar(tarefa_id: int) -> bool:
+    """Devolve a tarefa à fila para daqui a pouco; False se já esgotou as tentativas."""
+    linha = obter(tarefa_id)
+    if linha["tentativas_fila"] + 1 >= MAX_TENTATIVAS_FILA:
+        return False
+    atualizar(tarefa_id, status="adiada", tentativas_fila=linha["tentativas_fila"] + 1,
+              proxima_tentativa=_agora(INTERVALO_REAGENDAMENTO))
+    return True
+
+
+def historico(usuario: str, andar: str, agente: str, antes_de: int, limite: int = 3) -> list[sqlite3.Row]:
+    """Últimas trocas concluídas com o mesmo agente (contexto para qualquer modelo que assumir)."""
+    linhas = _db().execute(
+        "SELECT texto, resposta FROM tarefas WHERE usuario = ? AND andar = ? AND agente = ? "
+        "AND status = 'concluida' AND id < ? ORDER BY id DESC LIMIT ?",
+        (usuario, andar, agente, antes_de, limite),
+    ).fetchall()
+    return list(reversed(linhas))
 
 
 def nao_entregues(usuario: str) -> list[sqlite3.Row]:

@@ -72,9 +72,17 @@ def _contexto_construtor() -> str:
     )
 
 
-def descricao_tarefa(agente_id: str, texto: str) -> str:
+def _resumo_historico(historico: list) -> str:
+    """Trocas anteriores, encurtadas para não pesar em tokens."""
+    trocas = [f"- Usuário: {h['texto'][:300]}\n  Você: {(h['resposta'] or '')[:600]}" for h in historico]
+    return "Conversa recente com este usuário (use como contexto):\n" + "\n".join(trocas)
+
+
+def descricao_tarefa(agente_id: str, texto: str, historico: list = ()) -> str:
     """Monta a descrição da Task com o contexto que cada agente precisa."""
     partes = [f"Pedido do usuário: {texto}", INSTRUCOES]
+    if historico:
+        partes.insert(0, _resumo_historico(historico))
     if agente_id in AGENTES_ESCOLA:
         partes.append(f"Baseie-se apenas neste manual da ferramenta:\n{MANUAL_ESCOLA}")
     if agente_id == "construtor":

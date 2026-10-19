@@ -30,10 +30,11 @@ Cores do status: cinza = dormindo, verde = disponível, laranja = trabalhando.
 - Para trabalhos que envolvem várias áreas, fale com o Gestor: ele divide e delega.
 
 ## Dificuldade, tempo e fila
-- Cada tarefa é classificada automaticamente como simples, média ou complexa (pelo tamanho do pedido e pelo tipo de trabalho; tarefas do Gestor e do Construtor são complexas).
+- Cada tarefa é classificada automaticamente como simples, média ou complexa (pelo tamanho do pedido e pelo tipo de trabalho; tarefas do Gestor e do Construtor são no mínimo médias).
 - Primeiro tentam modelos de IA gratuitos; tarefas simples e médias também podem rodar no modelo local (mais lento).
-- Se demorar demais ou falhar, a tarefa é ADIADA para a fila do Claude e você recebe a resposta assim que for processada, mesmo que tenha saído (ela chega quando você voltar).
-- O Claude usa um crédito mensal com ritmo diário; se o orçamento do dia acabar, a fila retoma no dia seguinte.
+- Se um modelo esgotar a cota, ele sai da rota até a cota voltar e o próximo assume, com o histórico recente da conversa.
+- Se demorar demais ou falhar, a tarefa é ADIADA para a fila e você recebe a resposta assim que for processada, mesmo que tenha saído (ela chega quando você voltar).
+- Na fila, o Claude atende primeiro: Haiku para tarefas simples e médias, Sonnet só para as complexas. Ele usa um crédito mensal com ritmo diário; quando esse ritmo ou o crédito acabam, a fila continua com os modelos gratuitos e o local (nunca para).
 - Clique no Despachante, no Porão, para ver o painel com todas as tarefas, tempos e o uso do crédito.
 
 ## Dúvidas comuns

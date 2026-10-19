@@ -128,7 +128,20 @@ async function carregarTarefas() {
 
 // ---------- Renderização ----------
 function renderizarPainel({ resumo = {}, tarefas = [] }) {
-  painelConteudo.replaceChildren(criarResumo(resumo), criarCredito(resumo.anthropic), criarListaTarefas(tarefas));
+  const blocos = [criarResumo(resumo), criarCredito(resumo.anthropic), criarModelosFora(resumo.modelos_fora), criarListaTarefas(tarefas)];
+  painelConteudo.replaceChildren(...blocos.filter(Boolean));
+}
+
+// Modelos que estouraram cota/crédito e estão fora da rota até a cota voltar.
+function criarModelosFora(modelos = []) {
+  if (!modelos.length) return null;
+  const caixa = novoEl('section', 'credito');
+  caixa.append(novoEl('h3', null, 'Modelos fora da rota'));
+  modelos.forEach(({ modelo, motivo, volta_em: volta }) => {
+    const quando = new Date(volta).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    caixa.append(novoEl('p', 'credito-legenda', `${abreviarModelo(modelo)} · ${motivo} · volta em ${quando}`));
+  });
+  return caixa;
 }
 
 function criarResumo(resumo) {
@@ -140,7 +153,7 @@ function criarResumo(resumo) {
     grade.append(cartao);
   });
   const fila = novoEl('div', 'resumo-cartao resumo-fila');
-  fila.append(novoEl('strong', null, resumo.fila_anthropic ?? 0), novoEl('span', null, 'Fila do Claude'));
+  fila.append(novoEl('strong', null, resumo.fila_anthropic ?? 0), novoEl('span', null, 'Na fila'));
   grade.append(fila);
   return grade;
 }
@@ -176,7 +189,9 @@ function criarCredito(anthropic) {
   legenda.append(novoEl('i', 'credito-ponto', ''), document.createTextNode(`Liberado até hoje (ritmo diário): ${moedaUsd(liberado)}`));
   caixa.append(valores, barra, legenda);
 
-  if (anthropic.pausado) caixa.append(novoEl('p', 'credito-pausado', 'Orçamento do dia atingido — fila retoma amanhã'));
+  if (anthropic.pausado) {
+    caixa.append(novoEl('p', 'credito-pausado', 'Ritmo diário do Claude atingido — a fila segue com os modelos gratuitos e o local'));
+  }
   return caixa;
 }
 

@@ -1,18 +1,22 @@
-"""Orquestra as tarefas: execução imediata (gratuito → local), fila adiada do Claude e entrega das respostas."""
+"""Orquestra as tarefas: execução imediata (gratuito → local), fila adiada e entrega das respostas.
+
+A fila nunca trava: tenta o Claude (Haiku/Sonnet) e, se ele estiver indisponível (crédito do mês
+esgotado ou ritmo diário atingido), segue em contingência com os gratuitos e o modelo local.
+"""
 
 import asyncio
 import logging
 import time
 
+import saude
 import tarefas
 from conexoes import gerenciador
 from estado import Agente, Status, buscar_agente, snapshot
-from roteamento import Dificuldade, Etapa, classificar, etapa_fila, etapas_imediatas
+from roteamento import Dificuldade, Etapa, classificar, etapa_fila, etapas_contingencia, etapas_imediatas
 
 log = logging.getLogger(__name__)
 
-INTERVALO_FILA = 5          # segundos entre verificações da fila
-ESPERA_ORCAMENTO = 10 * 60  # orçamento do dia esgotado: tenta de novo mais tarde
+INTERVALO_FILA = 5  # segundos entre verificações da fila
 
 _em_andamento: set[asyncio.Task] = set()  # referência forte às tarefas em segundo plano
 
@@ -23,7 +27,7 @@ async def atualizar_status(agente: Agente, status: Status) -> None:
 
 
 def ha_modelo_disponivel() -> bool:
-    return any(etapas_imediatas(d) or etapa_fila(d) for d in Dificuldade)
+    return bool(etapas_contingencia() or etapa_fila(Dificuldade.simples))
 
 
 async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str) -> None:
@@ -35,43 +39,49 @@ async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str) -> Non
     execucao.add_done_callback(_em_andamento.discard)
 
 
-async def _tentar(tarefa_id: int, agente: Agente, texto: str, etapa: Etapa):
-    """Uma tentativa num modelo. Devolve (resultado ou None, descrição do erro)."""
+async def _tentar(tarefa, agente: Agente, etapa: Etapa):
+    """Uma tentativa num modelo, com o histórico da conversa. Devolve (resultado ou None, erro)."""
     from agents.executor import LocalOcupado, executar  # import tardio: CrewAI é pesado
 
+    historico = tarefas.historico(tarefa["usuario"], tarefa["andar"], tarefa["agente"], tarefa["id"])
     inicio = time.monotonic()
     try:
-        return await executar(agente.id, texto, etapa), ""
+        return await executar(agente.id, tarefa["texto"], etapa, historico), ""
     except LocalOcupado:
         return None, "modelo local ocupado"
     except asyncio.TimeoutError:
         erro = f"excedeu {etapa.limite_s // 60} min"
     except Exception as e:
         erro = str(e)
+        saude.registrar_falha(etapa.modelo, erro)  # estourou? sai da rota até a cota voltar
     finally:
-        tarefas.registrar_tentativa(tarefa_id, time.monotonic() - inicio)
-    log.warning("Tarefa %s: %s falhou (%s).", tarefa_id, etapa.modelo, erro[:200])
+        tarefas.registrar_tentativa(tarefa["id"], time.monotonic() - inicio)
+    log.warning("Tarefa %s: %s falhou (%s).", tarefa["id"], etapa.modelo, erro[:200])
     return None, erro
+
+
+async def _executar_etapas(tarefa, agente: Agente, etapas: list[Etapa]) -> bool:
+    """Troca de modelo a cada falha, até um concluir."""
+    for etapa in etapas:
+        resultado, _ = await _tentar(tarefa, agente, etapa)
+        if resultado:
+            await _concluir(tarefa["id"], etapa.modelo, resultado)
+            return True
+    return False
 
 
 async def _executar_imediata(tarefa_id: int, agente: Agente, dificuldade: Dificuldade) -> None:
     tarefa = tarefas.obter(tarefa_id)
     try:
-        for etapa in etapas_imediatas(dificuldade):
-            resultado, _ = await _tentar(tarefa_id, agente, tarefa["texto"], etapa)
-            if resultado:
-                return await _concluir(tarefa_id, etapa.modelo, resultado)
-
-        motivo = "Os modelos gratuitos e o local não concluíram a tarefa a tempo."
-        if etapa_fila(dificuldade):
-            tarefas.atualizar(tarefa_id, status="adiada", motivo=motivo)
-            await gerenciador.enviar_para_usuario(tarefa["usuario"], {
-                "tipo": "tarefa_adiada", "andar": tarefa["andar"], "agente": agente.id, "tarefa_id": tarefa_id,
-                "texto": f"{motivo} Ela foi para a fila do Claude; a resposta chega assim que for processada.",
-            })
-        else:
-            tarefas.atualizar(tarefa_id, status="falhou", motivo=motivo)
-            await _entregar(tarefas.obter(tarefa_id))
+        if await _executar_etapas(tarefa, agente, etapas_imediatas(dificuldade, agente.id)):
+            return
+        destino = "fila do Claude" if etapa_fila(dificuldade) else "fila de contingência (gratuitos e local)"
+        tarefas.atualizar(tarefa_id, status="adiada", motivo="Os modelos imediatos não concluíram a tarefa a tempo.")
+        await gerenciador.enviar_para_usuario(tarefa["usuario"], {
+            "tipo": "tarefa_adiada", "andar": tarefa["andar"], "agente": agente.id, "tarefa_id": tarefa_id,
+            "texto": f"Os modelos imediatos não concluíram a tarefa a tempo. Ela foi para a {destino}; "
+                     "a resposta chega assim que for processada.",
+        })
     finally:
         await atualizar_status(agente, Status.disponivel)
 
@@ -103,7 +113,7 @@ async def entregar_pendentes(login: str) -> None:
         await _entregar(linha)
 
 
-# --- Fila adiada (Claude) ---------------------------------------------------------------
+# --- Fila adiada -------------------------------------------------------------------------
 
 async def processar_fila() -> None:
     while True:
@@ -115,36 +125,35 @@ async def processar_fila() -> None:
         await asyncio.sleep(espera)
 
 
+def _etapas_fila(dificuldade: Dificuldade) -> list[Etapa]:
+    """Claude primeiro (se houver crédito e ritmo diário); depois a contingência."""
+    claude = etapa_fila(dificuldade) if not tarefas.orcamento_pausado() else None
+    return ([claude] if claude else []) + etapas_contingencia()
+
+
 async def _processar_proxima() -> int:
     """Processa uma tarefa adiada; devolve quantos segundos esperar antes da próxima."""
-    if tarefas.orcamento_pausado():
-        return ESPERA_ORCAMENTO
-
     for linha in tarefas.proximas_adiadas():
         agente = buscar_agente(linha["andar"], linha["agente"])
-        etapa = etapa_fila(Dificuldade(linha["dificuldade"]))
-        if not agente or not etapa:
-            tarefas.atualizar(linha["id"], status="falhou", motivo="Agente ou modelo do Claude indisponível.")
+        if not agente:
+            tarefas.atualizar(linha["id"], status="falhou", motivo="Agente não existe mais.")
             await _entregar(tarefas.obter(linha["id"]))
             continue
-        if agente.status == Status.trabalhando:
-            continue  # tenta outra; esta volta na próxima rodada
+        etapas = _etapas_fila(Dificuldade(linha["dificuldade"]))
+        if agente.status == Status.trabalhando or not etapas:
+            continue  # agente ocupado ou nenhum modelo no ar agora: fica para a próxima rodada
 
         tarefas.atualizar(linha["id"], status="executando")
         await atualizar_status(agente, Status.trabalhando)
         try:
-            resultado, erro = await _tentar(linha["id"], agente, linha["texto"], etapa)
+            concluiu = await _executar_etapas(linha, agente, etapas)
         finally:
             await atualizar_status(agente, Status.disponivel)
 
-        if resultado:
-            await _concluir(linha["id"], etapa.modelo, resultado)
-            return 0
-        if "credit balance" in erro.lower():  # crédito do mês acabou: mantém na fila
-            tarefas.atualizar(linha["id"], status="adiada")
-            return ESPERA_ORCAMENTO
-        tarefas.atualizar(linha["id"], status="falhou", motivo="O Claude também não concluiu a tarefa.")
-        await _entregar(tarefas.obter(linha["id"]))
+        if not concluiu and not tarefas.reagendar(linha["id"]):
+            tarefas.atualizar(linha["id"], status="falhou",
+                              motivo="Nenhum modelo conseguiu concluir a tarefa após várias tentativas.")
+            await _entregar(tarefas.obter(linha["id"]))
         return 0
 
     return INTERVALO_FILA
