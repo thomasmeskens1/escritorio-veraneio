@@ -7,6 +7,7 @@ o próximo lê o plano e a passagem e continua da primeira etapa pendente: nada 
 import json
 import re
 import threading
+import unicodedata
 from pathlib import Path
 from typing import Callable
 
@@ -17,6 +18,8 @@ EQUIPE = {"designer": "Designer", "moviemaker": "Moviemaker", "gestor_trafego": 
 MAX_ETAPAS = 6
 TRECHO_ETAPA = 1500   # caracteres de cada etapa anterior enviados à próxima
 TRECHO_FINAL = 2500   # caracteres de cada etapa enviados à consolidação
+PALAVRAS_ETAPA = 400  # limite pedido a cada etapa (tempo e tokens)
+PALAVRAS_FINAL = 800
 
 
 class Cancelado(Exception):
@@ -36,14 +39,27 @@ def _gravar(arquivo: Path, texto: str) -> None:
     temporario.replace(arquivo)
 
 
+def _chave(nome: str) -> str:
+    sem_acento = unicodedata.normalize("NFKD", str(nome)).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z]", "", sem_acento.lower())
+
+
+# Aceita o id ("gestor_trafego") ou o nome ("Gestor de Tráfego"), sem diferenciar maiúsculas/acentos.
+_IDS_POR_CHAVE = {**{_chave(i): i for i in EQUIPE}, **{_chave(n): i for i, n in EQUIPE.items()}}
+
+
 def _extrair_plano(texto: str) -> list[dict]:
     bloco = re.search(r"\[.*\]", texto, re.DOTALL)
     if not bloco:
         raise ValueError("O Gestor não devolveu um plano em JSON.")
-    plano = [p for p in json.loads(bloco.group(0)) if isinstance(p, dict) and p.get("agente") in EQUIPE]
+    plano = []
+    for passo in json.loads(bloco.group(0)):
+        agente = _IDS_POR_CHAVE.get(_chave(passo.get("agente", ""))) if isinstance(passo, dict) else None
+        if agente:
+            plano.append({"agente": agente, "instrucao": str(passo.get("instrucao", ""))})
     if not plano:
         raise ValueError("Plano sem etapas válidas.")
-    return [{"agente": p["agente"], "instrucao": str(p.get("instrucao", ""))} for p in plano[:MAX_ETAPAS]]
+    return plano[:MAX_ETAPAS]
 
 
 def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar) -> list[dict]:
@@ -101,7 +117,8 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
         descricao = (
             f"{contexto}\n\nProjeto: {pedido}\n\n{_passagem(pasta, plano)}\n"
             f"Resultados das etapas anteriores:\n{anteriores or '(nenhuma)'}\n\n"
-            f"Sua etapa ({n}): {passo['instrucao']}"
+            f"Sua etapa ({n}): {passo['instrucao']}\n\n"
+            f"Seja objetivo: até ~{PALAVRAS_ETAPA} palavras, só o essencial para as próximas etapas."
         )
         _gravar(arquivo, executar(passo["agente"], descricao, "Entrega completa desta etapa.", "equipe"))
         _passagem(pasta, plano)
@@ -115,6 +132,6 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
             for i, p in enumerate(plano, 1)
         )
         descricao = (f"{contexto}\n\nPedido do usuário: {pedido}\n\nEntregas da equipe:\n{entregas}\n\n"
-                     "Revise e consolide tudo numa entrega final coerente para o usuário.")
+                     f"Revise e consolide tudo numa entrega final coerente para o usuário (até ~{PALAVRAS_FINAL} palavras).")
         _gravar(final, executar("gestor", descricao, "Entrega final consolidada e revisada.", "gestor"))
     return final.read_text(encoding="utf-8")
