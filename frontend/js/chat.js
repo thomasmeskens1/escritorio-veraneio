@@ -1,9 +1,10 @@
-// Modal de conversa com os agentes.
+// Popup do agente: conversa (a ficha de informações fica em js/perfil.js).
 
-const ROTULOS_STATUS = { dormindo: 'Dormindo', disponivel: 'Disponível', trabalhando: 'Trabalhando' };
+const ROTULOS_STATUS = { dormindo: 'Pausado', disponivel: 'Disponível', trabalhando: 'Trabalhando', construindo: 'Em construção' };
 
 const historicos = {}; // 'andar/agente' -> [{ autor, texto, tipo, meta? }]
 const pendentes = new Set(); // agentes com tarefa enviada aguardando resposta
+const rascunhos = {}; // 'andar/agente' -> texto digitado e não enviado
 let chatAberto = null; // { andar, agente }
 
 const modal = document.getElementById('modal');
@@ -53,6 +54,7 @@ function atualizarChat() {
   const dados = dadosAgente(andar, agente);
   const ocupado = dados.status === 'trabalhando' || pendentes.has(chave(andar, agente));
   const online = conectado();
+  const restrito = producaoRestrita(andar, agente);
 
   document.getElementById('modal-nome').textContent = dados.nome;
   document.getElementById('modal-funcao').textContent = dados.funcao || ANDARES[andar].nome;
@@ -61,27 +63,34 @@ function atualizarChat() {
   status.title = ROTULOS_STATUS[dados.status];
 
   document.getElementById('modal-pensando').hidden = !ocupado;
-  modalInput.disabled = ocupado || !online;
-  modalEnviar.disabled = ocupado || !online;
-  modalInput.placeholder = online ? 'Descreva a tarefa...' : 'Sem conexão com o servidor...';
+  modalInput.disabled = ocupado || !online || restrito;
+  modalEnviar.disabled = ocupado || !online || restrito;
+  if (restrito) modalInput.placeholder = 'Envio indisponível para esta conta';
+  else modalInput.placeholder = online ? 'Descreva a tarefa...' : 'Sem conexão com o servidor...';
 }
 
 function abrirChat(andar, agente) {
+  if (chatAberto) rascunhos[chave(chatAberto.andar, chatAberto.agente)] = modalInput.value;
   chatAberto = { andar, agente };
+  modalInput.value = rascunhos[chave(andar, agente)] || '';
   modalHistorico.replaceChildren(...(historicos[chave(andar, agente)] || []).map(criarMensagem));
   modal.classList.add('aberto');
+  carregarPerfil(andar, agente);
   atualizarChat();
   rolarParaFim();
   if (!modalInput.disabled) modalInput.focus();
 }
 
 function fecharChat() {
+  if (chatAberto) rascunhos[chave(chatAberto.andar, chatAberto.agente)] = modalInput.value;
   chatAberto = null;
   modal.classList.remove('aberto');
 }
 
 function limparChat() {
   Object.keys(historicos).forEach((k) => delete historicos[k]);
+  Object.keys(rascunhos).forEach((k) => delete rascunhos[k]);
+  modalInput.value = '';
   pendentes.clear();
 }
 

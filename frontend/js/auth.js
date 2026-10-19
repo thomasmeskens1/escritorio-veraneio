@@ -111,7 +111,11 @@ function encerrarSessao(aviso = '') {
   desconectar();
   fecharChat();
   fecharPainel();
+  limparRegistro();
+  fecharDiretora();
   limparChat();
+  limparPerfis();
+  atualizarContadores({});
   limparToasts();
   encerrarEscritorio();
   document.getElementById('app').hidden = true;

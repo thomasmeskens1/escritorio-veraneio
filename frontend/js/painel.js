@@ -70,19 +70,23 @@ function novoEl(tag, classe, texto) {
 }
 
 // ---------- Abertura ----------
+// conhecimento -> ficha da Diretora; sistema -> painel de tarefas; ia -> popup do agente.
 function abrirAgente(andar, id) {
   const { tipo } = dadosAgente(andar, id);
-  if (tipo === 'conhecimento') return; // Diretora: só os agentes a consultam
-  if (tipo === 'sistema') {
+  if (tipo === 'conhecimento') {
+    abrirDiretora(andar, id);
+  } else if (tipo === 'sistema') {
     abrirPainel();
   } else {
     fecharPainel();
+    fecharDiretora();
     abrirChat(andar, id);
   }
 }
 
 function abrirPainel() {
   if (typeof fecharChat === 'function') fecharChat();
+  if (typeof fecharDiretora === 'function') fecharDiretora();
   painelAberto = true;
   painel.classList.add('aberto');
   if (!painelConteudo.childElementCount) painelConteudo.append(novoEl('p', 'painel-aviso', 'Carregando tarefas...'));

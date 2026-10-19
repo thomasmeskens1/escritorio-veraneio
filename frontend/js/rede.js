@@ -17,10 +17,7 @@ function enviar(dados) {
 }
 
 function atualizarConexao() {
-  const online = conectado();
-  const indicador = document.getElementById('conexao');
-  indicador.classList.toggle('online', online);
-  indicador.title = online ? 'Conectado' : 'Desconectado';
+  atualizarPilula(conectado());
   atualizarChat();
 }
 
@@ -28,6 +25,8 @@ function tratarMensagem(msg) {
   switch (msg.tipo) {
     case 'estado':
       aplicarEstado(msg.andares);
+      atualizarContadores(msg.andares);
+      atualizarCabecalhoDiretora();
       break;
     case 'resposta_agente':
       receberResposta(msg);
