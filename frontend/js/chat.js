@@ -2,7 +2,7 @@
 
 const ROTULOS_STATUS = { dormindo: 'Dormindo', disponivel: 'Disponível', trabalhando: 'Trabalhando' };
 
-const historicos = {}; // 'andar/agente' -> [{ autor, texto, tipo }]
+const historicos = {}; // 'andar/agente' -> [{ autor, texto, tipo, meta? }]
 const pendentes = new Set(); // agentes com tarefa enviada aguardando resposta
 let chatAberto = null; // { andar, agente }
 
@@ -13,15 +13,24 @@ const modalEnviar = document.getElementById('modal-enviar');
 
 const chave = (andar, agente) => `${andar}/${agente}`;
 
-function criarMensagem({ autor, texto, tipo }) {
+function criarMensagem({ autor, texto, tipo, meta }) {
   const div = document.createElement('div');
   div.className = `msg msg-${tipo}`;
   const nome = document.createElement('span');
   nome.className = 'msg-autor';
   nome.textContent = autor;
   div.append(nome, document.createTextNode(texto));
+  if (meta) {
+    const linha = document.createElement('span');
+    linha.className = 'msg-meta';
+    linha.textContent = meta;
+    div.append(linha);
+  }
   return div;
 }
+
+const chatEstaAberto = (andar, agente) =>
+  !!chatAberto && chave(chatAberto.andar, chatAberto.agente) === chave(andar, agente);
 
 function rolarParaFim() {
   modalHistorico.scrollTop = modalHistorico.scrollHeight;
@@ -31,7 +40,7 @@ function rolarParaFim() {
 function adicionarMensagem(andar, agente, mensagem) {
   const k = chave(andar, agente);
   (historicos[k] ||= []).push(mensagem);
-  if (chatAberto && chave(chatAberto.andar, chatAberto.agente) === k) {
+  if (chatEstaAberto(andar, agente)) {
     modalHistorico.append(criarMensagem(mensagem));
     rolarParaFim();
   }
@@ -90,12 +99,26 @@ function enviarTarefa(evento) {
   atualizarChat();
 }
 
-function receberResposta({ andar, agente, texto, modelo }) {
+// Resposta pode vir com extras (dificuldade, tempo, adiada); o modelo vai na linha de metadados.
+function receberResposta(msg) {
+  const { andar, agente, texto, modelo } = msg;
   pendentes.delete(chave(andar, agente));
   const nome = dadosAgente(andar, agente).nome;
-  const autor = modelo ? `${nome} · ${modelo}` : nome; // mostra qual modelo respondeu
-  adicionarMensagem(andar, agente, { autor, texto, tipo: 'agente' });
+  const meta = metadadosResposta(msg);
+  const autor = !meta && modelo ? `${nome} · ${modelo}` : nome;
+  adicionarMensagem(andar, agente, { autor, texto, tipo: 'agente', meta });
+  if (!chatEstaAberto(andar, agente)) mostrarToast(andar, agente, texto);
   atualizarChat();
+  avisarPainel();
+}
+
+// Tarefa estourou o tempo/falhou localmente e foi para a fila do Claude.
+function receberAdiada({ andar, agente, texto }) {
+  if (!andar || !agente) return;
+  pendentes.delete(chave(andar, agente));
+  adicionarMensagem(andar, agente, { autor: 'sistema', texto, tipo: 'sistema' });
+  atualizarChat();
+  avisarPainel();
 }
 
 function receberErro({ andar, agente, texto }) {
