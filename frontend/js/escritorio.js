@@ -166,7 +166,7 @@ function posicionarAgentes(nivel, ocupadas) {
     posicionados.push({ id, setor: '', estacao: 'mesa', x: celula.x, y: celula.y });
   });
   const vagas = [];
-  setores.forEach((s) => livres[s.id].forEach(([x, y]) => vagas.push({ x, y, estacao: s.vaga || 'vaga' })));
+  setores.forEach((s) => livres[s.id].forEach(([x, y]) => vagas.push({ x, y, estacao: s.vaga || 'vaga', setor: s.id })));
   return { agentes: posicionados, vagas };
 }
 
@@ -191,6 +191,7 @@ function limparAndar() {
   avatares = {};
   setoresAndar = {};
   setorDosAgentes = {};
+  setorDestacado = null;
   limparVisitas();
 }
 
@@ -253,8 +254,8 @@ function renderizarAndar(nivel) {
   ocupadasAndar = ocupadas;
 
   const { agentes, vagas } = posicionarAgentes(nivel, ocupadas);
-  vagas.forEach((v) => desenharVaga(ctx, v, escalaRotulo));
-  agentes.forEach((a) => {
+  vagas.forEach((v) => registrarObjetosSetor(v.setor, () => desenharVaga(ctx, v, escalaRotulo)));
+  agentes.forEach((a) => registrarObjetosSetor(a.setor, () => {
     posicoesAndar[a.id] = { x: a.x, y: a.y };
     setorDosAgentes[a.id] = a.setor;
     desenharEstacao(ctx, a.estacao, a.x, a.y);
@@ -273,7 +274,7 @@ function renderizarAndar(nivel) {
     });
     avatares[a.id] = avatar;
     elementos.push(...avatar.objetos);
-  });
+  }));
   atualizarSetores();
 
   assinaturaAtual = assinatura(nivel);
@@ -323,6 +324,7 @@ class EscritorioScene extends Phaser.Scene {
 
   create() {
     cena = this;
+    configurarDestaqueSetores();
     this.scale.on('resize', () => renderizarAndar(andarAtual)); // reenquadra
     renderizarAndar(andarAtual);
   }
@@ -354,6 +356,7 @@ function encerrarEscritorio() {
   ocupadasAndar = new Set();
   setoresAndar = {};
   setorDosAgentes = {};
+  setorDestacado = null;
   limparVisitas();
 }
 

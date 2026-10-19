@@ -94,7 +94,6 @@ function desenharSetores(nivel, ctx, escalaTexto = 1) {
     const rotulo = ctx.cena.add.text(p.x, p.y, s.nome.toUpperCase(), {
       fontFamily: 'Consolas, "Lucida Console", Menlo, monospace', fontSize: '16px', fontStyle: 'bold',
       color: `#${tomCor(s.cor, 1.5).toString(16).padStart(6, '0')}`,
-      stroke: 'rgba(0, 0, 0, 0.5)', strokeThickness: 3,
     }).setOrigin(0, 0.5).setRotation(ANGULO_EIXO_X).setDepth(PROF_PAREDE + 2)
       .setScale(escalaTexto).setAlpha(0.6);
     rotulo.setLetterSpacing?.(3);
