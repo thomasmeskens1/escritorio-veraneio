@@ -16,22 +16,25 @@ def _lista(nome: str, padrao: str) -> list[str]:
 
 
 # Provedores de LLM. Modelos usam o formato "<provedor>/<modelo>".
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")  # créditos inclusos no plano Max
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
 
-# Cadeia de fallback: gratuitos → barato → local. Se um falhar, passa para o próximo.
+# Cadeia de fallback sem custo extra: gratuitos primeiro, créditos do Max por último.
 MODELOS = _lista(
     "MODELOS",
-    "openrouter/google/gemma-4-31b-it:free,"
     "openrouter/nvidia/nemotron-3-super-120b-a12b:free,"
-    "openrouter/qwen/qwen3.7-flash,"
-    "ollama/qwen3:4b",
+    "openrouter/google/gemma-4-31b-it:free,"
+    "ollama/qwen3:4b,"
+    "anthropic/claude-haiku-5-5",
 )
-# Opcional e pago (ex.: openrouter/anthropic/claude-sonnet-5.5). Vazio = nunca usado.
-MODELO_PREMIUM = os.getenv("MODELO_PREMIUM", "").strip()
-# Agentes cujas tarefas começam pelo modelo premium.
+# Modelo mais forte; vem primeiro para os agentes complexos. Vazio = nunca usado.
+MODELO_PREMIUM = os.getenv("MODELO_PREMIUM", "anthropic/claude-sonnet-5-5").strip()
 AGENTES_COMPLEXOS = set(_lista("AGENTES_COMPLEXOS", "gestor"))
+
+# Provedor -> chave exigida (modelos sem chave configurada saem da cadeia).
+_CHAVES = {"anthropic/": ANTHROPIC_API_KEY, "openrouter/": OPENROUTER_API_KEY}
 
 TEMPO_LIMITE_TAREFA = int(os.getenv("TEMPO_LIMITE_TAREFA", "600"))  # segundos
 
@@ -39,7 +42,7 @@ FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", Path(__file__).resolve().parent.pa
 
 
 def cadeia_modelos(agente_id: str) -> list[str]:
-    """Ordem de tentativa para o agente; ignora modelos do OpenRouter sem chave configurada."""
+    """Ordem de tentativa para o agente; ignora modelos de provedores sem chave configurada."""
     premium = [MODELO_PREMIUM] if MODELO_PREMIUM else []
     cadeia = premium + MODELOS if agente_id in AGENTES_COMPLEXOS else MODELOS + premium
-    return [m for m in cadeia if OPENROUTER_API_KEY or not m.startswith("openrouter/")]
+    return [m for m in cadeia if all(chave for prefixo, chave in _CHAVES.items() if m.startswith(prefixo))]

@@ -1,10 +1,9 @@
-"""Time de Marketing (CrewAI) com cadeia de modelos (OpenRouter e Ollama local)."""
+"""Time de Marketing (CrewAI) com cadeia de modelos (Claude, OpenRouter e Ollama local)."""
 
 import asyncio
 import logging
 
 import crewai.llms.retry
-import openai
 from crewai import LLM, Agent, Crew, Process, Task
 
 import config
@@ -48,6 +47,8 @@ INSTRUCOES = "Responda em português do Brasil, de forma objetiva e acionável."
 
 def _llm(modelo: str) -> LLM:
     # Sem novas tentativas no mesmo modelo: em caso de limite, a cadeia passa ao próximo.
+    if modelo.startswith("anthropic/"):
+        return LLM(model=modelo, api_key=config.ANTHROPIC_API_KEY, timeout=90, max_retries=0)
     if modelo.startswith("openrouter/"):
         return LLM(model=modelo, base_url=config.OPENROUTER_BASE_URL, api_key=config.OPENROUTER_API_KEY,
                    timeout=90, max_retries=0)
@@ -58,17 +59,6 @@ def _llm(modelo: str) -> LLM:
 
 def _agente(agente_id: str, llm: LLM, delegar: bool = False) -> Agent:
     return Agent(**PERFIS[agente_id], llm=llm, allow_delegation=delegar, max_retry_limit=0, verbose=False)
-
-
-def _erro_de_autenticacao(erro: BaseException | None) -> bool:
-    """Chave inválida não melhora trocando de modelo; procura na cadeia de causas."""
-    vistos = set()  # a cadeia pode ser circular
-    while erro and id(erro) not in vistos:
-        if isinstance(erro, openai.AuthenticationError):
-            return True
-        vistos.add(id(erro))
-        erro = erro.__cause__ or erro.__context__
-    return False
 
 
 def _montar_crew(agente_id: str, texto: str, modelo: str) -> Crew:
@@ -95,8 +85,6 @@ async def executar(agente_id: str, texto: str) -> tuple[str, str]:
             resultado = await asyncio.to_thread(crew.kickoff)
             return resultado.raw, modelo
         except Exception as erro:
-            if _erro_de_autenticacao(erro):
-                raise
             log.warning("Modelo %s falhou (%s); tentando o próximo.", modelo, erro)
             ultimo_erro = erro
     raise RuntimeError("Todos os modelos falharam.") from ultimo_erro

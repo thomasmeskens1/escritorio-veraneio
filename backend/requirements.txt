@@ -3,4 +3,4 @@ uvicorn[standard]==0.54.0
 websockets==17.2
 pydantic==2.12.5
 pyjwt==2.15.1
-crewai==1.15.28
+crewai[anthropic]==1.15.28
