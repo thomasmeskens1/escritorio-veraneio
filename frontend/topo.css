@@ -1,0 +1,317 @@
+/* ---------- Barra superior (64px) ---------- */
+.topo {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 64px;
+  padding: 0 16px;
+  background: rgba(20, 22, 26, 0.92);
+  border-bottom: 1px solid #2b3035;
+  backdrop-filter: blur(6px);
+}
+
+.topo-marca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.topo-logo {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: #3a3026;
+  border: 1px solid #f4a261;
+  color: #f4a261;
+  font-weight: 700;
+}
+
+.topo-titulo {
+  min-width: 0;
+}
+
+.topo-titulo h1 {
+  margin: 0;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.topo-titulo p {
+  margin: 1px 0 0;
+  font-size: 0.78rem;
+  color: #f4a261;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Contadores de agentes por status */
+.contadores {
+  display: flex;
+  gap: 8px;
+  flex: 1 1 auto;
+  justify-content: center;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.contador {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 92px;
+  height: 46px;
+  padding: 0 12px;
+  background: #1b1e24;
+  border: 1px solid #343a40;
+  border-left: 3px solid #495057;
+  border-radius: 8px;
+}
+
+.contador strong {
+  font-size: 1.2rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.contador span {
+  font-size: 0.68rem;
+  color: #adb5bd;
+  white-space: nowrap;
+}
+
+.contador-disponivel { border-left-color: #40c057; }
+.contador-trabalhando { border-left-color: #f4a261; }
+.contador-construindo { border-left-color: #748ffc; }
+.contador-dormindo { border-left-color: #868e96; }
+
+/* Ações: registro, sessão, status do servidor e relógio */
+.topo-acoes {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  margin-left: auto;
+}
+
+.topo-icone {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  background: #212529;
+  border: 1px solid #3d444b;
+  border-radius: 8px;
+  color: #ced4da;
+  cursor: pointer;
+}
+
+.topo-icone:hover,
+.topo-icone:focus-visible {
+  border-color: #f4a261;
+  color: #f4a261;
+  outline: none;
+}
+
+.topo-sessao {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: #adb5bd;
+}
+
+#usuario-logado {
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sair {
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid #3d444b;
+  border-radius: 6px;
+  color: #adb5bd;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.sair:hover,
+.sair:focus-visible {
+  border-color: #f4a261;
+  color: #f4a261;
+  outline: none;
+}
+
+/* Pílula AO VIVO / FECHADO */
+.conexao {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(250, 82, 82, 0.14);
+  border: 1px solid rgba(250, 82, 82, 0.45);
+  color: #ff8787;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.conexao::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.conexao.online {
+  background: rgba(64, 192, 87, 0.14);
+  border-color: rgba(64, 192, 87, 0.45);
+  color: #69db7c;
+}
+
+.conexao.online::before {
+  animation: ao-vivo 1.6s ease-in-out infinite;
+}
+
+@keyframes ao-vivo {
+  50% { opacity: 0.35; }
+}
+
+.relogio {
+  font-size: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #e9ecef;
+}
+
+/* Telas médias: contadores mais compactos, sem nome de usuário */
+@media (max-width: 1180px) {
+  .contador {
+    min-width: 0;
+    padding: 0 10px;
+  }
+
+  #usuario-logado {
+    max-width: 120px;
+  }
+}
+
+@media (max-width: 960px) {
+  .topo-titulo h1 span,
+  #usuario-logado {
+    display: none;
+  }
+
+  .contador {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+    height: 36px;
+    align-items: center;
+  }
+
+  .contador strong {
+    font-size: 1rem;
+  }
+}
+
+/* Celular: duas linhas dentro dos 64px — marca + ações em cima, contadores embaixo */
+@media (max-width: 640px) {
+  .topo {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 32px 24px;
+    align-content: center;
+    gap: 2px 8px;
+    padding: 0 16px;
+  }
+
+  .topo-logo {
+    display: none;
+  }
+
+  .topo-titulo {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .topo-titulo h1 {
+    font-size: 0.9rem;
+  }
+
+  .topo-titulo h1 span {
+    display: none;
+  }
+
+  .topo-titulo p {
+    margin: 0;
+    min-width: 0;
+  }
+
+  .topo-acoes {
+    gap: 6px;
+  }
+
+  .topo-icone {
+    width: 30px;
+    height: 30px;
+  }
+
+  .relogio {
+    font-size: 0.85rem;
+  }
+
+  .contadores {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: space-between;
+    gap: 4px;
+  }
+
+  .contador {
+    flex: 1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 22px;
+    padding: 0 4px;
+    border-width: 0 0 0 3px;
+    border-radius: 4px;
+  }
+
+  .contador strong {
+    font-size: 0.85rem;
+  }
+
+  .contador span {
+    font-size: 0.64rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@media (max-width: 380px) {
+  .relogio {
+    display: none;
+  }
+}

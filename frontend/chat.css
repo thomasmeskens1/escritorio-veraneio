@@ -103,9 +103,25 @@
   cursor: pointer;
 }
 
-.fechar:hover {
+/* Seta de abrir/fechar (acordeões) */
+.seta {
+  justify-self: end;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin: 0 3px 4px;
+  border-right: 2px solid #868e96;
+  border-bottom: 2px solid #868e96;
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+
+.fechar:hover,
+.fechar:focus-visible {
   background: #343a40;
   color: #e9ecef;
+  outline: none;
+  box-shadow: 0 0 0 2px #f4a261;
 }
 
 .historico {
@@ -118,6 +134,14 @@
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   font-size: 0.85rem;
   line-height: 1.5;
+}
+
+.historico:empty::before {
+  content: "Nenhuma conversa ainda. Descreva uma tarefa abaixo.";
+  margin: auto;
+  color: #6c757d;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-align: center;
 }
 
 .msg {

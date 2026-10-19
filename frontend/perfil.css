@@ -1,0 +1,299 @@
+/* ---------- Popup do agente: ficha + conversa ---------- */
+.janela-agente {
+  max-width: 600px;
+  height: min(720px, 100%);
+}
+
+.status-construindo {
+  background: #748ffc;
+}
+
+.botao-secundario {
+  padding: 7px 14px;
+  background: transparent;
+  border: 1px solid #f4a261;
+  border-radius: 8px;
+  color: #f4a261;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.botao-secundario:hover:not(:disabled),
+.botao-secundario:focus-visible {
+  background: #3a3026;
+  outline: none;
+}
+
+.botao-secundario:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+/* Ficha recolhível: limitada para o chat continuar com espaço */
+.perfil {
+  flex: none;
+  max-height: 46%;
+  overflow-y: auto;
+  background: #1b1e24;
+  border-bottom: 1px solid #343a40;
+  font-size: 0.82rem;
+}
+
+.perfil-carregando {
+  margin: 0;
+  padding: 10px 14px;
+  color: #868e96;
+}
+
+.perfil-carregando.erro {
+  color: #ff8787;
+}
+
+.perfil-alternar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 14px;
+  background: #1b1e24;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.perfil-alternar:hover,
+.perfil-alternar:focus-visible {
+  background: #212529;
+  outline: none;
+}
+
+.perfil-alternar-titulo {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #adb5bd;
+  white-space: nowrap;
+}
+
+.perfil-alternar-resumo {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #868e96;
+  font-size: 0.75rem;
+}
+
+.perfil-alternar[aria-expanded="true"] .seta {
+  transform: translateY(2px) rotate(-135deg);
+}
+
+.perfil-corpo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 14px 14px;
+}
+
+.perfil-descricao {
+  margin: 0;
+  line-height: 1.5;
+  color: #ced4da;
+}
+
+.perfil-exemplo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  background: #212529;
+  border: 1px dashed #495057;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.perfil-exemplo small {
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #868e96;
+}
+
+.perfil-exemplo span {
+  color: #e9ecef;
+  font-style: italic;
+}
+
+.perfil-exemplo:hover,
+.perfil-exemplo:focus-visible {
+  border-color: #f4a261;
+  outline: none;
+}
+
+.perfil-fatos {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #adb5bd;
+}
+
+.perfil-fatos li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 4px;
+}
+
+.perfil-fatos strong {
+  color: #f4a261;
+  font-variant-numeric: tabular-nums;
+}
+
+.perfil-fatos .selo-modelo {
+  margin-left: 6px;
+}
+
+.perfil-ajustes h4 {
+  margin: 0 0 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #ced4da;
+}
+
+.perfil-ajustes ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.perfil-ajustes small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: #868e96;
+}
+
+.perfil-treino {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.perfil-treino-resultado {
+  flex: 1 1 220px;
+  margin: 0;
+  padding: 8px 10px;
+  background: rgba(64, 192, 87, 0.1);
+  border: 1px solid rgba(64, 192, 87, 0.35);
+  border-radius: 6px;
+  color: #b2f2bb;
+  font-size: 0.78rem;
+  white-space: pre-line;
+}
+
+.perfil-treino-resultado.erro {
+  background: rgba(250, 82, 82, 0.12);
+  border-color: rgba(250, 82, 82, 0.4);
+  color: #ffa8a8;
+}
+
+/* Aviso de produção restrita (envio desativado) */
+.aviso-restrito {
+  flex: none;
+  margin: 10px 12px 0;
+  padding: 9px 12px;
+  background: rgba(250, 176, 5, 0.1);
+  border: 1px solid rgba(250, 176, 5, 0.4);
+  border-left-width: 3px;
+  border-radius: 6px;
+  color: #ffe066;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+/* ---------- Janela da Diretora ---------- */
+.janela-diretora {
+  max-width: 520px;
+  height: auto;
+  max-height: 100%;
+}
+
+.diretora-conteudo {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  overflow-y: auto;
+  font-size: 0.85rem;
+}
+
+.diretora-conteudo h3 {
+  margin: 0 0 8px;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #868e96;
+}
+
+.diretora-documentos ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid #343a40;
+  border-radius: 8px;
+}
+
+.diretora-documentos li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+}
+
+.diretora-documentos li + li {
+  border-top: 1px solid #2b3035;
+}
+
+.doc-nome {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+.doc-tamanho {
+  flex: none;
+  color: #868e96;
+  font-variant-numeric: tabular-nums;
+}
+
+.diretora-nota {
+  margin: 0;
+  padding: 8px 12px;
+  background: #1b1e24;
+  border-left: 3px solid #b197fc;
+  border-radius: 4px;
+  color: #adb5bd;
+  font-style: italic;
+}
+
+@media (max-width: 640px) {
+  .perfil {
+    max-height: 40%;
+  }
+}
