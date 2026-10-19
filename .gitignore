@@ -28,6 +28,8 @@ Thumbs.db
 
 # Memória e estado de execução
 .swarm/
+.claude/proven-config.json
+.claude/.proven-config-version
 .hive-mind/
 .claude-flow/*
 !.claude-flow/config.yaml
