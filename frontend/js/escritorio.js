@@ -1,35 +1,42 @@
 // Escritório Veraneio — grade isométrica, andares e agentes (Phaser).
+// Desenho do cenário e dos avatares fica em js/cenario/.
 
-const TILE_W = 80;
-const TILE_H = 40;
-const GRADE = 8; // chão de 8x8 tiles
-const MESA_ALTURA = 12;
-
-const CORES_STATUS = { dormindo: 0x868e96, disponivel: 0x40c057, trabalhando: 0xf4a261 };
-
-// Layout fixo no front (posição e cor por id); nome/função/status vêm do servidor.
+// Layout fixo no front: posição e estação de trabalho por id; o resto vem do servidor.
 const ANDARES = {
-  porao: { nome: 'Porão', cor: 0x495057, agentes: [] },
-  terreo: { nome: 'Térreo', cor: 0x52796f, agentes: [] },
-  marketing: {
-    nome: '1º Andar – Marketing',
-    cor: 0x7f6a55,
+  porao: {
+    nome: 'Porão',
     agentes: [
-      { id: 'designer', nome: 'Designer', x: 1, y: 2, cor: 0xe76f51 },
-      { id: 'moviemaker', nome: 'Moviemaker', x: 3, y: 2, cor: 0xf4a261 },
-      { id: 'gestor_trafego', nome: 'Gestor de Tráfego', x: 5, y: 2, cor: 0xe9c46a },
-      { id: 'gestor', nome: 'Gestor', x: 2, y: 5, cor: 0x2a9d8f },
-      { id: 'carpinteiro', nome: 'Carpinteiro', x: 4, y: 5, cor: 0x8ecae6 },
+      { id: 'construtor', nome: 'Construtor', x: 2, y: 2, estacao: 'bancada' },
+      { id: 'despachante', nome: 'Despachante', x: 4, y: 1, estacao: 'central' },
     ],
   },
-  cobertura: { nome: 'Cobertura', cor: 0x2b2d42, agentes: [], restrito: true },
+  terreo: {
+    nome: 'Térreo',
+    agentes: [
+      { id: 'recepcionista', nome: 'Recepcionista', x: 6, y: 3, estacao: 'balcao' },
+      { id: 'professor', nome: 'Professor', x: 1, y: 2, estacao: 'pulpito' },
+      { id: 'tutora', nome: 'Tutora', x: 4, y: 5, estacao: 'livros' },
+    ],
+  },
+  marketing: {
+    nome: '1º Andar – Marketing',
+    agentes: [
+      { id: 'designer', nome: 'Designer', x: 1, y: 2, estacao: 'design' },
+      { id: 'moviemaker', nome: 'Moviemaker', x: 1, y: 5, estacao: 'video' },
+      { id: 'gestor_trafego', nome: 'Gestor de Tráfego', x: 3, y: 1, estacao: 'graficos' },
+      { id: 'gestor', nome: 'Gestor', x: 5, y: 4, estacao: 'executiva' },
+    ],
+  },
+  cobertura: { nome: 'Cobertura', agentes: [], restrito: true },
 };
 
 let jogo = null;
 let cena = null;
 let andarAtual = 'terreo';
 let elementos = []; // objetos do andar renderizado
-let estadoAgentes = {}; // último "estado" recebido: { andar: { id: {nome, funcao, status} } }
+let avatares = {}; // id -> avatar do andar renderizado
+let assinaturaAtual = ''; // agentes/aparências do andar renderizado
+let estadoAgentes = {}; // último "estado" recebido: { andar: { id: {nome, funcao, status, tipo, aparencia} } }
 
 function podeAcessar(nivel) {
   return !ANDARES[nivel]?.restrito || sessao?.role === 'diretoria';
@@ -44,123 +51,139 @@ function dadosAgente(nivel, id) {
     nome: remoto.nome || local?.nome || id,
     funcao: remoto.funcao || '',
     status: remoto.status in CORES_STATUS ? remoto.status : 'dormindo',
+    tipo: remoto.tipo === 'sistema' ? 'sistema' : 'ia',
+    aparencia: remoto.aparencia && typeof remoto.aparencia === 'object' ? remoto.aparencia : null,
   };
 }
 
-// Converte coordenadas da grade (x, y) para pixels, centralizando o chão.
+// Converte coordenadas da grade (x, y) para pixels, centralizando chão + paredes.
 function isoParaTela(x, y) {
   const origemX = cena.scale.width / 2;
-  const origemY = (cena.scale.height - GRADE * TILE_H) / 2;
+  const origemY = (cena.scale.height - GRADE * TILE_H + ALTURA_PAREDE) / 2;
   return {
     x: origemX + (x - y) * (TILE_W / 2),
     y: origemY + (x + y) * (TILE_H / 2),
   };
 }
 
-function pontosLosango(cx, cy, w, h) {
-  return [
-    { x: cx, y: cy - h / 2 },
-    { x: cx + w / 2, y: cy },
-    { x: cx, y: cy + h / 2 },
-    { x: cx - w / 2, y: cy },
-  ];
+// Ids exibidos: os do servidor quando houver estado do andar; senão, o layout local.
+function idsDoAndar(nivel) {
+  const remoto = estadoAgentes[nivel];
+  return remoto ? Object.keys(remoto) : ANDARES[nivel].agentes.map((a) => a.id);
 }
 
-function desenharChao(g, cor) {
-  for (let x = 0; x < GRADE; x++) {
-    for (let y = 0; y < GRADE; y++) {
-      const { x: cx, y: cy } = isoParaTela(x + 0.5, y + 0.5);
-      const pontos = pontosLosango(cx, cy, TILE_W, TILE_H);
-      g.fillStyle(cor, (x + y) % 2 ? 1 : 0.85); // xadrez sutil
-      g.fillPoints(pontos, true);
-      g.lineStyle(1, 0x000000, 0.15);
-      g.strokePoints(pontos, true);
+// Quanto o rótulo/corpo de um agente em `a` cobre o de `b` na tela (0 = nada).
+function sobreposicao(a, b) {
+  const coluna = Math.abs((a.x - a.y) - (b.x - b.y));
+  const linha = Math.abs((a.x + a.y) - (b.x + b.y));
+  return coluna <= 2 && linha <= 4 ? 5 - linha : 0;
+}
+
+// Melhor célula livre para um agente sem posição: longe de móveis/agentes, perto do centro.
+function melhorCelulaLivre(ocupadas, agentes) {
+  let melhor = null;
+  for (let x = 1; x < GRADE; x++) {
+    for (let y = 1; y < GRADE; y++) {
+      if (ocupadas.has(`${x},${y}`)) continue;
+      let vizinhos = 0;
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) vizinhos += ocupadas.has(`${x + dx},${y + dy}`) ? 1 : 0;
+      }
+      const colisoes = agentes.reduce((soma, a) => soma + sobreposicao(a, { x, y }), 0);
+      const custo = vizinhos * 2 + colisoes * 2 +Math.hypot(x - 3.5, y - 3.5) + (x === GRADE - 1 || y === GRADE - 1 ? 3 : 0);
+      if (!melhor || custo < melhor.custo) melhor = { x, y, custo };
     }
   }
+  return melhor;
 }
 
-// Mesa = losango no topo + duas faces laterais para dar volume.
-function desenharMesa(g, cx, cy) {
-  const w = TILE_W * 0.8;
-  const h = TILE_H * 0.8;
-  const topo = cy - MESA_ALTURA;
-
-  g.fillStyle(0x7f5539);
-  g.fillPoints([
-    { x: cx - w / 2, y: topo }, { x: cx, y: topo + h / 2 },
-    { x: cx, y: cy + h / 2 }, { x: cx - w / 2, y: cy },
-  ], true);
-
-  g.fillStyle(0x9c6644);
-  g.fillPoints([
-    { x: cx + w / 2, y: topo }, { x: cx, y: topo + h / 2 },
-    { x: cx, y: cy + h / 2 }, { x: cx + w / 2, y: cy },
-  ], true);
-
-  g.fillStyle(0xb08968);
-  g.fillPoints(pontosLosango(cx, topo, w, h), true);
+// Posição e estação de cada agente; ids desconhecidos ganham uma mesa padrão numa célula livre.
+function posicionarAgentes(nivel, ocupadas) {
+  const locais = ANDARES[nivel].agentes;
+  locais.forEach((a) => ocupadas.add(`${a.x},${a.y}`));
+  const ids = idsDoAndar(nivel);
+  const novos = ids.filter((id) => !locais.some((a) => a.id === id)).sort();
+  const posicionados = locais.filter((a) => ids.includes(a.id));
+  novos.forEach((id) => {
+    const celula = melhorCelulaLivre(ocupadas, posicionados);
+    if (!celula) return; // andar lotado
+    ocupadas.add(`${celula.x},${celula.y}`);
+    posicionados.push({ id, estacao: 'mesa', x: celula.x, y: celula.y });
+  });
+  return posicionados;
 }
 
-function criarAgente(agente, nivel, cx, cy) {
-  const topo = cy - MESA_ALTURA;
-  const dados = dadosAgente(nivel, agente.id);
+// Muda quando entram/saem agentes ou mudam nome/aparência (status não conta).
+function assinatura(nivel) {
+  return JSON.stringify(idsDoAndar(nivel).sort().map((id) => {
+    const { nome, tipo, aparencia } = dadosAgente(nivel, id);
+    return [id, nome, tipo, aparencia];
+  }));
+}
 
-  const corpo = cena.add.rectangle(cx, topo - 16, 22, 32, agente.cor)
-    .setStrokeStyle(2, 0x1b1e24)
-    .setDepth(cy)
-    .setInteractive({ useHandCursor: true })
-    .on('pointerdown', () => abrirChat(nivel, agente.id));
+function clicarAgente(nivel, id) {
+  if (typeof abrirAgente === 'function') abrirAgente(nivel, id);
+  else abrirChat(nivel, id);
+}
 
-  const rotulo = cena.add.text(cx, topo - 40, dados.nome, {
-    fontFamily: 'system-ui, sans-serif',
-    fontSize: '12px',
-    color: '#e9ecef',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    padding: { x: 4, y: 2 },
-  }).setOrigin(0.5, 1).setDepth(cy);
-
-  // Bolinha de status no canto do sprite; pulsa enquanto trabalha.
-  const status = cena.add.circle(cx + 11, topo - 32, 5, CORES_STATUS[dados.status])
-    .setStrokeStyle(2, 0x1b1e24)
-    .setDepth(cy + 1);
-  if (dados.status === 'trabalhando') {
-    cena.tweens.add({ targets: status, scale: 1.5, duration: 600, yoyo: true, repeat: -1 });
-  }
-
-  elementos.push(corpo, rotulo, status);
+function limparAndar() {
+  cena.tweens.killAll();
+  elementos.forEach((e) => e.destroy());
+  elementos = [];
+  avatares = {};
 }
 
 // Limpa o andar atual e desenha o andar pedido.
 function renderizarAndar(nivel) {
-  const andar = ANDARES[nivel];
-  if (!cena || !andar || !podeAcessar(nivel)) return;
-
-  elementos.forEach((e) => {
-    cena.tweens.killTweensOf(e);
-    e.destroy();
-  });
-  elementos = [];
+  if (!cena || !ANDARES[nivel] || !podeAcessar(nivel)) return;
+  limparAndar();
   andarAtual = nivel;
 
-  // Reduz o zoom em telas estreitas para o chão caber inteiro.
-  cena.cameras.main.setZoom(Math.min(1, cena.scale.width / (GRADE * TILE_W + 32)));
+  // Zoom para chão e paredes caberem inteiros, deixando espaço para o elevador lateral.
+  const { width, height } = cena.scale;
+  const margem = width > 640 ? 200 : 16;
+  const zoom = Math.min(1.3, (width - 2 * margem) / (GRADE * TILE_W), height / (GRADE * TILE_H + ALTURA_PAREDE + 90));
+  cena.cameras.main.setZoom(zoom);
+  const escalaRotulo = Math.min(1.4, Math.max(1, 0.9 / zoom));
 
-  const chao = cena.add.graphics().setDepth(0);
-  desenharChao(chao, andar.cor);
-  elementos.push(chao);
+  const ctx = {
+    cena,
+    extras: elementos,
+    anima: (cfg) => cena.tweens.add({ repeat: -1, ...cfg }),
+  };
+  const ocupadas = montarCenario(nivel, ctx);
 
-  // Mesas em ordem de profundidade (fundo → frente).
-  const mesas = cena.add.graphics().setDepth(1);
-  [...andar.agentes]
-    .sort((a, b) => a.x + a.y - (b.x + b.y))
-    .forEach((agente) => {
-      const { x: cx, y: cy } = isoParaTela(agente.x + 0.5, agente.y + 0.5);
-      desenharMesa(mesas, cx, cy);
-      criarAgente(agente, nivel, cx, cy);
+  posicionarAgentes(nivel, ocupadas).forEach((a) => {
+    const estacao = ESTACOES[a.estacao] || ESTACOES.mesa;
+    const pos = { x: a.x + AGENTE_NO_TILE, y: a.y + AGENTE_NO_TILE };
+    const pes = isoParaTela(pos.x, pos.y);
+
+    if (estacao.atras) {
+      const g = cena.add.graphics().setDepth(PROF_BASE + pes.y - 1);
+      estacao.atras(g, a.x, a.y);
+      elementos.push(g);
+    }
+    const frente = cena.add.graphics().setDepth(profundidade(a.x + 1, a.y + 1));
+    estacao.frente(frente, a.x, a.y);
+    elementos.push(frente);
+
+    const dados = dadosAgente(nivel, a.id);
+    const avatar = criarAvatar(cena, pes.x, pes.y, {
+      ...dados,
+      escalaRotulo,
+      aoClicar: () => clicarAgente(nivel, a.id),
     });
-  elementos.push(mesas);
+    avatares[a.id] = avatar;
+    elementos.push(...avatar.objetos);
+  });
 
+  assinaturaAtual = assinatura(nivel);
   atualizarUI(nivel);
+}
+
+// Só troca status/animações, sem recriar a cena.
+function atualizarStatus() {
+  Object.entries(avatares).forEach(([id, avatar]) => avatar.definirStatus(dadosAgente(andarAtual, id).status));
 }
 
 function atualizarUI(nivel) {
@@ -170,10 +193,13 @@ function atualizarUI(nivel) {
   });
 }
 
-// Recebe o estado completo do servidor e redesenha o andar visível.
+// Recebe o estado completo do servidor; recria o andar só se os agentes mudaram.
 function aplicarEstado(andares) {
   estadoAgentes = andares || {};
-  renderizarAndar(andarAtual);
+  if (cena) {
+    if (assinatura(andarAtual) === assinaturaAtual) atualizarStatus();
+    else renderizarAndar(andarAtual);
+  }
   atualizarChat();
 }
 
@@ -218,6 +244,8 @@ function encerrarEscritorio() {
   jogo = null;
   cena = null;
   elementos = [];
+  avatares = {};
+  assinaturaAtual = '';
   estadoAgentes = {};
 }
 
