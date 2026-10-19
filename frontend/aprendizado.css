@@ -1,0 +1,178 @@
+/* ---------- Aprendizado do Despachante (painel) ---------- */
+.aprendizado {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.aprendizado h3 {
+  margin-bottom: 0;
+}
+
+.aprendizado-resumo {
+  margin: 0;
+  color: #adb5bd;
+}
+
+.aprendizado-resumo strong {
+  color: #e9ecef;
+  font-variant-numeric: tabular-nums;
+}
+
+.aprendizado-nota {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #868e96;
+}
+
+/* Marcos 10 / 50 / 100 / 200 */
+.marcos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.marco {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.marco-trilho {
+  height: 6px;
+  overflow: hidden;
+  background: #2b3035;
+  border-radius: 3px;
+}
+
+.marco-trilho i {
+  display: block;
+  height: 100%;
+  background: #f4a261;
+  border-radius: 3px;
+}
+
+.marco.feito .marco-trilho i {
+  background: #40c057;
+}
+
+.marco-rotulo {
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: #6c757d;
+}
+
+.marco.atual .marco-rotulo { color: #f4a261; font-weight: 600; }
+.marco.feito .marco-rotulo { color: #69db7c; }
+
+/* Modelo treinado + ajustes lado a lado (empilham no celular) */
+.aprendizado-corpo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.aprendizado-modelo,
+.ajustes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #212529;
+  border: 1px solid #2b3035;
+  border-radius: 8px;
+}
+
+.aprendizado-modelo small,
+.ajustes small {
+  font-size: 0.72rem;
+  color: #868e96;
+}
+
+.aprendizado-modelo.sem-modelo {
+  border-style: dashed;
+  color: #868e96;
+  font-size: 0.78rem;
+}
+
+.aprendizado-modelo.sem-modelo strong {
+  color: #ced4da;
+  font-size: 0.85rem;
+}
+
+.aprendizado-modelo-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.selo-modelo {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.selo-modelo.ativo { background: rgba(64, 192, 87, 0.15); color: #69db7c; }
+.selo-modelo.inativo { background: rgba(134, 142, 150, 0.18); color: #adb5bd; }
+
+.acuracia {
+  display: grid;
+  grid-template-columns: 78px 1fr 38px;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: #adb5bd;
+}
+
+.acuracia strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #e9ecef;
+}
+
+.acuracia-barra {
+  height: 8px;
+  background: #2b3035;
+  border-radius: 4px;
+}
+
+.acuracia-barra i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+
+.do-modelo .acuracia-barra i { background: #f4a261; }
+.das-regras .acuracia-barra i { background: #748ffc; }
+
+.ajustes h4 {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #ced4da;
+}
+
+.ajustes ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ajuste-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ajuste-seta {
+  color: #868e96;
+}

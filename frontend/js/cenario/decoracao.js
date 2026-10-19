@@ -28,7 +28,7 @@ const CENARIOS = {
     ],
   },
 
-  // Escola do escritório.
+  // Escola do escritório e o arquivo da Diretora.
   terreo: {
     chao: { estilo: 'madeira', cor: 0xc8a27a },
     parede: { cor: 0xcfc3a8, acabamento: 'lambri' },
@@ -45,8 +45,10 @@ const CENARIOS = {
       { tipo: 'tapete', x: 2.6, y: 0.8, w: 3.2, d: 3.6, cores: [0x8ecae6, 0xa8dadc] },
       { tipo: 'tapete', x: 6.25, y: 0.15, w: 1.1, d: 0.8, cores: [0x9d0208, 0xc92a2a], texto: 'BEM-VINDO' },
       { tipo: 'planta', x: 0, y: 0, alta: true },
+      // Canto do arquivo (Diretora): arquivos de aço ao redor da estante.
+      { tipo: 'arquivo', x: 0, y: 4 },
       { tipo: 'estante', x: 0, y: 5 },
-      { tipo: 'planta', x: 0, y: 7 },
+      { tipo: 'arquivo', x: 0, y: 7 },
       { tipo: 'planta', x: 7, y: 5 },
       { tipo: 'carteira', x: 3, y: 1 },
       { tipo: 'carteira', x: 3, y: 3 },
