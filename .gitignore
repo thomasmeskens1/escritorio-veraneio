@@ -44,3 +44,6 @@ Thumbs.db
 *.db-wal
 *.db-shm
 *.log
+
+# Worktrees temporários dos agentes do Claude Code
+.claude/worktrees/
