@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import config
+import diretora
 import orquestrador
 import saude
 import tarefas
@@ -26,6 +27,7 @@ TAMANHO_MAX_TEXTO = 4000
 @asynccontextmanager
 async def ciclo_de_vida(_: FastAPI):
     tarefas.iniciar()
+    diretora.vincular_loop(asyncio.get_running_loop())
     fila = asyncio.create_task(orquestrador.processar_fila())
     yield
     fila.cancel()

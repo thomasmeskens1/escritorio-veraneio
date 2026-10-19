@@ -10,7 +10,7 @@ Um escritório virtual onde cada andar reúne agentes de IA especialistas. Você
 
 ## Andares (use o painel "Elevador" à direita)
 - Porão: infraestrutura. Construtor (cria novos agentes) e Despachante (painel da fila de tarefas).
-- Térreo: a escola. Recepcionista, Professor e Tutora ensinam a usar a ferramenta.
+- Térreo: a escola. Recepcionista e Professor ensinam a usar a ferramenta. Ali também trabalha a Diretora, que guarda o conhecimento da empresa (marca, produtos, regras); ela não conversa com usuários, só os agentes a consultam. Quando um agente a consulta, ela vai até o andar dele e a mesa dela mostra "Trabalhando em outro andar".
 - 1º Andar – Marketing: Designer, Moviemaker, Gestor de Tráfego e Gestor (coordena o time e delega).
 - Cobertura: diretoria, acesso restrito. Quem não tem perfil de diretoria vê "Acesso Negado".
 

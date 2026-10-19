@@ -37,8 +37,9 @@ class Agente(BaseModel):
     nome: str
     funcao: str
     aparencia: Aparencia
-    tipo: Literal["ia", "sistema"] = "ia"  # "sistema" não conversa (ex.: Despachante)
+    tipo: Literal["ia", "sistema", "conhecimento"] = "ia"  # sistema: painel; conhecimento: sem interação
     status: Status = Status.disponivel
+    visitando: dict | None = None  # {"andar", "agente"} enquanto a Diretora atende em outro andar
 
 
 def _ap(pele, cabelo, cor_cabelo, roupa, cor_roupa, calca, acessorio) -> Aparencia:
@@ -62,8 +63,8 @@ ANDARES: dict[str, dict[str, Agente]] = {
                aparencia=_ap("#ffdbac", "longo", "#b5651d", "blazer", "#2a9d8f", "#264653", "cracha")),
         Agente(id="professor", nome="Professor", funcao="Ensina a pedir tarefas e escrever bons briefings",
                aparencia=_ap("#e0ac69", "curto", "#9e9e9e", "camisa", "#6d597a", "#355070", "oculos")),
-        Agente(id="tutora", nome="Tutora", funcao="Explica acessos, status, fila e limites dos modelos",
-               aparencia=_ap("#a0522d", "coque", "#1b1b1b", "moletom", "#e9c46a", "#3a5a40", "lapis")),
+        Agente(id="diretora", nome="Diretora", funcao="Conhecimento da empresa (consultada pelos agentes)",
+               tipo="conhecimento", aparencia=_ap("#e0ac69", "coque", "#3b2f2f", "blazer", "#7b2d26", "#1b1b1b", "oculos")),
     ),
     "marketing": _andar(
         Agente(id="designer", nome="Designer", funcao="Design gráfico e identidade visual",
@@ -89,6 +90,10 @@ def pode_acessar(role: str, andar: str) -> bool:
 
 def buscar_agente(andar: str, agente_id: str) -> Agente | None:
     return ANDARES.get(andar, {}).get(agente_id)
+
+
+def andar_do_agente(agente_id: str) -> str | None:
+    return next((andar for andar, agentes in ANDARES.items() if agente_id in agentes), None)
 
 
 def snapshot(role: str) -> dict:

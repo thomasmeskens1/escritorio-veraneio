@@ -19,18 +19,13 @@ PERFIS = {
     # Térreo (escola)
     "recepcionista": {
         "role": "Recepcionista",
-        "goal": "Dar boas-vindas e explicar como o escritório funciona: andares, agentes e por onde começar.",
+        "goal": "Dar boas-vindas e explicar como o escritório funciona: andares, agentes, status, fila, limites dos modelos e por onde começar.",
         "backstory": "Primeira pessoa que todo usuário encontra; simpática, clara e direta.",
     },
     "professor": {
         "role": "Professor",
         "goal": "Ensinar a pedir tarefas aos agentes e a escrever bons briefings, com exemplos práticos.",
         "backstory": "Professor paciente que transforma pedidos vagos em briefings claros.",
-    },
-    "tutora": {
-        "role": "Tutora",
-        "goal": "Explicar acessos, status dos agentes, dificuldade das tarefas, fila do Claude e limites dos modelos.",
-        "backstory": "Tutora detalhista que conhece cada regra de funcionamento da ferramenta.",
     },
     # 1º Andar – Marketing
     "designer": {
@@ -56,7 +51,7 @@ PERFIS = {
 }
 
 INSTRUCOES = "Responda em português do Brasil, de forma objetiva e acionável."
-AGENTES_ESCOLA = {"recepcionista", "professor", "tutora"}
+AGENTES_ESCOLA = {"recepcionista", "professor"}
 
 
 def _contexto_construtor() -> str:
@@ -78,13 +73,17 @@ def _resumo_historico(historico: list) -> str:
     return "Conversa recente com este usuário (use como contexto):\n" + "\n".join(trocas)
 
 
-def descricao_tarefa(agente_id: str, texto: str, historico: list = ()) -> str:
-    """Monta a descrição da Task com o contexto que cada agente precisa."""
-    partes = [f"Pedido do usuário: {texto}", INSTRUCOES]
-    if historico:
-        partes.insert(0, _resumo_historico(historico))
+def contexto(agente_id: str, historico: list = ()) -> str:
+    """Contexto fixo do agente: conversa recente, instruções e conhecimento específico."""
+    partes = [_resumo_historico(historico)] if historico else []
+    partes.append(INSTRUCOES)
     if agente_id in AGENTES_ESCOLA:
         partes.append(f"Baseie-se apenas neste manual da ferramenta:\n{MANUAL_ESCOLA}")
     if agente_id == "construtor":
         partes.append(_contexto_construtor())
     return "\n\n".join(partes)
+
+
+def descricao_tarefa(agente_id: str, texto: str, historico: list = ()) -> str:
+    """Monta a descrição da Task com o pedido e o contexto do agente."""
+    return f"Pedido do usuário: {texto}\n\n{contexto(agente_id, historico)}"

@@ -8,6 +8,7 @@ import asyncio
 import logging
 import time
 
+import diretora
 import saude
 import tarefas
 from conexoes import gerenciador
@@ -34,7 +35,11 @@ async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str) -> Non
     dificuldade = classificar(agente.id, texto)
     tarefa_id = tarefas.criar(login, andar, agente.id, texto, dificuldade.value)
     await atualizar_status(agente, Status.trabalhando)
-    execucao = asyncio.create_task(_executar_imediata(tarefa_id, agente, dificuldade))
+    _em_segundo_plano(_executar_imediata(tarefa_id, agente, dificuldade))
+
+
+def _em_segundo_plano(corrotina) -> None:
+    execucao = asyncio.create_task(corrotina)
     _em_andamento.add(execucao)
     execucao.add_done_callback(_em_andamento.discard)
 
@@ -46,7 +51,7 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
     historico = tarefas.historico(tarefa["usuario"], tarefa["andar"], tarefa["agente"], tarefa["id"])
     inicio = time.monotonic()
     try:
-        return await executar(agente.id, tarefa["texto"], etapa, historico), ""
+        return await executar(agente.id, tarefa["texto"], etapa, historico, tarefa["id"]), ""
     except LocalOcupado:
         return None, "modelo local ocupado"
     except asyncio.TimeoutError:
@@ -56,6 +61,7 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
         saude.registrar_falha(etapa.modelo, erro)  # estourou? sai da rota até a cota voltar
     finally:
         tarefas.registrar_tentativa(tarefa["id"], time.monotonic() - inicio)
+        _em_segundo_plano(diretora.encerrar_consulta(agente.id))  # Diretora volta ao Térreo
     log.warning("Tarefa %s: %s falhou (%s).", tarefa["id"], etapa.modelo, erro[:200])
     return None, erro
 
@@ -87,9 +93,8 @@ async def _executar_imediata(tarefa_id: int, agente: Agente, dificuldade: Dificu
 
 
 async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
-    custo = tarefas.custo_estimado(modelo, resultado.tokens_entrada, resultado.tokens_saida)
     tarefas.atualizar(tarefa_id, status="concluida", modelo=modelo, resposta=resultado.texto,
-                      tokens_entrada=resultado.tokens_entrada, tokens_saida=resultado.tokens_saida, custo_usd=custo)
+                      tokens_entrada=resultado.tokens_entrada, tokens_saida=resultado.tokens_saida, custo_usd=resultado.custo_usd)
     await _entregar(tarefas.obter(tarefa_id))
 
 
