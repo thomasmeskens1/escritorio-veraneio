@@ -250,6 +250,7 @@ function renderizarAndar(nivel) {
   };
   const ocupadas = montarCenario(nivel, ctx);
   setoresAndar = desenharSetores(nivel, ctx, Math.min(1.8, Math.max(1, 0.8 / zoom)));
+  distribuirMoveisNosSetores(ctx.moveis);
   posicoesAndar = {};
   ocupadasAndar = ocupadas;
 

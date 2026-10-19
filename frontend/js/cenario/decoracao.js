@@ -124,13 +124,16 @@ function montarCenario(nivel, ctx) {
   desenharElementosParede(paredes, cenario.paredes, ctx);
   ctx.extras.push(paredes);
 
+  ctx.moveis = []; // { x, y, objetos } — o destaque de setor usa para saber o que é de cada setor
   cenario.moveis.forEach((m) => {
     const def = MOVEIS[m.tipo];
     if (!def) return;
+    const antes = ctx.extras.length;
     ctx.profundidade = def.chao ? PROF_PAREDE + 1 : profundidade(m.x + def.w, m.y + def.d);
     const g = ctx.cena.add.graphics().setDepth(ctx.profundidade);
     def.desenhar(g, m, ctx);
     ctx.extras.push(g);
+    ctx.moveis.push({ x: m.x, y: m.y, objetos: ctx.extras.slice(antes) });
     celulasDoMovel(m).forEach((c) => ocupadas.add(c));
   });
   return ocupadas;

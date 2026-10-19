@@ -76,6 +76,13 @@ function desenharSetores(nivel, ctx, escalaTexto = 1) {
   setoresDoAndar(nivel).forEach((s) => {
     const [ax, ay, w, d] = s.area;
     const x0 = ax + 0.12, y0 = ay + 0.12, x1 = ax + w - 0.12, y1 = ay + d - 0.12;
+    // Chão sólido do setor, mostrado só no destaque (cobre o que de outros setores invade a área).
+    const fundo = ctx.cena.add.graphics().setVisible(false);
+    quadChao(fundo, ax, ay, ax + w, ay + d, tomCor(CENARIOS[nivel].chao.cor, 0.8), 1);
+    quadChao(fundo, x0, y0, x1, y1, s.cor, 0.22);
+    contornoArea(fundo, x0, y0, x1, y1, 2, s.cor, 0.8);
+    ctx.extras.push(fundo);
+
     const g = ctx.cena.add.graphics().setDepth(PROF_PAREDE + 1);
     quadChao(g, x0, y0, x1, y1, s.cor, 0.12);
     quadChao(g, x0 + 0.12, y0 + 0.12, x1 - 0.12, y1 - 0.12, s.cor, 0.06);
@@ -99,7 +106,7 @@ function desenharSetores(nivel, ctx, escalaTexto = 1) {
     rotulo.setLetterSpacing?.(3);
     ctx.extras.push(rotulo);
 
-    registros[s.id] = { brilho, rotulo, ativo: false, tween: null };
+    registros[s.id] = { fundo, tapete: g, brilho, rotulo, ativo: false, tween: null };
   });
   return registros;
 }
