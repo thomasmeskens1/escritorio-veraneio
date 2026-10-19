@@ -3,7 +3,8 @@
 
 const TILE_W = 80;
 const TILE_H = 40;
-const GRADE = 8; // chão de 8x8 tiles
+// Lado da grade do andar renderizado (cada cenário define o seu; ver definirGrade).
+let GRADE = 8;
 const ALTURA_PAREDE = 120;
 const PX_POR_T = Math.hypot(TILE_W / 2, TILE_H / 2); // pixels por unidade ao longo da parede
 const PROF_PAREDE = 2; // profundidade (depth) das paredes e seus elementos
