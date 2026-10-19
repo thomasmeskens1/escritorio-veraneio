@@ -110,7 +110,9 @@ function encerrarSessao(aviso = '') {
   sessao = null;
   desconectar();
   fecharChat();
+  fecharPainel();
   limparChat();
+  limparToasts();
   encerrarEscritorio();
   document.getElementById('app').hidden = true;
   telaLogin.hidden = false;

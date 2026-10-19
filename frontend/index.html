@@ -6,6 +6,7 @@
   <title>Escritório Veraneio</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="chat.css">
+  <link rel="stylesheet" href="painel.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.1/phaser.min.js"></script>
 </head>
 <body>
@@ -86,10 +87,29 @@
         </form>
       </section>
     </div>
+
+    <!-- Painel de tarefas do Despachante -->
+    <div id="painel" class="modal">
+      <section class="janela janela-painel" role="dialog" aria-modal="true" aria-labelledby="painel-titulo">
+        <header class="janela-barra">
+          <span class="janela-luzes" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="janela-titulo">
+            <h2 id="painel-titulo">Despachante · Fila de tarefas</h2>
+            <p id="painel-atualizado"></p>
+          </div>
+          <button id="painel-fechar" class="fechar" type="button" aria-label="Fechar">×</button>
+        </header>
+        <div id="painel-conteudo" class="painel-conteudo"></div>
+      </section>
+    </div>
+
+    <!-- Notificações de novas respostas -->
+    <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
   </div>
 
   <script src="js/escritorio.js"></script>
   <script src="js/chat.js"></script>
+  <script src="js/painel.js"></script>
   <script src="js/rede.js"></script>
   <script src="js/auth.js"></script>
 </body>

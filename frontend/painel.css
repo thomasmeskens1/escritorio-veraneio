@@ -1,0 +1,376 @@
+/* ---------- Painel de tarefas (Despachante) ---------- */
+.janela-painel {
+  max-width: 960px;
+  height: min(680px, 100%);
+}
+
+.painel-conteudo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  overflow-y: auto;
+  font-size: 0.85rem;
+}
+
+.painel-conteudo h3 {
+  margin: 0 0 10px;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #868e96;
+}
+
+.painel-aviso {
+  margin: auto;
+  color: #868e96;
+}
+
+/* Cartões de resumo */
+.resumo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.resumo-cartao {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  background: #1b1e24;
+  border: 1px solid #343a40;
+  border-left: 3px solid #495057;
+  border-radius: 8px;
+}
+
+.resumo-cartao strong {
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.resumo-cartao span {
+  font-size: 0.75rem;
+  color: #adb5bd;
+}
+
+.resumo-executando { border-left-color: #f4a261; }
+.resumo-concluida { border-left-color: #40c057; }
+.resumo-adiada { border-left-color: #748ffc; }
+.resumo-falhou { border-left-color: #fa5252; }
+.resumo-fila { border-left-color: #b197fc; }
+
+/* Crédito Anthropic */
+.credito {
+  padding: 12px 14px;
+  background: #1b1e24;
+  border: 1px solid #343a40;
+  border-radius: 8px;
+}
+
+.credito-valores {
+  margin: 0 0 8px;
+  color: #adb5bd;
+}
+
+.credito-valores strong {
+  color: #e9ecef;
+  font-size: 1.05rem;
+}
+
+.credito-barra {
+  position: relative;
+  height: 10px;
+  background: #2b3035;
+  border-radius: 5px;
+}
+
+.credito-uso {
+  height: 100%;
+  min-width: 2px;
+  background: #f4a261;
+  border-radius: 5px;
+}
+
+.credito-uso.no-limite {
+  background: #fa5252;
+}
+
+.credito-marcador {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  background: #e9ecef;
+  border-radius: 1px;
+}
+
+.credito-legenda {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 0.75rem;
+  color: #868e96;
+}
+
+.credito-ponto {
+  width: 2px;
+  height: 10px;
+  background: #e9ecef;
+}
+
+.credito-pausado {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  background: rgba(250, 82, 82, 0.12);
+  border: 1px solid rgba(250, 82, 82, 0.4);
+  border-radius: 6px;
+  color: #ffa8a8;
+}
+
+/* Lista de tarefas */
+.tabela-tarefas {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tabela-tarefas th {
+  padding: 6px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: left;
+  color: #868e96;
+  border-bottom: 1px solid #343a40;
+  white-space: nowrap;
+}
+
+.tabela-tarefas td {
+  padding: 8px;
+  vertical-align: top;
+  border-bottom: 1px solid #2b3035;
+  white-space: nowrap;
+}
+
+.tabela-tarefas small {
+  display: block;
+  font-size: 0.7rem;
+  color: #868e96;
+}
+
+.tabela-tarefas .col-texto {
+  width: 100%;
+  min-width: 180px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: #ced4da;
+}
+
+.tarefa-motivo {
+  margin-top: 2px;
+  font-style: italic;
+}
+
+.tarefa-modelo {
+  display: inline-block;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.75rem;
+  color: #adb5bd;
+}
+
+.tabela-tarefas .vazia {
+  color: #495057;
+}
+
+.tarefas-vazio {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  padding: 32px 16px;
+  text-align: center;
+  color: #868e96;
+  border: 1px dashed #343a40;
+  border-radius: 8px;
+}
+
+.tarefas-vazio strong {
+  color: #ced4da;
+}
+
+/* Selos de dificuldade e status */
+.selo,
+.estado {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.selo-simples { background: rgba(64, 192, 87, 0.15); color: #69db7c; }
+.selo-media { background: rgba(250, 176, 5, 0.15); color: #ffd43b; }
+.selo-complexa { background: rgba(255, 107, 53, 0.18); color: #ff8c5a; }
+
+.estado { padding: 0; border-radius: 0; font-weight: 500; }
+.estado::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.estado-executando { color: #f4a261; }
+.estado-concluida { color: #69db7c; }
+.estado-adiada { color: #91a7ff; }
+.estado-falhou { color: #ff8787; }
+
+/* Telas estreitas: cada tarefa vira um cartão */
+@media (max-width: 720px) {
+  .tabela-tarefas thead {
+    display: none;
+  }
+
+  .tabela-tarefas,
+  .tabela-tarefas tbody,
+  .tabela-tarefas tr,
+  .tabela-tarefas td {
+    display: block;
+  }
+
+  .tabela-tarefas tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 12px;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    background: #1b1e24;
+    border: 1px solid #343a40;
+    border-radius: 8px;
+  }
+
+  .tabela-tarefas td {
+    padding: 0;
+    border: 0;
+    white-space: normal;
+  }
+
+  .tabela-tarefas td::before {
+    content: attr(data-rotulo);
+    display: block;
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #868e96;
+  }
+
+  .tabela-tarefas .col-agente::before,
+  .tabela-tarefas .col-texto::before {
+    display: none;
+  }
+
+  .tabela-tarefas .col-agente,
+  .tabela-tarefas .col-texto {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .tabela-tarefas .col-agente small {
+    display: inline;
+    margin-left: 6px;
+  }
+
+  .tabela-tarefas td.vazia {
+    display: none;
+  }
+}
+
+/* ---------- Metadados da resposta no chat ---------- */
+.msg-meta {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  font-style: normal;
+  color: #6c757d;
+}
+
+/* ---------- Toasts ---------- */
+.toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: calc(100% - 32px);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 300px;
+  max-width: 100%;
+  padding: 10px 14px;
+  background: #212529;
+  border: 1px solid #343a40;
+  border-left: 3px solid #f4a261;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  text-align: left;
+  font-size: 0.8rem;
+  cursor: pointer;
+  pointer-events: auto;
+  animation: toast-entrar 0.2s ease-out;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.toast:hover,
+.toast:focus-visible {
+  background: #2b3035;
+  outline: none;
+}
+
+.toast span {
+  color: #adb5bd;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.toast.saindo {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+@keyframes toast-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (max-width: 640px) {
+  /* acima da barra do elevador */
+  .toasts {
+    left: 16px;
+    bottom: 104px;
+    align-items: stretch;
+  }
+
+  .toast {
+    width: auto;
+  }
+}
