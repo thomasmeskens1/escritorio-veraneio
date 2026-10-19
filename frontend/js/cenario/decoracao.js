@@ -1,35 +1,11 @@
 // Decoração exclusiva de cada andar: piso, paredes, elementos de parede e móveis.
+// `grade` é o lado do chão em tiles; o elevador fica sempre em t = grade - 1.8 .. grade - 0.6
+// na parede da direita. Porão, Marketing e Cobertura estão em cenarios_setores.js.
 
 const CENARIOS = {
-  // Infraestrutura: oficina do Construtor e central de operações.
-  porao: {
-    chao: { estilo: 'concreto', cor: 0x5f646b },
-    parede: { cor: 0x4a4f57, acabamento: 'blocos' },
-    paredes: [
-      { tipo: 'canos', lado: 'esq', descida: 6.7 },
-      { tipo: 'canos', lado: 'dir', alturas: [ALTURA_PAREDE - 22] },
-      { tipo: 'ferramentas', lado: 'esq', t0: 1.4, t1: 3.4, z0: 36, z1: 80 },
-      { tipo: 'painel', lado: 'dir', t0: 0.5, t1: 1.3, z0: 42, z1: 82 },
-      { tipo: 'tv', lado: 'dir', t0: 3.2, t1: 5.2, z0: 46, z1: 84 },
-      { tipo: 'arandela', lado: 'esq', t: 0.9, z: 84 },
-      { tipo: 'arandela', lado: 'dir', t: 2.3, z: 84 },
-      { tipo: 'elevador', lado: 'dir', t0: 6.2, t1: 7.4, letra: 'P' },
-    ],
-    moveis: [
-      { tipo: 'tapete', x: 6.2, y: 0.12, w: 1.2, d: 0.5, cores: [0x212529, 0xffc300, 0x212529, 0xffc300, 0x212529, 0xffc300] },
-      { tipo: 'rack', x: 0, y: 4 },
-      { tipo: 'rack', x: 0, y: 5 },
-      { tipo: 'rack', x: 0, y: 6 },
-      { tipo: 'caixas', x: 1, y: 0 },
-      { tipo: 'caixas', x: 2, y: 0, pilha: 1 },
-      { tipo: 'caixas', x: 7, y: 6 },
-      { tipo: 'tambores', x: 5, y: 7 },
-      { tipo: 'prototipo', x: 3, y: 4 },
-    ],
-  },
-
   // Escola do escritório e o arquivo da Diretora.
   terreo: {
+    grade: 8,
     chao: { estilo: 'madeira', cor: 0xc8a27a },
     parede: { cor: 0xcfc3a8, acabamento: 'lambri' },
     paredes: [
@@ -54,54 +30,6 @@ const CENARIOS = {
       { tipo: 'carteira', x: 3, y: 3 },
       { tipo: 'carteira', x: 5, y: 1 },
       { tipo: 'carteira', x: 5, y: 3 },
-    ],
-  },
-
-  // Agência criativa.
-  marketing: {
-    chao: { estilo: 'madeira', cor: 0x7f6a55 },
-    parede: { cor: 0x2f4858, acabamento: 'liso' },
-    paredes: [
-      { tipo: 'moodboard', lado: 'esq', t0: 0.6, t1: 3.0, z0: 42, z1: 96 },
-      { tipo: 'janela', lado: 'esq', t0: 3.6, t1: 5.2, z0: 42, z1: 102 },
-      { tipo: 'quadro', lado: 'esq', t0: 5.8, t1: 7.0, z0: 50, z1: 86, fundo: 0xfff1e6, cores: [0xe76f51, 0x7b2cbf, 0xe9c46a] },
-      { tipo: 'prateleira', lado: 'dir', t0: 0.6, t1: 2.0, z: 74, itens: [0xd4af37, 0xe9c46a, 0xf8f9fa] },
-      { tipo: 'tv', lado: 'dir', t0: 2.6, t1: 4.6, z0: 44, z1: 88 },
-      { tipo: 'relogio', lado: 'dir', t: 5.4, z: 92 },
-      { tipo: 'elevador', lado: 'dir', t0: 6.2, t1: 7.4, letra: '1' },
-    ],
-    moveis: [
-      { tipo: 'tapete', x: 2.4, y: 2.6, w: 2.4, d: 2.4, cores: [0x264653, 0xe76f51, 0xf4a261, 0xe9c46a, 0x2a9d8f] },
-      { tipo: 'planta', x: 0, y: 0, alta: true },
-      { tipo: 'cafeteira', x: 5, y: 0 },
-      { tipo: 'planta', x: 7, y: 2 },
-      { tipo: 'tripe', x: 1, y: 4 },
-      { tipo: 'sofa', x: 4, y: 6, cor: 0x6d597a },
-      { tipo: 'planta', x: 0, y: 7 },
-    ],
-  },
-
-  // Diretoria: sala executiva.
-  cobertura: {
-    chao: { estilo: 'marmore', cor: 0x2b2d42 },
-    parede: { cor: 0x1f2235, acabamento: 'painel', rodape: 0xd4af37 },
-    paredes: [
-      { tipo: 'janela', lado: 'esq', t0: 0.5, t1: 4.6, z0: 26, z1: 108, skyline: true, ceu: 0x23365f, moldura: 0x2b2b2b },
-      { tipo: 'quadro', lado: 'esq', t0: 5.3, t1: 6.9, z0: 66, z1: 106, moldura: 0xd4af37, fundo: 0x14182b, cores: [0xd4af37, 0x9d0208, 0xf8f9fa] },
-      { tipo: 'janela', lado: 'dir', t0: 0.5, t1: 5.6, z0: 26, z1: 108, skyline: true, ceu: 0x23365f, moldura: 0x2b2b2b },
-      { tipo: 'elevador', lado: 'dir', t0: 6.2, t1: 7.4, letra: 'C', moldura: 0xd4af37 },
-    ],
-    moveis: [
-      { tipo: 'tapete', x: 1.6, y: 1.6, w: 3.8, d: 3.8, cores: [0xd4af37, 0x4a0e17] },
-      { tipo: 'planta', x: 0, y: 0, alta: true },
-      { tipo: 'bar', x: 0, y: 5 },
-      { tipo: 'mesaReuniao', x: 2, y: 2 },
-      { tipo: 'cadeirasFrente', x: 2, y: 4 },
-      { tipo: 'poltrona', x: 5, y: 6, cor: 0x7f5539 },
-      { tipo: 'mesinha', x: 6, y: 6 },
-      { tipo: 'poltrona', x: 6, y: 5, cor: 0x7f5539 },
-      { tipo: 'abajur', x: 7, y: 4 },
-      { tipo: 'planta', x: 5, y: 0, alta: true },
     ],
   },
 };
@@ -162,6 +90,11 @@ function linhasGrade(g, alfa) {
     g.lineBetween(a.x, a.y, b.x, b.y);
     g.lineBetween(c.x, c.y, d.x, d.y);
   }
+}
+
+// Ajusta GRADE para o andar que vai ser desenhado.
+function definirGrade(nivel) {
+  GRADE = CENARIOS[nivel]?.grade || 8;
 }
 
 // Células ocupadas por um móvel (para posicionar agentes novos em células livres).

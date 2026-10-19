@@ -1,34 +1,46 @@
 // Escritório Veraneio — grade isométrica, andares e agentes (Phaser).
-// Desenho do cenário e dos avatares fica em js/cenario/.
+// Desenho do cenário, dos setores e dos avatares fica em js/cenario/.
 
-// Layout fixo no front: posição e estação de trabalho por id; o resto vem do servidor.
+// Layout fixo no front: setor e estação de trabalho por id; o resto vem do servidor.
+// No Térreo (escola) as posições são fixas; nos outros andares cada agente ocupa uma mesa
+// do seu setor (js/cenario/setores.js), na ordem desta lista.
 const ANDARES = {
   porao: {
     nome: 'Porão',
     agentes: [
-      { id: 'construtor', nome: 'Construtor', x: 2, y: 2, estacao: 'bancada' },
-      { id: 'despachante', nome: 'Despachante', x: 4, y: 1, estacao: 'central' },
+      { id: 'construtor', nome: 'Construtor', setor: 'oficina', estacao: 'bancada' },
+      { id: 'despachante', nome: 'Despachante', setor: 'operacoes', estacao: 'central' },
     ],
   },
   terreo: {
     nome: 'Térreo',
     agentes: [
-      { id: 'recepcionista', nome: 'Recepcionista', x: 6, y: 3, estacao: 'balcao' },
-      { id: 'professor', nome: 'Professor', x: 1, y: 2, estacao: 'pulpito' },
-      { id: 'diretora', nome: 'Diretora', x: 1, y: 5, estacao: 'arquivo', tipo: 'conhecimento' },
+      { id: 'recepcionista', nome: 'Recepcionista', setor: 'escola', x: 6, y: 3, estacao: 'balcao' },
+      { id: 'professor', nome: 'Professor', setor: 'escola', x: 1, y: 2, estacao: 'pulpito' },
+      { id: 'diretora', nome: 'Diretora', setor: 'escola', x: 1, y: 5, estacao: 'arquivo', tipo: 'conhecimento' },
     ],
   },
   marketing: {
     nome: '1º Andar – Marketing',
     agentes: [
-      { id: 'designer', nome: 'Designer', x: 1, y: 2, estacao: 'design' },
-      { id: 'moviemaker', nome: 'Moviemaker', x: 1, y: 5, estacao: 'video' },
-      { id: 'gestor_trafego', nome: 'Gestor de Tráfego', x: 3, y: 1, estacao: 'graficos' },
-      { id: 'gestor', nome: 'Gestor', x: 5, y: 4, estacao: 'executiva' },
+      { id: 'gestor', nome: 'Gestor', setor: 'gestao', estacao: 'executiva' },
+      { id: 'designer', nome: 'Designer', setor: 'criacao', estacao: 'design' },
+      { id: 'criador_imagens', nome: 'Criador de Imagens', setor: 'criacao', estacao: 'ilustracao' },
+      { id: 'copywriter', nome: 'Copywriter', setor: 'conteudo', estacao: 'redacao' },
+      { id: 'social_media', nome: 'Social Media', setor: 'conteudo', estacao: 'social' },
+      { id: 'moviemaker', nome: 'Moviemaker', setor: 'video', estacao: 'video' },
+      { id: 'editor_video', nome: 'Editor de Vídeo', setor: 'video', estacao: 'edicao' },
+      { id: 'gestor_trafego', nome: 'Gestor de Tráfego', setor: 'performance', estacao: 'graficos' },
+      { id: 'analista_metricas', nome: 'Analista de Métricas', setor: 'performance', estacao: 'metricas' },
     ],
   },
   cobertura: { nome: 'Cobertura', agentes: [], restrito: true },
 };
+
+// Espaço ocupado pela interface sobre o canvas (px de tela).
+const BARRA_TOPO = 64;
+const PAINEL_ELEVADOR = 200; // elevador à esquerda (desktop)
+const BARRA_ELEVADOR = 90; // elevador embaixo (telas ≤ 640px)
 
 let jogo = null;
 let cena = null;
@@ -36,9 +48,11 @@ let andarAtual = 'terreo';
 let elementos = []; // objetos do andar renderizado
 let avatares = {}; // id -> avatar do andar renderizado
 let assinaturaAtual = ''; // agentes/aparências do andar renderizado
-let estadoAgentes = {}; // último "estado" recebido: { andar: { id: {nome, funcao, status, tipo, aparencia, visitando} } }
+let estadoAgentes = {}; // último "estado" recebido: { andar: { id: {nome, funcao, status, tipo, aparencia, visitando, setor} } }
 let posicoesAndar = {}; // id -> { x, y } (tile) dos agentes do andar renderizado
 let ocupadasAndar = new Set(); // células com móveis/agentes no andar renderizado
+let setoresAndar = {}; // setor -> tapete/brilho desenhado no andar renderizado
+let setorDosAgentes = {}; // id -> setor da mesa ocupada no andar renderizado
 
 const TIPOS_AGENTE = ['ia', 'sistema', 'conhecimento'];
 
@@ -52,7 +66,7 @@ function lerVisita(v) {
     ? { andar: v.andar, agente: v.agente } : null;
 }
 
-// Junta o layout local com o estado do servidor (nome local como fallback).
+// Junta o layout local com o estado do servidor (nome/setor locais como fallback).
 function dadosAgente(nivel, id) {
   const local = ANDARES[nivel]?.agentes.find((a) => a.id === id);
   const remoto = estadoAgentes[nivel]?.[id] || {};
@@ -64,10 +78,12 @@ function dadosAgente(nivel, id) {
     tipo: TIPOS_AGENTE.includes(remoto.tipo) ? remoto.tipo : local?.tipo || 'ia',
     aparencia: remoto.aparencia && typeof remoto.aparencia === 'object' ? remoto.aparencia : null,
     visitando: lerVisita(remoto.visitando),
+    setor: typeof remoto.setor === 'string' && remoto.setor ? remoto.setor : local?.setor || '',
   };
 }
 
-// Converte coordenadas da grade (x, y) para pixels, centralizando chão + paredes.
+// Converte coordenadas da grade (x, y) para pixels do mundo, centralizando chão + paredes
+// em (largura/2, altura/2); a câmera depois enquadra esse centro na área livre da tela.
 function isoParaTela(x, y) {
   const origemX = cena.scale.width / 2;
   const origemY = (cena.scale.height - GRADE * TILE_H + ALTURA_PAREDE) / 2;
@@ -93,6 +109,7 @@ function sobreposicao(a, b) {
 // Melhor célula livre para um agente sem posição: longe de móveis/agentes, perto do centro.
 function melhorCelulaLivre(ocupadas, agentes) {
   let melhor = null;
+  const meio = (GRADE - 1) / 2;
   for (let x = 1; x < GRADE; x++) {
     for (let y = 1; y < GRADE; y++) {
       if (ocupadas.has(`${x},${y}`)) continue;
@@ -101,39 +118,68 @@ function melhorCelulaLivre(ocupadas, agentes) {
         for (let dy = -1; dy <= 1; dy++) vizinhos += ocupadas.has(`${x + dx},${y + dy}`) ? 1 : 0;
       }
       const colisoes = agentes.reduce((soma, a) => soma + sobreposicao(a, { x, y }), 0);
-      const custo = vizinhos * 2 + colisoes * 2 +Math.hypot(x - 3.5, y - 3.5) + (x === GRADE - 1 || y === GRADE - 1 ? 3 : 0);
+      const custo = vizinhos * 2 + colisoes * 2 + Math.hypot(x - meio, y - meio) + (x === GRADE - 1 || y === GRADE - 1 ? 3 : 0);
       if (!melhor || custo < melhor.custo) melhor = { x, y, custo };
     }
   }
   return melhor;
 }
 
-// Posição e estação de cada agente; ids desconhecidos ganham uma mesa padrão numa célula livre.
+// Ordem estável: a do layout local; ids desconhecidos depois, em ordem alfabética.
+function ordenarIds(nivel, ids) {
+  const locais = ANDARES[nivel].agentes;
+  const ordem = (id) => {
+    const i = locais.findIndex((a) => a.id === id);
+    return i < 0 ? locais.length : i;
+  };
+  return [...ids].sort((a, b) => ordem(a) - ordem(b) || a.localeCompare(b));
+}
+
+// Posição e estação de cada agente: mesa do seu setor, posição fixa (Térreo) ou, sem
+// nenhuma das duas, uma mesa padrão numa célula livre. Mesas de setor que sobram viram vagas.
 function posicionarAgentes(nivel, ocupadas) {
   const locais = ANDARES[nivel].agentes;
-  locais.forEach((a) => ocupadas.add(`${a.x},${a.y}`));
-  const ids = idsDoAndar(nivel);
-  const novos = ids.filter((id) => !locais.some((a) => a.id === id)).sort();
-  const posicionados = locais.filter((a) => ids.includes(a.id));
-  novos.forEach((id) => {
+  const setores = setoresDoAndar(nivel);
+  const livres = {};
+  setores.forEach((s) => {
+    livres[s.id] = [...(s.mesas || [])];
+    livres[s.id].forEach(([x, y]) => ocupadas.add(`${x},${y}`));
+  });
+  locais.forEach((a) => a.x !== undefined && ocupadas.add(`${a.x},${a.y}`));
+
+  const posicionados = [];
+  const semLugar = [];
+  ordenarIds(nivel, idsDoAndar(nivel)).forEach((id) => {
+    const local = locais.find((a) => a.id === id);
+    const setor = setores.find((s) => s.id === dadosAgente(nivel, id).setor);
+    const mesa = setor && livres[setor.id].shift();
+    if (mesa) {
+      const estacao = local?.estacao || setor.estacao || 'mesa';
+      posicionados.push({ id, setor: setor.id, estacao, x: mesa[0], y: mesa[1] });
+    } else if (local && local.x !== undefined) posicionados.push({ ...local, setor: '' });
+    else semLugar.push(id);
+  });
+  semLugar.forEach((id) => {
     const celula = melhorCelulaLivre(ocupadas, posicionados);
     if (!celula) return; // andar lotado
     ocupadas.add(`${celula.x},${celula.y}`);
-    posicionados.push({ id, estacao: 'mesa', x: celula.x, y: celula.y });
+    posicionados.push({ id, setor: '', estacao: 'mesa', x: celula.x, y: celula.y });
   });
-  return posicionados;
+  const vagas = [];
+  setores.forEach((s) => livres[s.id].forEach(([x, y]) => vagas.push({ x, y, estacao: s.vaga || 'vaga' })));
+  return { agentes: posicionados, vagas };
 }
 
-// Muda quando entram/saem agentes ou mudam nome/aparência (status não conta).
+// Muda quando entram/saem agentes ou mudam nome/aparência/setor (status não conta).
 function assinatura(nivel) {
   return JSON.stringify(idsDoAndar(nivel).sort().map((id) => {
-    const { nome, tipo, aparencia } = dadosAgente(nivel, id);
-    return [id, nome, tipo, aparencia];
+    const { nome, tipo, aparencia, setor } = dadosAgente(nivel, id);
+    return [id, nome, tipo, aparencia, setor];
   }));
 }
 
+// abrirAgente (UI) decide: chat para os agentes, popup informativo para a Diretora.
 function clicarAgente(nivel, id) {
-  if (dadosAgente(nivel, id).tipo === 'conhecimento') return; // só os agentes a consultam
   if (typeof abrirAgente === 'function') abrirAgente(nivel, id);
   else abrirChat(nivel, id);
 }
@@ -143,7 +189,47 @@ function limparAndar() {
   elementos.forEach((e) => e.destroy());
   elementos = [];
   avatares = {};
+  setoresAndar = {};
+  setorDosAgentes = {};
   limparVisitas();
+}
+
+// Área da tela não coberta pela barra do topo e pelo elevador (à esquerda ou embaixo).
+// Desconta só o que de fato cobre o canvas, caso o layout já o tenha recuado.
+function areaLivre(width, height) {
+  const r = cena.game.canvas.getBoundingClientRect();
+  const estreita = window.innerWidth <= 640;
+  const topo = Math.max(0, BARRA_TOPO - r.top);
+  const esquerda = estreita ? 0 : Math.max(0, PAINEL_ELEVADOR - r.left);
+  const base = estreita ? Math.max(0, r.bottom - (window.innerHeight - BARRA_ELEVADOR)) : 0;
+  return { x: esquerda, y: topo, w: Math.max(1, width - esquerda), h: Math.max(1, height - topo - base) };
+}
+
+// Zoom para chão e paredes caberem inteiros (largura e altura), centralizados na área livre.
+function enquadrarCamera() {
+  const cam = cena.cameras.main;
+  const { width, height } = cena.scale;
+  const area = areaLivre(width, height);
+  const largura = GRADE * TILE_W + 24;
+  const altura = GRADE * TILE_H + ALTURA_PAREDE + 12 + 28;
+  const zoom = Math.max(0.2, Math.min(1.3, (area.w - 16) / largura, (area.h - 12) / altura));
+  cam.setZoom(zoom);
+  // Centro do conteúdo no mundo (um pouco acima, pela folga dos rótulos sobre a parede).
+  const cx = width / 2, cy = height / 2 - 8;
+  cam.setScroll(
+    cx - width / 2 - (area.x + area.w / 2 - width / 2) / zoom,
+    cy - height / 2 - (area.y + area.h / 2 - height / 2) / zoom,
+  );
+  return zoom;
+}
+
+// Acende os setores com algum agente trabalhando (sem recriar a cena).
+function atualizarSetores() {
+  const ativos = new Set();
+  Object.entries(setorDosAgentes).forEach(([id, setor]) => {
+    if (setor && dadosAgente(andarAtual, id).status === 'trabalhando') ativos.add(setor);
+  });
+  Object.entries(setoresAndar).forEach(([id, reg]) => definirBrilhoSetor(reg, ativos.has(id)));
 }
 
 // Limpa o andar atual e desenha o andar pedido.
@@ -151,13 +237,10 @@ function renderizarAndar(nivel) {
   if (!cena || !ANDARES[nivel] || !podeAcessar(nivel)) return;
   limparAndar();
   andarAtual = nivel;
+  definirGrade(nivel);
 
-  // Zoom para chão e paredes caberem inteiros, deixando espaço para o elevador lateral.
-  const { width, height } = cena.scale;
-  const margem = width > 640 ? 200 : 16;
-  const zoom = Math.min(1.3, (width - 2 * margem) / (GRADE * TILE_W), height / (GRADE * TILE_H + ALTURA_PAREDE + 90));
-  cena.cameras.main.setZoom(zoom);
-  const escalaRotulo = Math.min(1.4, Math.max(1, 0.9 / zoom));
+  const zoom = enquadrarCamera();
+  const escalaRotulo = Math.min(2.2, Math.max(1, 0.9 / zoom)); // nomes legíveis em telas pequenas
 
   const ctx = {
     cena,
@@ -165,23 +248,18 @@ function renderizarAndar(nivel) {
     anima: (cfg) => cena.tweens.add({ repeat: -1, ...cfg }),
   };
   const ocupadas = montarCenario(nivel, ctx);
+  setoresAndar = desenharSetores(nivel, ctx, Math.min(1.8, Math.max(1, 0.8 / zoom)));
   posicoesAndar = {};
   ocupadasAndar = ocupadas;
 
-  posicionarAgentes(nivel, ocupadas).forEach((a) => {
+  const { agentes, vagas } = posicionarAgentes(nivel, ocupadas);
+  vagas.forEach((v) => desenharVaga(ctx, v, escalaRotulo));
+  agentes.forEach((a) => {
     posicoesAndar[a.id] = { x: a.x, y: a.y };
-    const estacao = ESTACOES[a.estacao] || ESTACOES.mesa;
+    setorDosAgentes[a.id] = a.setor;
+    desenharEstacao(ctx, a.estacao, a.x, a.y);
     const pos = { x: a.x + AGENTE_NO_TILE, y: a.y + AGENTE_NO_TILE };
     const pes = isoParaTela(pos.x, pos.y);
-
-    if (estacao.atras) {
-      const g = cena.add.graphics().setDepth(PROF_BASE + pes.y - 1);
-      estacao.atras(g, a.x, a.y);
-      elementos.push(g);
-    }
-    const frente = cena.add.graphics().setDepth(profundidade(a.x + 1, a.y + 1));
-    estacao.frente(frente, a.x, a.y);
-    elementos.push(frente);
 
     const dados = dadosAgente(nivel, a.id);
     if (dados.tipo === 'conhecimento') {
@@ -196,15 +274,17 @@ function renderizarAndar(nivel) {
     avatares[a.id] = avatar;
     elementos.push(...avatar.objetos);
   });
+  atualizarSetores();
 
   assinaturaAtual = assinatura(nivel);
   sincronizarVisitas(false, escalaRotulo);
   atualizarUI(nivel);
 }
 
-// Só troca status/animações e anima visitas, sem recriar a cena.
+// Só troca status/animações, brilho dos setores e anima visitas, sem recriar a cena.
 function atualizarStatus() {
   Object.entries(avatares).forEach(([id, avatar]) => avatar.definirStatus(dadosAgente(andarAtual, id).status));
+  atualizarSetores();
   sincronizarVisitas(true);
 }
 
@@ -243,7 +323,7 @@ class EscritorioScene extends Phaser.Scene {
 
   create() {
     cena = this;
-    this.scale.on('resize', () => renderizarAndar(andarAtual)); // recentraliza
+    this.scale.on('resize', () => renderizarAndar(andarAtual)); // reenquadra
     renderizarAndar(andarAtual);
   }
 }
@@ -258,6 +338,7 @@ function iniciarEscritorio() {
     backgroundColor: '#1b1e24',
     scale: { mode: Phaser.Scale.RESIZE, width: '100%', height: '100%' },
     scene: EscritorioScene,
+    input: { windowEvents: false }, // cliques em popups da interface não chegam ao canvas
   });
 }
 
@@ -271,6 +352,8 @@ function encerrarEscritorio() {
   estadoAgentes = {};
   posicoesAndar = {};
   ocupadasAndar = new Set();
+  setoresAndar = {};
+  setorDosAgentes = {};
   limparVisitas();
 }
 

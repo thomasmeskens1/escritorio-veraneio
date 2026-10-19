@@ -1,8 +1,9 @@
 // Agentes de "conhecimento" (Diretora): ficam no arquivo do Térreo e, quando outro
-// agente os consulta (`visitando`), caminham até ele. Não são interativos.
+// agente os consulta (`visitando`), caminham até ele. O clique abre o popup informativo.
 
-const PORTA_ELEVADOR = { x: 6.8, y: 0.15 }; // porta na parede da direita (y = 0)
-const SAIDA_ELEVADOR = { x: 6.8, y: 0.85 };
+// Porta do elevador na parede da direita (y = 0), perto do fim da grade do andar.
+const portaElevador = () => ({ x: GRADE - 1.2, y: 0.15 });
+const saidaElevador = () => ({ x: GRADE - 1.2, y: 0.85 });
 const VEL_CAMINHADA = 2.6; // tiles por segundo
 const ROTULO_VISITA = 22; // sobe o nome para não cobrir o do agente consultado
 
@@ -46,7 +47,7 @@ function lugarAoLado(agenteId, a) {
       + 0.5 * outros.reduce((soma, o) => soma + sobreposicao(o, { x, y }), 0);
     if (!melhor || custo < melhor.custo) melhor = { x, y, sentido, custo };
   });
-  return melhor || { x: SAIDA_ELEVADOR.x - 0.6, y: SAIDA_ELEVADOR.y + 0.6, sentido: -1 };
+  return melhor || { x: GRADE - 1.8, y: 1.45, sentido: -1 };
 }
 
 // Onde o agente deve estar no andar renderizado (null = fora dele).
@@ -54,7 +55,7 @@ function alvoNoAndar(id, casa, dados) {
   const v = dados.visitando;
   if (v && v.andar === andarAtual) {
     const a = posicoesAndar[v.agente];
-    const lugar = a ? lugarAoLado(v.agente, a) : { x: 5.6, y: 1.6, sentido: -1 };
+    const lugar = a ? lugarAoLado(v.agente, a) : { x: GRADE - 2.4, y: 1.6, sentido: -1 };
     return { chave: `visita:${v.agente}`, ...lugar, rotulo: ROTULO_VISITA };
   }
   const c = casasAndar[id];
@@ -106,25 +107,27 @@ function posicionar(p) {
   p.avatar.mover(pes.x, pes.y);
 }
 
-function criarPresenca(id, dados, inicio, rotulo) {
+function criarPresenca(id, casa, dados, inicio, rotulo) {
   const pes = isoParaTela(inicio.x, inicio.y);
-  const avatar = criarAvatar(cena, pes.x, pes.y, { ...dados, escalaRotulo: escalaVisitas, rotuloAcima: rotulo });
+  const avatar = criarAvatar(cena, pes.x, pes.y, {
+    ...dados, escalaRotulo: escalaVisitas, rotuloAcima: rotulo, aoClicar: () => clicarAgente(casa, id),
+  });
   return { avatar, g: { x: inicio.x, y: inicio.y }, tweens: [], chave: null, saindo: false };
 }
 
 // Leva o agente ao alvo: aparece direto (sem animação) ou entra/caminha.
-function irPara(id, dados, alvo, animar) {
+function irPara(id, casa, dados, alvo, animar) {
   let p = presencas[id];
   const chegar = () => {
     p.avatar.virar(alvo.sentido);
     p.avatar.ajustarRotulo(alvo.rotulo);
   };
   if (!p) {
-    const inicio = animar ? PORTA_ELEVADOR : alvo;
-    p = presencas[id] = criarPresenca(id, dados, inicio, alvo.rotulo);
+    const inicio = animar ? portaElevador() : alvo;
+    p = presencas[id] = criarPresenca(id, casa, dados, inicio, alvo.rotulo);
     if (animar) {
       p.avatar.definirAlfa(0);
-      caminhar(p, [SAIDA_ELEVADOR, alvo], chegar);
+      caminhar(p, [saidaElevador(), alvo], chegar);
       cena.tweens.add({ targets: p.avatar.objetos, alpha: 1, duration: 350 });
     } else {
       chegar();
@@ -162,7 +165,7 @@ function sairDoAndar(id, animar) {
   }
   p.saindo = true;
   p.chave = null;
-  caminhar(p, [SAIDA_ELEVADOR, PORTA_ELEVADOR], () => {
+  caminhar(p, [saidaElevador(), portaElevador()], () => {
     p.tweens.push(cena.tweens.add({ targets: p.avatar.objetos, alpha: 0, duration: 300, onComplete: remover }));
   });
 }
@@ -180,7 +183,7 @@ function sincronizarVisitas(animar, escalaRotulo) {
       p?.avatar.definirStatus(dados.status);
       sairDoAndar(id, animar);
     } else if (p && !p.saindo && p.chave === alvo.chave) p.avatar.definirStatus(dados.status);
-    else irPara(id, dados, alvo, animar);
+    else irPara(id, casa, dados, alvo, animar);
   });
   Object.keys(presencas).filter((id) => !vistos.has(id)).forEach((id) => sairDoAndar(id, animar));
   Object.keys(casasAndar).forEach(atualizarEtiqueta);

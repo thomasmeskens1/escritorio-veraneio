@@ -1,7 +1,8 @@
 // Avatar humano (chibi) desenhado proceduralmente a partir do campo `aparencia`.
 // Coordenadas locais: (0, 0) são os pés; y negativo sobe.
 
-const CORES_STATUS = { dormindo: 0x868e96, disponivel: 0x40c057, trabalhando: 0xf4a261 };
+// construindo: agente sendo criado pelo Construtor (aparece translúcido, com martelo).
+const CORES_STATUS = { dormindo: 0x868e96, disponivel: 0x40c057, trabalhando: 0xf4a261, construindo: 0x4dabf7 };
 
 const PALETA_PELE = ['#ffdbac', '#f1c27d', '#e0ac69', '#c68642', '#a0522d', '#8d5524'];
 const PALETA_CABELO = ['#1b1b1b', '#3b2f2f', '#7b4a12', '#b5651d', '#d8b26e', '#9e9e9e'];
@@ -115,7 +116,18 @@ function criarAvatar(cena, x, y, { id, aparencia, nome, tipo, status, aoClicar, 
     fontFamily: 'system-ui, sans-serif', fontSize: '13px', fontStyle: 'bold', color: '#adb5bd',
   }).setOrigin(0.5);
 
-  const avatar = cena.add.container(x, y, [sombra, boneco, balao, zzz]).setDepth(PROF_BASE + y);
+  // Martelo de "em construção" (status construindo).
+  const martelo = cena.add.container(-20, CABECA_Y - 10);
+  const gm = cena.add.graphics();
+  gm.fillStyle(0x8b5e34);
+  gm.fillRect(-1.5, -2, 3, 14);
+  gm.fillStyle(0xadb5bd);
+  gm.fillRect(-6, -6, 12, 5);
+  gm.lineStyle(1, 0x15171c, 0.6);
+  gm.strokeRect(-6, -6, 12, 5);
+  martelo.add(gm);
+
+  const avatar = cena.add.container(x, y, [sombra, boneco, balao, zzz, martelo]).setDepth(PROF_BASE + y);
   let rotuloDy = CABECA_Y - CABECA_R - 26 - rotuloAcima;
   const { rotulo, bolinha } = criarRotulo(cena, x, y + rotuloDy, nome, tipo);
   rotulo.setScale(escalaRotulo);
@@ -139,7 +151,7 @@ function criarAvatar(cena, x, y, { id, aparencia, nome, tipo, status, aoClicar, 
     const s = novoStatus in CORES_STATUS ? novoStatus : 'dormindo';
     animacoes.forEach((t) => t.remove());
     animacoes = [];
-    [boneco, bracos, cabeca, balao, zzz, bolinha, ...pontos].forEach((o) => {
+    [boneco, bracos, cabeca, balao, zzz, martelo, bolinha, ...pontos].forEach((o) => {
       o.setScale(1).setAlpha(1);
     });
     bracos.y = 0;
@@ -151,6 +163,8 @@ function criarAvatar(cena, x, y, { id, aparencia, nome, tipo, status, aoClicar, 
     statusAtual = s;
     balao.setVisible(s === 'trabalhando' && !andando);
     zzz.setVisible(s === 'dormindo');
+    martelo.setVisible(s === 'construindo');
+    martelo.angle = 0;
     const atraso = hashTexto(id) % 900; // agentes não respiram em sincronia
 
     if (s === 'trabalhando') {
@@ -159,6 +173,11 @@ function criarAvatar(cena, x, y, { id, aparencia, nome, tipo, status, aoClicar, 
       anima({ targets: boneco, scaleY: 1.02, duration: 700, yoyo: true, ease: 'Sine.inOut' });
       anima({ targets: bolinha, scale: 1.45, duration: 500, yoyo: true });
       pontos.forEach((p, i) => anima({ targets: p, alpha: 0.2, duration: 380, yoyo: true, delay: i * 130 }));
+    } else if (s === 'construindo') {
+      boneco.setAlpha(0.45);
+      anima({ targets: boneco, alpha: 0.8, duration: 900, yoyo: true, ease: 'Sine.inOut', delay: atraso / 3 });
+      anima({ targets: martelo, angle: -35, duration: 260, yoyo: true, ease: 'Quad.in' });
+      anima({ targets: bolinha, scale: 1.35, duration: 700, yoyo: true });
     } else if (s === 'dormindo') {
       anima({ targets: boneco, scaleY: 1.015, duration: 2400, yoyo: true, ease: 'Sine.inOut', delay: atraso });
       anima({ targets: cabeca, angle: 4, duration: 2400, yoyo: true, ease: 'Sine.inOut', delay: atraso });
