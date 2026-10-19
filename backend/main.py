@@ -154,6 +154,15 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     await orquestrador.nova_tarefa(usuario["sub"], andar, agente, texto)
 
 
+class FrontendSemCacheVelho(StaticFiles):
+    """Obriga o navegador a revalidar (ETag → 304), para nunca usar JS/HTML desatualizado."""
+
+    def file_response(self, *args, **kwargs):
+        resposta = super().file_response(*args, **kwargs)
+        resposta.headers["Cache-Control"] = "no-cache"
+        return resposta
+
+
 # Frontend servido na mesma origem (montado por último para não sombrear as rotas acima).
 if config.FRONTEND_DIR.is_dir():
-    app.mount("/", StaticFiles(directory=config.FRONTEND_DIR, html=True), name="frontend")
+    app.mount("/", FrontendSemCacheVelho(directory=config.FRONTEND_DIR, html=True), name="frontend")
