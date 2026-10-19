@@ -14,6 +14,7 @@ import atividade
 import config
 import diretora
 import orquestrador
+import producao
 import tarefas
 from api_painel import rotas as rotas_painel
 from auth import autenticar, criar_token, validar_token
@@ -29,6 +30,7 @@ TAMANHO_MAX_TEXTO = 4000
 @asynccontextmanager
 async def ciclo_de_vida(_: FastAPI):
     tarefas.iniciar()
+    producao.iniciar()
     aprendizado.carregar()
     diretora.vincular_loop(asyncio.get_running_loop())
     atividade.vincular_loop(asyncio.get_running_loop())
@@ -39,6 +41,7 @@ async def ciclo_de_vida(_: FastAPI):
 
 app = FastAPI(title="Escritório Veraneio", lifespan=ciclo_de_vida)
 app.include_router(rotas_painel)
+app.include_router(producao.rotas)
 
 
 class Credenciais(BaseModel):
@@ -127,7 +130,10 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     if not orquestrador.ha_modelo_disponivel():
         return await erro("Nenhum modelo de IA configurado no servidor.", **alvo)
 
-    await orquestrador.nova_tarefa(usuario["sub"], andar, agente, texto)
+    if agente.id in AGENTES_PRODUCAO:  # só chega aqui o dono do plano Max (checado acima)
+        await producao.enfileirar(usuario["sub"], andar, agente, texto)
+    else:
+        await orquestrador.nova_tarefa(usuario["sub"], andar, agente, texto)
 
 
 class FrontendSemCacheVelho(StaticFiles):
