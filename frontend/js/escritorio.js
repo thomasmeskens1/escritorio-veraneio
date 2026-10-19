@@ -15,7 +15,7 @@ const ANDARES = {
     agentes: [
       { id: 'recepcionista', nome: 'Recepcionista', x: 6, y: 3, estacao: 'balcao' },
       { id: 'professor', nome: 'Professor', x: 1, y: 2, estacao: 'pulpito' },
-      { id: 'tutora', nome: 'Tutora', x: 4, y: 5, estacao: 'livros' },
+      { id: 'diretora', nome: 'Diretora', x: 1, y: 5, estacao: 'arquivo', tipo: 'conhecimento' },
     ],
   },
   marketing: {
@@ -36,10 +36,20 @@ let andarAtual = 'terreo';
 let elementos = []; // objetos do andar renderizado
 let avatares = {}; // id -> avatar do andar renderizado
 let assinaturaAtual = ''; // agentes/aparências do andar renderizado
-let estadoAgentes = {}; // último "estado" recebido: { andar: { id: {nome, funcao, status, tipo, aparencia} } }
+let estadoAgentes = {}; // último "estado" recebido: { andar: { id: {nome, funcao, status, tipo, aparencia, visitando} } }
+let posicoesAndar = {}; // id -> { x, y } (tile) dos agentes do andar renderizado
+let ocupadasAndar = new Set(); // células com móveis/agentes no andar renderizado
+
+const TIPOS_AGENTE = ['ia', 'sistema', 'conhecimento'];
 
 function podeAcessar(nivel) {
   return !ANDARES[nivel]?.restrito || sessao?.role === 'diretoria';
+}
+
+// `visitando` só vale com andar conhecido e id de agente: { andar, agente } ou null.
+function lerVisita(v) {
+  return v && typeof v === 'object' && ANDARES[v.andar] && typeof v.agente === 'string'
+    ? { andar: v.andar, agente: v.agente } : null;
 }
 
 // Junta o layout local com o estado do servidor (nome local como fallback).
@@ -51,8 +61,9 @@ function dadosAgente(nivel, id) {
     nome: remoto.nome || local?.nome || id,
     funcao: remoto.funcao || '',
     status: remoto.status in CORES_STATUS ? remoto.status : 'dormindo',
-    tipo: remoto.tipo === 'sistema' ? 'sistema' : 'ia',
+    tipo: TIPOS_AGENTE.includes(remoto.tipo) ? remoto.tipo : local?.tipo || 'ia',
     aparencia: remoto.aparencia && typeof remoto.aparencia === 'object' ? remoto.aparencia : null,
+    visitando: lerVisita(remoto.visitando),
   };
 }
 
@@ -122,6 +133,7 @@ function assinatura(nivel) {
 }
 
 function clicarAgente(nivel, id) {
+  if (dadosAgente(nivel, id).tipo === 'conhecimento') return; // só os agentes a consultam
   if (typeof abrirAgente === 'function') abrirAgente(nivel, id);
   else abrirChat(nivel, id);
 }
@@ -131,6 +143,7 @@ function limparAndar() {
   elementos.forEach((e) => e.destroy());
   elementos = [];
   avatares = {};
+  limparVisitas();
 }
 
 // Limpa o andar atual e desenha o andar pedido.
@@ -152,8 +165,11 @@ function renderizarAndar(nivel) {
     anima: (cfg) => cena.tweens.add({ repeat: -1, ...cfg }),
   };
   const ocupadas = montarCenario(nivel, ctx);
+  posicoesAndar = {};
+  ocupadasAndar = ocupadas;
 
   posicionarAgentes(nivel, ocupadas).forEach((a) => {
+    posicoesAndar[a.id] = { x: a.x, y: a.y };
     const estacao = ESTACOES[a.estacao] || ESTACOES.mesa;
     const pos = { x: a.x + AGENTE_NO_TILE, y: a.y + AGENTE_NO_TILE };
     const pes = isoParaTela(pos.x, pos.y);
@@ -168,6 +184,10 @@ function renderizarAndar(nivel) {
     elementos.push(frente);
 
     const dados = dadosAgente(nivel, a.id);
+    if (dados.tipo === 'conhecimento') {
+      registrarCasa(a.id, pos, escalaRotulo); // avatar fica a cargo de js/visitas.js
+      return;
+    }
     const avatar = criarAvatar(cena, pes.x, pes.y, {
       ...dados,
       escalaRotulo,
@@ -178,12 +198,14 @@ function renderizarAndar(nivel) {
   });
 
   assinaturaAtual = assinatura(nivel);
+  sincronizarVisitas(false, escalaRotulo);
   atualizarUI(nivel);
 }
 
-// Só troca status/animações, sem recriar a cena.
+// Só troca status/animações e anima visitas, sem recriar a cena.
 function atualizarStatus() {
   Object.entries(avatares).forEach(([id, avatar]) => avatar.definirStatus(dadosAgente(andarAtual, id).status));
+  sincronizarVisitas(true);
 }
 
 function atualizarUI(nivel) {
@@ -247,6 +269,9 @@ function encerrarEscritorio() {
   avatares = {};
   assinaturaAtual = '';
   estadoAgentes = {};
+  posicoesAndar = {};
+  ocupadasAndar = new Set();
+  limparVisitas();
 }
 
 document.querySelectorAll('.andar').forEach((botao) => {

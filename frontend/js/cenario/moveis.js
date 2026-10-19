@@ -325,4 +325,25 @@ const MOVEIS = {
       });
     },
   },
+
+  // Arquivo de aço com gavetas etiquetadas (canto da Diretora).
+  arquivo: {
+    w: 1, d: 1,
+    desenhar(g, { x, y, cor = 0x6c7a72 }) {
+      const x0 = x + 0.15, y0 = y + 0.2, x1 = x + 0.75, y1 = y + 0.8;
+      caixaIso(g, x0, y0, x1, y1, 0, 72, cor);
+      for (let i = 0; i < 4; i++) {
+        const z0 = 5 + i * 16.5, z1 = z0 + 14;
+        g.fillStyle(tomCor(cor, 0.92));
+        g.fillPoints([pIso(x1, y0 + 0.05, z1), pIso(x1, y1 - 0.05, z1), pIso(x1, y1 - 0.05, z0), pIso(x1, y0 + 0.05, z0)], true);
+        const et = pIso(x1, (y0 + y1) / 2, z1 - 4);
+        g.fillStyle(0xf8f9fa);
+        g.fillRect(et.x - 1, et.y - 2, 5, 3);
+        const puxador = pIso(x1, (y0 + y1) / 2, z0 + 5);
+        g.fillStyle(0xdee2e6);
+        g.fillRect(puxador.x - 2, puxador.y - 1, 7, 2);
+      }
+      [0xe9c46a, 0xd4a373].forEach((c, i) => caixaIso(g, x0 + 0.08, y0 + 0.1, x0 + 0.4, y0 + 0.45, 72 + i * 3, 75 + i * 3, c, false));
+    },
+  },
 };

@@ -44,24 +44,43 @@ function normalizarAparencia(ap, id) {
 }
 
 // Rótulo com bolinha de status; fica acima de tudo para continuar legível.
-function criarRotulo(cena, x, y, nome, sistema) {
-  const texto = cena.add.text(5, 0, sistema ? `⚙ ${nome}` : nome, {
+// Borda azul: sistema (Despachante); dourada: conhecimento (Diretora).
+const BORDAS_ROTULO = { sistema: [0x8ecae6, 0.55], conhecimento: [0xd4af37, 0.6], ia: [0xffffff, 0.12] };
+
+function criarRotulo(cena, x, y, nome, tipo = 'ia') {
+  const texto = cena.add.text(5, 0, tipo === 'sistema' ? `⚙ ${nome}` : nome, {
     fontFamily: 'system-ui, sans-serif', fontSize: '12px', color: '#f1f3f5',
   }).setOrigin(0.5);
   const largura = texto.width + 26;
+  const [borda, alfaBorda] = BORDAS_ROTULO[tipo] || BORDAS_ROTULO.ia;
   const fundo = cena.add.graphics();
   fundo.fillStyle(0x15171c, 0.78);
   fundo.fillRoundedRect(-largura / 2, -10, largura, 20, 10);
-  fundo.lineStyle(1, sistema ? 0x8ecae6 : 0xffffff, sistema ? 0.55 : 0.12);
+  fundo.lineStyle(1, borda, alfaBorda);
   fundo.strokeRoundedRect(-largura / 2, -10, largura, 20, 10);
   const bolinha = cena.add.circle(-largura / 2 + 11, 0, 4.5, CORES_STATUS.dormindo).setStrokeStyle(1.5, 0x15171c);
   const rotulo = cena.add.container(x, y, [fundo, texto, bolinha]).setDepth(PROF_ROTULOS + y);
   return { rotulo, bolinha };
 }
 
-// Cria o avatar nos pés (x, y). Retorna objetos e controles de status.
+// Etiqueta informativa (pílula sem status), ex.: "Trabalhando em outro andar".
+function criarEtiqueta(cena, x, y, texto, escala = 1) {
+  const t = cena.add.text(0, 0, texto, {
+    fontFamily: 'system-ui, sans-serif', fontSize: '11px', fontStyle: 'italic', color: '#f4a261',
+  }).setOrigin(0.5);
+  const largura = t.width + 20;
+  const fundo = cena.add.graphics();
+  fundo.fillStyle(0x15171c, 0.82);
+  fundo.fillRoundedRect(-largura / 2, -10, largura, 20, 10);
+  fundo.lineStyle(1, 0xf4a261, 0.55);
+  fundo.strokeRoundedRect(-largura / 2, -10, largura, 20, 10);
+  return cena.add.container(x, y, [fundo, t]).setDepth(PROF_ROTULOS + y).setScale(escala);
+}
+
+// Cria o avatar nos pés (x, y). Retorna objetos e controles de status/movimento.
 // `escalaRotulo` compensa o zoom da câmera em telas pequenas para o nome continuar legível.
-function criarAvatar(cena, x, y, { id, aparencia, nome, tipo, status, aoClicar, escalaRotulo = 1 }) {
+// Sem `aoClicar` o avatar não é interativo (cursor padrão). `rotuloAcima` sobe o nome (px).
+function criarAvatar(cena, x, y, { id, aparencia, nome, tipo, status, aoClicar, escalaRotulo = 1, rotuloAcima = 0 }) {
   const ap = normalizarAparencia(aparencia, id);
   const novo = (desenho, ...args) => {
     const g = cena.add.graphics();
@@ -97,17 +116,23 @@ function criarAvatar(cena, x, y, { id, aparencia, nome, tipo, status, aoClicar, 
   }).setOrigin(0.5);
 
   const avatar = cena.add.container(x, y, [sombra, boneco, balao, zzz]).setDepth(PROF_BASE + y);
-  const { rotulo, bolinha } = criarRotulo(cena, x, y + CABECA_Y - CABECA_R - 26, nome, tipo === 'sistema');
+  let rotuloDy = CABECA_Y - CABECA_R - 26 - rotuloAcima;
+  const { rotulo, bolinha } = criarRotulo(cena, x, y + rotuloDy, nome, tipo);
   rotulo.setScale(escalaRotulo);
 
   // Área de clique generosa: corpo inteiro + rótulo.
-  const alvo = cena.add.zone(x, y - 44, 48, 100).setDepth(PROF_ROTULOS + y + 1)
-    .setInteractive({ useHandCursor: true });
-  alvo.on('pointerdown', aoClicar);
-  alvo.on('pointerover', () => rotulo.setScale(escalaRotulo * 1.08));
-  alvo.on('pointerout', () => rotulo.setScale(escalaRotulo));
+  let alvo = null;
+  if (aoClicar) {
+    alvo = cena.add.zone(x, y - 44, 48, 100).setDepth(PROF_ROTULOS + y + 1)
+      .setInteractive({ useHandCursor: true });
+    alvo.on('pointerdown', aoClicar);
+    alvo.on('pointerover', () => rotulo.setScale(escalaRotulo * 1.08));
+    alvo.on('pointerout', () => rotulo.setScale(escalaRotulo));
+  }
 
   let animacoes = [];
+  let statusAtual = 'dormindo';
+  let andando = false;
   const anima = (cfg) => animacoes.push(cena.tweens.add({ repeat: -1, ...cfg }));
 
   function definirStatus(novoStatus) {
@@ -123,7 +148,8 @@ function criarAvatar(cena, x, y, { id, aparencia, nome, tipo, status, aoClicar, 
     bolinha.setFillStyle(CORES_STATUS[s]);
     olhosAbertos.setVisible(s !== 'dormindo');
     olhosFechados.setVisible(s === 'dormindo');
-    balao.setVisible(s === 'trabalhando');
+    statusAtual = s;
+    balao.setVisible(s === 'trabalhando' && !andando);
     zzz.setVisible(s === 'dormindo');
     const atraso = hashTexto(id) % 900; // agentes não respiram em sincronia
 
@@ -144,6 +170,50 @@ function criarAvatar(cena, x, y, { id, aparencia, nome, tipo, status, aoClicar, 
     }
   }
 
+  // Leva os pés para (nx, ny) na tela, junto com rótulo, área de clique e profundidade.
+  function mover(nx, ny) {
+    avatar.setPosition(nx, ny).setDepth(PROF_BASE + ny);
+    rotulo.setPosition(nx, ny + rotuloDy).setDepth(PROF_ROTULOS + ny);
+    alvo?.setPosition(nx, ny - 44).setDepth(PROF_ROTULOS + ny + 1);
+  }
+
+  // Sobe/desce o nome (ex.: ao parar ao lado de outro agente).
+  function ajustarRotulo(acima) {
+    rotuloDy = CABECA_Y - CABECA_R - 26 - acima;
+    rotulo.setY(avatar.y + rotuloDy);
+  }
+
+  // Passos: balanço do corpo enquanto caminha.
+  let passos = [];
+  function caminhar(ativo) {
+    passos.forEach((t) => t.remove());
+    passos = [];
+    boneco.y = 0;
+    boneco.angle = 0;
+    andando = ativo;
+    balao.setVisible(statusAtual === 'trabalhando' && !ativo); // sem "digitando" enquanto anda
+    if (!ativo) return;
+    passos.push(cena.tweens.add({ targets: boneco, y: -3, duration: 160, yoyo: true, repeat: -1, ease: 'Sine.out' }));
+    boneco.angle = -4;
+    passos.push(cena.tweens.add({ targets: boneco, angle: 4, duration: 320, yoyo: true, repeat: -1, ease: 'Sine.inOut' }));
+  }
+
+  // Vira para a esquerda (-1) ou direita (1); o balão acompanha o lado.
+  const virar = (sentido) => avatar.setScale(sentido < 0 ? -1 : 1, 1);
+
+  function definirAlfa(alfa) {
+    avatar.setAlpha(alfa);
+    rotulo.setAlpha(alfa);
+  }
+
   definirStatus(status);
-  return { objetos: [avatar, rotulo, alvo], definirStatus };
-}
+  return {
+    objetos: [avatar, rotulo, alvo].filter(Boolean),
+    definirStatus, mover, caminhar, virar, definirAlfa, ajustarRotulo,
+    destruir: () => {
+      caminhar(false);
+      animacoes.forEach((t) => t.remove());
+      [avatar, rotulo, alvo].forEach((o) => o?.destroy());
+    },
+  };
+}

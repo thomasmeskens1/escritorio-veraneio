@@ -71,7 +71,9 @@ function novoEl(tag, classe, texto) {
 
 // ---------- Abertura ----------
 function abrirAgente(andar, id) {
-  if (dadosAgente(andar, id).tipo === 'sistema') {
+  const { tipo } = dadosAgente(andar, id);
+  if (tipo === 'conhecimento') return; // Diretora: só os agentes a consultam
+  if (tipo === 'sistema') {
     abrirPainel();
   } else {
     fecharPainel();
@@ -128,7 +130,10 @@ async function carregarTarefas() {
 
 // ---------- Renderização ----------
 function renderizarPainel({ resumo = {}, tarefas = [] }) {
-  const blocos = [criarResumo(resumo), criarCredito(resumo.anthropic), criarModelosFora(resumo.modelos_fora), criarListaTarefas(tarefas)];
+  const blocos = [
+    criarResumo(resumo), criarCredito(resumo.anthropic), criarModelosFora(resumo.modelos_fora),
+    criarAprendizado(resumo.aprendizado), criarListaTarefas(tarefas),
+  ];
   painelConteudo.replaceChildren(...blocos.filter(Boolean));
 }
 
