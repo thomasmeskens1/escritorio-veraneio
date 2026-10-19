@@ -116,7 +116,8 @@ function receberResposta(msg) {
   const meta = metadadosResposta(msg);
   const autor = !meta && modelo ? `${nome} · ${modelo}` : nome;
   adicionarMensagem(andar, agente, { autor, texto, tipo: 'agente', meta });
-  if (!chatEstaAberto(andar, agente)) mostrarToast(andar, agente, texto);
+  if (chatEstaAberto(andar, agente)) carregarPerfil(andar, agente); // atualiza o contador de tarefas
+  else mostrarToast(andar, agente, texto);
   atualizarChat();
   avisarPainel();
 }
