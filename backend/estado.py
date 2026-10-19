@@ -1,6 +1,7 @@
 """Estado dos agentes, dividido por andar (em memória)."""
 
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -11,11 +12,38 @@ class Status(str, Enum):
     trabalhando = "trabalhando"
 
 
+class Cabelo(BaseModel):
+    estilo: Literal["curto", "longo", "coque", "careca", "cacheado", "moicano"]
+    cor: str
+
+
+class Roupa(BaseModel):
+    estilo: Literal["camiseta", "camisa", "blazer", "moletom", "macacao", "avental"]
+    cor: str
+
+
+class Aparencia(BaseModel):
+    """Visual do avatar; o Construtor gera aparências novas neste mesmo formato."""
+
+    pele: str
+    cabelo: Cabelo
+    roupa: Roupa
+    calca: str
+    acessorio: Literal["nenhum", "oculos", "fone", "bone", "capacete", "cracha", "gravata", "camera", "lapis"]
+
+
 class Agente(BaseModel):
     id: str
     nome: str
     funcao: str
+    aparencia: Aparencia
+    tipo: Literal["ia", "sistema"] = "ia"  # "sistema" não conversa (ex.: Despachante)
     status: Status = Status.disponivel
+
+
+def _ap(pele, cabelo, cor_cabelo, roupa, cor_roupa, calca, acessorio) -> Aparencia:
+    return Aparencia(pele=pele, cabelo=Cabelo(estilo=cabelo, cor=cor_cabelo),
+                     roupa=Roupa(estilo=roupa, cor=cor_roupa), calca=calca, acessorio=acessorio)
 
 
 def _andar(*agentes: Agente) -> dict[str, Agente]:
@@ -23,14 +51,29 @@ def _andar(*agentes: Agente) -> dict[str, Agente]:
 
 
 ANDARES: dict[str, dict[str, Agente]] = {
-    "porao": {},
-    "terreo": {},
+    "porao": _andar(
+        Agente(id="construtor", nome="Construtor", funcao="Cria novos agentes para o escritório",
+               aparencia=_ap("#c68642", "curto", "#2b1d0e", "macacao", "#f4a261", "#3d405b", "capacete")),
+        Agente(id="despachante", nome="Despachante", funcao="Classifica tarefas e opera a fila do Claude",
+               tipo="sistema", aparencia=_ap("#8d5524", "careca", "#000000", "camisa", "#457b9d", "#1d3557", "fone")),
+    ),
+    "terreo": _andar(
+        Agente(id="recepcionista", nome="Recepcionista", funcao="Boas-vindas e visão geral do escritório",
+               aparencia=_ap("#ffdbac", "longo", "#b5651d", "blazer", "#2a9d8f", "#264653", "cracha")),
+        Agente(id="professor", nome="Professor", funcao="Ensina a pedir tarefas e escrever bons briefings",
+               aparencia=_ap("#e0ac69", "curto", "#9e9e9e", "camisa", "#6d597a", "#355070", "oculos")),
+        Agente(id="tutora", nome="Tutora", funcao="Explica acessos, status, fila e limites dos modelos",
+               aparencia=_ap("#a0522d", "coque", "#1b1b1b", "moletom", "#e9c46a", "#3a5a40", "lapis")),
+    ),
     "marketing": _andar(
-        Agente(id="designer", nome="Designer", funcao="Design gráfico e identidade visual"),
-        Agente(id="moviemaker", nome="Moviemaker", funcao="Roteiro, captação e edição de vídeos"),
-        Agente(id="gestor_trafego", nome="Gestor de Tráfego", funcao="Mídia paga e performance"),
-        Agente(id="gestor", nome="Gestor", funcao="Coordena, delega e revisa o time"),
-        Agente(id="carpinteiro", nome="Carpinteiro", funcao="Cria novos agentes para o escritório"),
+        Agente(id="designer", nome="Designer", funcao="Design gráfico e identidade visual",
+               aparencia=_ap("#f1c27d", "cacheado", "#7b2cbf", "camiseta", "#e76f51", "#22223b", "oculos")),
+        Agente(id="moviemaker", nome="Moviemaker", funcao="Roteiro, captação e edição de vídeos",
+               aparencia=_ap("#c68642", "curto", "#3b2f2f", "moletom", "#1d3557", "#14213d", "camera")),
+        Agente(id="gestor_trafego", nome="Gestor de Tráfego", funcao="Mídia paga e performance",
+               aparencia=_ap("#ffdbac", "moicano", "#d62828", "camiseta", "#2a9d8f", "#264653", "fone")),
+        Agente(id="gestor", nome="Gestor", funcao="Coordena, delega e revisa o time",
+               aparencia=_ap("#8d5524", "curto", "#1b1b1b", "blazer", "#343a40", "#212529", "gravata")),
     ),
     "cobertura": {},
 }

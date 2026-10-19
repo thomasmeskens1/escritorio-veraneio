@@ -21,28 +21,32 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
 
-# Cadeia de fallback sem custo extra: gratuitos primeiro, créditos do Max por último.
-MODELOS = _lista(
-    "MODELOS",
-    "openrouter/nvidia/nemotron-3-super-120b-a12b:free,"
-    "openrouter/google/gemma-4-31b-it:free,"
-    "ollama/qwen3:4b,"
-    "anthropic/claude-haiku-5-5",
+# Execução imediata: gratuitos em ordem e depois o local (sem custo).
+MODELOS_GRATUITOS = _lista(
+    "MODELOS_GRATUITOS",
+    "openrouter/nvidia/nemotron-3-super-120b-a12b:free,openrouter/google/gemma-4-31b-it:free",
 )
-# Modelo mais forte; vem primeiro para os agentes complexos. Vazio = nunca usado.
-MODELO_PREMIUM = os.getenv("MODELO_PREMIUM", "anthropic/claude-sonnet-5-5").strip()
-AGENTES_COMPLEXOS = set(_lista("AGENTES_COMPLEXOS", "gestor"))
+MODELO_LOCAL = os.getenv("MODELO_LOCAL", "ollama/qwen3:4b").strip()
 
-# Provedor -> chave exigida (modelos sem chave configurada saem da cadeia).
+# Fila adiada: créditos do Max. Haiku para simples/médias, Sonnet para complexas.
+MODELO_FILA_PADRAO = os.getenv("MODELO_FILA_PADRAO", "anthropic/claude-haiku-5-5").strip()
+MODELO_FILA_COMPLEXO = os.getenv("MODELO_FILA_COMPLEXO", "anthropic/claude-sonnet-5-5").strip()
+
+# Orçamento Anthropic: crédito mensal do Max 5x, liberado em ritmo diário dentro do mês.
+CREDITO_MENSAL_ANTHROPIC_USD = float(os.getenv("CREDITO_MENSAL_ANTHROPIC_USD", "100"))
+FRACAO_UTILIZAVEL = 0.95  # reserva de 5% contra erro de estimativa
+# US$ por milhão de tokens (entrada, saída). Conferir em platform.claude.com/docs/en/about-claude/pricing
+PRECOS_ANTHROPIC = {
+    "anthropic/claude-haiku-5-5": (0.10, 0.50),
+    "anthropic/claude-sonnet-5-5": (2.00, 10.00),
+}
+
+# Provedor -> chave exigida (modelos sem chave configurada são ignorados).
 _CHAVES = {"anthropic/": ANTHROPIC_API_KEY, "openrouter/": OPENROUTER_API_KEY}
 
-TEMPO_LIMITE_TAREFA = int(os.getenv("TEMPO_LIMITE_TAREFA", "600"))  # segundos
-
+ARQUIVO_BANCO = Path(__file__).resolve().parent / "dados" / "escritorio.db"
 FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", Path(__file__).resolve().parent.parent / "frontend"))
 
 
-def cadeia_modelos(agente_id: str) -> list[str]:
-    """Ordem de tentativa para o agente; ignora modelos de provedores sem chave configurada."""
-    premium = [MODELO_PREMIUM] if MODELO_PREMIUM else []
-    cadeia = premium + MODELOS if agente_id in AGENTES_COMPLEXOS else MODELOS + premium
-    return [m for m in cadeia if all(chave for prefixo, chave in _CHAVES.items() if m.startswith(prefixo))]
+def modelo_disponivel(modelo: str) -> bool:
+    return bool(modelo) and all(chave for prefixo, chave in _CHAVES.items() if modelo.startswith(prefixo))
