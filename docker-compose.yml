@@ -1,0 +1,17 @@
+services:
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      FRONTEND_DIR: /frontend
+      WATCHFILES_FORCE_POLLING: "true" # hot-reload confiável em volumes do Windows
+      CREWAI_TELEMETRY_OPT_OUT: "true"
+      OTEL_SDK_DISABLED: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # acesso ao Ollama rodando no host
+    volumes:
+      - ./backend:/app
+      - ./frontend:/frontend:ro
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload

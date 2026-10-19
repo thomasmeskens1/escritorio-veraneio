@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Escritório Veraneio</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="chat.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.1/phaser.min.js"></script>
+</head>
+<body>
+  <!-- Tela de login (visível até existir uma sessão válida) -->
+  <main id="login" class="login">
+    <form id="login-form" class="login-cartao" novalidate>
+      <div class="login-marca">
+        <span class="login-logo">V</span>
+        <div>
+          <h1>Escritório Veraneio</h1>
+          <p>Acesso restrito a colaboradores</p>
+        </div>
+      </div>
+
+      <label class="campo">
+        <span>E-mail ou usuário</span>
+        <input id="login-usuario" name="usuario" autocomplete="username" required>
+      </label>
+      <label class="campo">
+        <span>Senha</span>
+        <input id="login-senha" name="senha" type="password" autocomplete="current-password" required>
+      </label>
+
+      <p id="login-erro" class="login-erro" role="alert"></p>
+      <button id="login-entrar" class="botao-primario" type="submit">Entrar</button>
+    </form>
+  </main>
+
+  <!-- Escritório (exibido após o login) -->
+  <div id="app" hidden>
+    <div id="jogo"></div>
+
+    <header id="hud">
+      <h1>Escritório Veraneio</h1>
+      <p id="andar-atual"></p>
+      <div class="hud-sessao">
+        <span id="conexao" class="conexao" title="Desconectado"></span>
+        <span id="usuario-logado"></span>
+        <button id="sair" class="sair" type="button">Sair</button>
+      </div>
+    </header>
+
+    <nav id="elevador" aria-label="Elevador">
+      <h2>Elevador</h2>
+      <button class="andar bloqueado" data-andar="cobertura" data-icone="C" title="Acesso restrito à diretoria">
+        <span class="icone">🔒</span> Cobertura
+      </button>
+      <button class="andar" data-andar="marketing">
+        <span class="icone">1</span> Marketing
+      </button>
+      <button class="andar" data-andar="terreo">
+        <span class="icone">T</span> Térreo
+      </button>
+      <button class="andar" data-andar="porao">
+        <span class="icone">P</span> Porão
+      </button>
+    </nav>
+
+    <!-- Janela de conversa com o agente -->
+    <div id="modal" class="modal">
+      <section class="janela" role="dialog" aria-modal="true" aria-labelledby="modal-nome">
+        <header class="janela-barra">
+          <span class="janela-luzes" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span id="modal-status" class="status"></span>
+          <div class="janela-titulo">
+            <h2 id="modal-nome"></h2>
+            <p id="modal-funcao"></p>
+          </div>
+          <button id="modal-fechar" class="fechar" type="button" aria-label="Fechar">×</button>
+        </header>
+
+        <div id="modal-historico" class="historico" aria-live="polite"></div>
+        <p id="modal-pensando" class="pensando" hidden>pensando<span>...</span></p>
+
+        <form id="modal-form" class="janela-rodape">
+          <input id="modal-input" autocomplete="off" placeholder="Descreva a tarefa..." aria-label="Tarefa">
+          <button id="modal-enviar" class="botao-primario" type="submit">Enviar Tarefa</button>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <script src="js/escritorio.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/rede.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>

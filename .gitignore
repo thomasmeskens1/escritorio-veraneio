@@ -1,0 +1,46 @@
+# ===== Python / backend =====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.pytest_cache/
+backend/dados/
+
+# ===== Node / ferramentas =====
+node_modules/
+npm-debug.log*
+
+# ===== Sistema / editor =====
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ===== Claude Code =====
+.claude/settings.local.json
+.claude/settings.json.bak*
+
+# ===== Ruflo (MCP) =====
+# Versionados (necessários para o MCP e os hooks funcionarem num clone novo):
+#   .mcp.json, .claude/settings.json, .claude/helpers/,
+#   .claude-flow/config.yaml, CLAUDE.md
+
+# Memória e estado de execução
+.swarm/
+.hive-mind/
+.claude-flow/*
+!.claude-flow/config.yaml
+
+# Conteúdo genérico gerado pelo `npx ruflo@latest init` (recriável)
+.claude/agents/
+.claude/commands/
+.claude/skills/
+.agents/
+
+# Arquivos de banco/log gerados em qualquer lugar
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.log

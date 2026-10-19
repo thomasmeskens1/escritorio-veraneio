@@ -1,0 +1,2 @@
+# Quebras de linha LF em todo o repositório (o backend roda em containers Linux).
+* text=auto eol=lf
