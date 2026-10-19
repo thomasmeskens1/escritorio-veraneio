@@ -9,6 +9,7 @@ from crewai import LLM, Agent, Crew, Task
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 
+import atividade
 import config
 import diretora
 import tarefas
@@ -48,9 +49,10 @@ class ConsultarDiretora(BaseTool):
     args_schema: type[BaseModel] = _Pergunta
     andar: str
     agente: str
+    tarefa_id: int
 
     def _run(self, pergunta: str) -> str:
-        return diretora.consultar(pergunta, self.andar, self.agente)
+        return diretora.consultar(pergunta, self.andar, self.agente, self.tarefa_id)
 
 
 _trava_local = asyncio.Lock()
@@ -69,11 +71,12 @@ def _llm(modelo: str, limite_s: int) -> LLM:
     return LLM(model=modelo, timeout=90, max_retries=0)
 
 
-def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s: int, total: Resultado) -> str:
+def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s: int, total: Resultado,
+          tarefa_id: int) -> str:
     """Roda um agente (Crew de uma tarefa) e acumula tokens e custo no `total`."""
     ferramentas = []
     if diretora.tem_documentos():  # sem documentos, a ferramenta só gastaria chamadas
-        ferramentas.append(ConsultarDiretora(andar=andar_do_agente(agente_id) or "", agente=agente_id))
+        ferramentas.append(ConsultarDiretora(andar=andar_do_agente(agente_id) or "", agente=agente_id, tarefa_id=tarefa_id))
     agente = Agent(**PERFIS[agente_id], llm=_llm(modelo, limite_s), tools=ferramentas,
                    max_iter=MAX_ITERACOES, max_retry_limit=0, verbose=False)
     saida = Crew(agents=[agente], tasks=[Task(description=descricao, expected_output=esperado, agent=agente)]).kickoff()
@@ -94,13 +97,17 @@ def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa,
 
         def executar(agente: str, descricao: str, esperado: str, papel: str) -> str:
             return _rodar(agente, descricao, esperado, etapa.modelo if papel == "gestor" else equipe,
-                          etapa.limite_s, total)
+                          etapa.limite_s, total, tarefa_id)
 
-        total.texto = projeto.executar_projeto(tarefa_id, texto, contexto("gestor", historico), executar, cancelar)
+        def avisar(tipo: str, agente: str, detalhe: str) -> None:
+            atividade.etapa_em_thread(tarefa_id, tipo, agente, detalhe)
+
+        total.texto = projeto.executar_projeto(tarefa_id, texto, contexto("gestor", historico), executar,
+                                               cancelar, avisar)
     else:
         esperado = "JSON com a especificação do novo agente." if agente_id == "construtor" else "Resposta completa ao pedido."
         total.texto = _rodar(agente_id, descricao_tarefa(agente_id, texto, historico), esperado,
-                             etapa.modelo, etapa.limite_s, total)
+                             etapa.modelo, etapa.limite_s, total, tarefa_id)
     return total
 
 

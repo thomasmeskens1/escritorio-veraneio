@@ -30,6 +30,16 @@ CREATE TABLE IF NOT EXISTS tarefas (
     proxima_tentativa TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tarefas_status ON tarefas(status);
+CREATE TABLE IF NOT EXISTS eventos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tarefa_id INTEGER NOT NULL,
+    em TEXT NOT NULL,
+    tipo TEXT NOT NULL,   -- recebida | tentativa | falha_modelo | consulta_diretora | etapa_iniciada | etapa_salva | adiada | concluida | falhou
+    agente TEXT,
+    modelo TEXT,
+    detalhe TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_eventos_tarefa ON eventos(tarefa_id);
 """
 
 # Colunas adicionadas depois da primeira versão do banco (migração simples).
@@ -141,6 +151,44 @@ def contagem_por_status(usuario: str | None) -> dict[str, int]:
     contagem = {s: 0 for s in ("executando", "concluida", "adiada", "falhou")}
     contagem.update({linha["status"]: linha["n"] for linha in linhas})
     return contagem
+
+
+# --- Registro de atividade ------------------------------------------------------------
+
+def registrar_evento(tarefa_id: int, tipo: str, agente: str | None = None, modelo: str | None = None,
+                     detalhe: str | None = None) -> None:
+    with _db() as db:
+        db.execute("INSERT INTO eventos (tarefa_id, em, tipo, agente, modelo, detalhe) VALUES (?, ?, ?, ?, ?, ?)",
+                   (tarefa_id, _agora(), tipo, agente, modelo, (detalhe or "")[:300] or None))
+
+
+def eventos_de(tarefa_ids: list[int]) -> dict[int, list[sqlite3.Row]]:
+    if not tarefa_ids:
+        return {}
+    marcadores = ",".join("?" * len(tarefa_ids))
+    linhas = _db().execute(f"SELECT * FROM eventos WHERE tarefa_id IN ({marcadores}) ORDER BY id", tarefa_ids).fetchall()
+    por_tarefa: dict[int, list] = {}
+    for linha in linhas:
+        por_tarefa.setdefault(linha["tarefa_id"], []).append(linha)
+    return por_tarefa
+
+
+def contagem_do_agente(agente: str) -> tuple[int, int]:
+    """(concluídas, total) de tarefas pedidas diretamente ao agente."""
+    linha = _db().execute(
+        "SELECT SUM(status = 'concluida'), COUNT(*) FROM tarefas WHERE agente = ?", (agente,)
+    ).fetchone()
+    return int(linha[0] or 0), int(linha[1] or 0)
+
+
+def etapas_do_agente(agente: str) -> int:
+    """Etapas de projetos do Gestor entregues por este agente."""
+    return _db().execute("SELECT COUNT(*) FROM eventos WHERE tipo = 'etapa_salva' AND agente = ?",
+                         (agente,)).fetchone()[0]
+
+
+def consultas_diretora() -> int:
+    return _db().execute("SELECT COUNT(*) FROM eventos WHERE tipo = 'consulta_diretora'").fetchone()[0]
 
 
 # --- Orçamento Anthropic ---------------------------------------------------------------

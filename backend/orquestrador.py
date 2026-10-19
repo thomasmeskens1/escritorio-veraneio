@@ -9,6 +9,7 @@ import logging
 import time
 
 import aprendizado
+import atividade
 import diretora
 import saude
 import tarefas
@@ -35,7 +36,8 @@ def ha_modelo_disponivel() -> bool:
 async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str) -> None:
     dificuldade = classificar(agente.id, texto)
     tarefa_id = tarefas.criar(login, andar, agente.id, texto, dificuldade.value)
-    await atualizar_status(agente, Status.trabalhando)
+    tarefas.registrar_evento(tarefa_id, "recebida", agente.id, detalhe=f"Dificuldade: {dificuldade.value}")
+    await atividade.ocupar(agente.id)
     _em_segundo_plano(_executar_imediata(tarefa_id, agente, dificuldade))
 
 
@@ -52,6 +54,7 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
     historico = tarefas.historico(tarefa["usuario"], tarefa["andar"], tarefa["agente"], tarefa["id"])
     inicio = time.monotonic()
     try:
+        tarefas.registrar_evento(tarefa["id"], "tentativa", agente.id, etapa.modelo)
         return await executar(agente.id, tarefa["texto"], etapa, historico, tarefa["id"]), ""
     except LocalOcupado:
         return None, "modelo local ocupado"
@@ -63,6 +66,7 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
     finally:
         tarefas.registrar_tentativa(tarefa["id"], time.monotonic() - inicio)
         _em_segundo_plano(diretora.encerrar_consulta(agente.id))  # Diretora volta ao Térreo
+    tarefas.registrar_evento(tarefa["id"], "falha_modelo", agente.id, etapa.modelo, erro)
     log.warning("Tarefa %s: %s falhou (%s).", tarefa["id"], etapa.modelo, erro[:200])
     return None, erro
 
@@ -84,19 +88,26 @@ async def _executar_imediata(tarefa_id: int, agente: Agente, dificuldade: Dificu
             return
         destino = "fila do Claude" if etapa_fila(dificuldade) else "fila de contingência (gratuitos e local)"
         tarefas.atualizar(tarefa_id, status="adiada", motivo="Os modelos imediatos não concluíram a tarefa a tempo.")
+        tarefas.registrar_evento(tarefa_id, "adiada", agente.id, detalhe=destino)
         await gerenciador.enviar_para_usuario(tarefa["usuario"], {
             "tipo": "tarefa_adiada", "andar": tarefa["andar"], "agente": agente.id, "tarefa_id": tarefa_id,
             "texto": f"Os modelos imediatos não concluíram a tarefa a tempo. Ela foi para a {destino}; "
                      "a resposta chega assim que for processada.",
         })
     finally:
-        await atualizar_status(agente, Status.disponivel)
+        await atividade.liberar(agente.id)
 
 
 async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
     tarefas.atualizar(tarefa_id, status="concluida", modelo=modelo, resposta=resultado.texto,
                       tokens_entrada=resultado.tokens_entrada, tokens_saida=resultado.tokens_saida, custo_usd=resultado.custo_usd)
+    tarefas.registrar_evento(tarefa_id, "concluida", modelo=modelo)
     await _entregar(tarefas.obter(tarefa_id))
+
+
+def _falhar(tarefa_id: int, motivo: str) -> None:
+    tarefas.atualizar(tarefa_id, status="falhou", motivo=motivo)
+    tarefas.registrar_evento(tarefa_id, "falhou", detalhe=motivo)
 
 
 def _mensagem(linha) -> dict:
@@ -144,7 +155,7 @@ async def _processar_proxima() -> int:
     for linha in tarefas.proximas_adiadas():
         agente = buscar_agente(linha["andar"], linha["agente"])
         if not agente:
-            tarefas.atualizar(linha["id"], status="falhou", motivo="Agente não existe mais.")
+            _falhar(linha["id"], "Agente não existe mais.")
             await _entregar(tarefas.obter(linha["id"]))
             continue
         etapas = _etapas_fila(Dificuldade(linha["dificuldade"]))
@@ -152,15 +163,14 @@ async def _processar_proxima() -> int:
             continue  # agente ocupado ou nenhum modelo no ar agora: fica para a próxima rodada
 
         tarefas.atualizar(linha["id"], status="executando")
-        await atualizar_status(agente, Status.trabalhando)
+        await atividade.ocupar(agente.id)
         try:
             concluiu = await _executar_etapas(linha, agente, etapas)
         finally:
-            await atualizar_status(agente, Status.disponivel)
+            await atividade.liberar(agente.id)
 
         if not concluiu and not tarefas.reagendar(linha["id"]):
-            tarefas.atualizar(linha["id"], status="falhou",
-                              motivo="Nenhum modelo conseguiu concluir a tarefa após várias tentativas.")
+            _falhar(linha["id"], "Nenhum modelo conseguiu concluir a tarefa após várias tentativas.")
             await _entregar(tarefas.obter(linha["id"]))
         return 0
 

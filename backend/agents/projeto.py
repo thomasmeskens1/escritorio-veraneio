@@ -14,8 +14,12 @@ from typing import Callable
 import config
 
 PASTA_PROJETOS = config.ARQUIVO_BANCO.parent / "projetos"
-EQUIPE = {"designer": "Designer", "moviemaker": "Moviemaker", "gestor_trafego": "Gestor de Tráfego"}
-MAX_ETAPAS = 6
+EQUIPE = {
+    "designer": "Designer", "criador_imagens": "Criador de Imagens", "copywriter": "Copywriter",
+    "social_media": "Social Media", "moviemaker": "Moviemaker", "editor_video": "Editor de Vídeo",
+    "gestor_trafego": "Gestor de Tráfego", "analista_metricas": "Analista de Métricas",
+}
+MAX_ETAPAS = 8  # micro-tarefas: cada especialista com uma entrega focada
 TRECHO_ETAPA = 1500   # caracteres de cada etapa anterior enviados à próxima
 TRECHO_FINAL = 2500   # caracteres de cada etapa enviados à consolidação
 PALAVRAS_ETAPA = 400  # limite pedido a cada etapa (tempo e tokens)
@@ -69,6 +73,9 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar) -> list[
         descricao = (
             f"{contexto}\n\nPedido do usuário: {pedido}\n\n"
             f"Divida o trabalho em até {MAX_ETAPAS} etapas para a sua equipe: {equipe}. "
+            "Prefira micro-tarefas: cada etapa é uma entrega focada de um único especialista "
+            "(ex.: post de rede social = Designer define o conceito, Copywriter escreve a legenda, "
+            "Criador de Imagens especifica a arte). Acione só quem for necessário. "
             "Ordene as etapas de forma que cada uma possa usar o resultado das anteriores. "
             'Responda SOMENTE com um JSON: [{"agente": "<id>", "instrucao": "<o que entregar>"}].'
         )
@@ -98,8 +105,13 @@ def _passagem(pasta: Path, plano: list[dict]) -> str:
     return texto
 
 
+def _sem_aviso(tipo: str, agente: str, detalhe: str) -> None:
+    pass
+
+
 def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Executar,
-                     cancelar: threading.Event) -> str:
+                     cancelar: threading.Event, avisar: Callable[[str, str, str], None] = _sem_aviso) -> str:
+    """`avisar(tipo, agente, detalhe)` recebe etapa_iniciada/etapa_salva (registro e animação do setor)."""
     pasta = PASTA_PROJETOS / str(tarefa_id)
     (pasta / "etapas").mkdir(parents=True, exist_ok=True)
     plano = _plano(pasta, pedido, contexto, executar)
@@ -120,7 +132,13 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
             f"Sua etapa ({n}): {passo['instrucao']}\n\n"
             f"Seja objetivo: até ~{PALAVRAS_ETAPA} palavras, só o essencial para as próximas etapas."
         )
-        _gravar(arquivo, executar(passo["agente"], descricao, "Entrega completa desta etapa.", "equipe"))
+        detalhe = f"Etapa {n}: {passo['instrucao'][:160]}"
+        avisar("etapa_iniciada", passo["agente"], detalhe)
+        try:
+            _gravar(arquivo, executar(passo["agente"], descricao, "Entrega completa desta etapa.", "equipe"))
+        finally:
+            avisar("etapa_encerrada", passo["agente"], detalhe)
+        avisar("etapa_salva", passo["agente"], detalhe)
         _passagem(pasta, plano)
 
     final = pasta / "final.md"

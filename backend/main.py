@@ -5,19 +5,20 @@ import json
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import aprendizado
+import atividade
 import config
 import diretora
 import orquestrador
-import saude
 import tarefas
+from api_painel import rotas as rotas_painel
 from auth import autenticar, criar_token, validar_token
 from conexoes import gerenciador
-from estado import Status, andar_do_agente, buscar_agente, pode_acessar, snapshot
+from estado import AGENTES_PRODUCAO, Status, buscar_agente, pode_acessar, snapshot
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("veraneio")
@@ -30,12 +31,14 @@ async def ciclo_de_vida(_: FastAPI):
     tarefas.iniciar()
     aprendizado.carregar()
     diretora.vincular_loop(asyncio.get_running_loop())
+    atividade.vincular_loop(asyncio.get_running_loop())
     fila = asyncio.create_task(orquestrador.processar_fila())
     yield
     fila.cancel()
 
 
 app = FastAPI(title="Escritório Veraneio", lifespan=ciclo_de_vida)
+app.include_router(rotas_painel)
 
 
 class Credenciais(BaseModel):
@@ -49,49 +52,6 @@ def login(credenciais: Credenciais):
     if not usuario:
         raise HTTPException(status_code=401, detail="Usuário ou senha inválidos")
     return {"token": criar_token(usuario), "usuario": usuario["nome"], "role": usuario["role"]}
-
-
-@app.get("/api/tarefas")
-def listar_tarefas(authorization: str = Header("")):
-    """Painel do Despachante: diretoria vê todas as tarefas; os demais, só as próprias."""
-    usuario = validar_token(authorization.removeprefix("Bearer ").strip())
-    if not usuario:
-        raise HTTPException(status_code=401, detail="Token inválido")
-    filtro = None if usuario["role"] == "diretoria" else usuario["sub"]
-    contagem = tarefas.contagem_por_status(filtro)
-    return {
-        "resumo": {
-            "por_status": contagem,
-            "fila_anthropic": contagem["adiada"],
-            "anthropic": {
-                "gasto_mes_usd": round(tarefas.gasto_mes_usd(), 4),
-                "credito_mensal_usd": config.CREDITO_MENSAL_ANTHROPIC_USD,
-                "liberado_ate_hoje_usd": round(tarefas.liberado_ate_hoje_usd(), 2),
-                "pausado": tarefas.orcamento_pausado(),  # Claude pausado; a fila segue em contingência
-            },
-            "modelos_fora": saude.resumo(),
-            "aprendizado": aprendizado.resumo(_nome_do_agente),
-        },
-        "tarefas": [_tarefa_publica(linha) for linha in tarefas.listar(filtro)],
-    }
-
-
-def _nome_do_agente(agente_id: str) -> str:
-    andar = andar_do_agente(agente_id)
-    agente = buscar_agente(andar, agente_id) if andar else None
-    return agente.nome if agente else agente_id
-
-
-def _tarefa_publica(linha) -> dict:
-    agente = buscar_agente(linha["andar"], linha["agente"])
-    return {
-        "id": linha["id"], "usuario": linha["usuario"], "andar": linha["andar"], "agente": linha["agente"],
-        "agente_nome": agente.nome if agente else linha["agente"], "texto": linha["texto"][:140],
-        "dificuldade": linha["dificuldade"], "status": linha["status"], "modelo": linha["modelo"],
-        "tentativas": linha["tentativas"], "tempo_segundos": round(linha["tempo_segundos"], 1) or None,
-        "custo_usd": round(linha["custo_usd"], 4), "criada_em": linha["criada_em"],
-        "concluida_em": linha["concluida_em"], "motivo": linha["motivo"],
-    }
 
 
 @app.get("/test/{andar}/{agente_id}/{status}")
@@ -155,8 +115,11 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     agente = buscar_agente(andar, agente_id)
     if not agente:
         return await erro("Agente não encontrado.", **alvo)
-    if agente.tipo == "sistema":
-        return await erro(f"{agente.nome} não recebe tarefas; clique nele para ver o painel.", **alvo)
+    if agente.tipo != "ia":
+        return await erro(f"{agente.nome} não recebe tarefas pelo chat.", **alvo)
+    if agente.id in AGENTES_PRODUCAO and usuario["sub"] != config.DONO_MAX:
+        return await erro("A produção de imagens e vídeos é exclusiva da conta do Thomas. "
+                          "Fale com ele para solicitar.", **alvo)
     if not texto or len(texto) > TAMANHO_MAX_TEXTO:
         return await erro(f"A tarefa deve ter entre 1 e {TAMANHO_MAX_TEXTO} caracteres.", **alvo)
     if agente.status == Status.trabalhando:

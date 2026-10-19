@@ -11,6 +11,7 @@ import unicodedata
 from collections import Counter
 from pathlib import Path
 
+import atividade
 from conexoes import gerenciador
 from estado import Status, buscar_agente, snapshot
 
@@ -103,8 +104,16 @@ async def encerrar_consulta(agente: str) -> None:
     await _atualizar_visita()
 
 
-def consultar(pergunta: str, andar: str, agente: str) -> str:
+def consultar(pergunta: str, andar: str, agente: str, tarefa_id: int = 0) -> str:
     """Chamado pela ferramenta do agente (em thread): marca a visita e devolve os trechos relevantes."""
     if _loop:
         asyncio.run_coroutine_threadsafe(_iniciar(andar, agente), _loop)
+    if tarefa_id:
+        atividade.evento_em_thread(tarefa_id, "consulta_diretora", agente, detalhe=pergunta)
     return buscar(pergunta)
+
+
+def documentos() -> list[dict]:
+    """Para o popup da Diretora."""
+    return [{"nome": a.name, "tamanho_kb": round(a.stat().st_size / 1024, 1)}
+            for a in sorted(PASTA_CONHECIMENTO.glob("*.md"))]

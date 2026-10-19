@@ -51,7 +51,10 @@ PRECOS_ANTHROPIC = {
 # Provedor -> chave exigida (modelos sem chave configurada são ignorados).
 _CHAVES = {"anthropic/": ANTHROPIC_API_KEY, "openrouter/": OPENROUTER_API_KEY}
 
-ARQUIVO_BANCO = Path(__file__).resolve().parent / "dados" / "escritorio.db"
+# Única conta que pode acionar a produção de PNG/MP4 pelo Claude Code (plano Max pessoal).
+DONO_MAX = os.getenv("DONO_MAX", "thomas@casaveraneio.com").strip().lower()
+
+ARQUIVO_BANCO =Path(__file__).resolve().parent / "dados" / "escritorio.db"
 FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", Path(__file__).resolve().parent.parent / "frontend"))
 
 

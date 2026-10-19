@@ -136,13 +136,14 @@ def _treinar(linhas: list[dict]) -> tuple[object, dict]:
     return pipeline, meta
 
 
-async def talvez_treinar() -> None:
-    """Chamado ao fim de cada tarefa: atualiza a estatística e treina ao atingir o próximo marco."""
+async def talvez_treinar(forcar: bool = False) -> dict | None:
+    """Chamado ao fim de cada tarefa: atualiza a estatística e treina ao atingir o próximo marco.
+    `forcar=True` (botão "Treinar agora" da diretoria) treina já. Devolve o resultado do treino, se houve."""
     global _modelo, _meta, _treinando
     atualizar_ajustes()
     total = _total_finalizadas()
-    if _treinando or total < _proximo_marco(total):
-        return
+    if _treinando or not total or (not forcar and total < _proximo_marco(total)):
+        return None
     _treinando = True
     try:
         linhas = [dict(l) for l in _finalizadas(JANELA)]  # lê no loop principal; treina em thread
@@ -152,10 +153,16 @@ async def talvez_treinar() -> None:
         _meta, _modelo = meta, (modelo if meta["ativo"] else None)
         log.info("Aprendizado: treino com %s tarefas, acurácia %s (regras %s), ativo=%s.",
                  meta["amostras"], meta["acuracia"], meta["acuracia_regras"], meta["ativo"])
+        return meta
     except Exception:
         log.exception("Falha no treino do aprendizado.")
+        return None
     finally:
         _treinando = False
+
+
+def ajustes_do_agente(agente: str) -> list[dict]:
+    return [{"de": de, **ajuste} for (a, de), ajuste in _ajustes.items() if a == agente]
 
 
 def _salvar(modelo, meta: dict) -> None:
