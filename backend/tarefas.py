@@ -150,10 +150,19 @@ def custo_estimado(modelo: str, tokens_entrada: int, tokens_saida: int) -> float
     return (tokens_entrada * preco_entrada + tokens_saida * preco_saida) / 1_000_000
 
 
-def gasto_mes_usd() -> float:
+def gasto_mes_usd(dificuldade: str | None = None) -> float:
     inicio = datetime.now(timezone.utc).strftime("%Y-%m-01T00:00:00Z")
-    linha = _db().execute("SELECT COALESCE(SUM(custo_usd), 0) FROM tarefas WHERE concluida_em >= ?", (inicio,)).fetchone()
+    filtro, params = ("AND dificuldade = ?", (dificuldade,)) if dificuldade else ("", ())
+    linha = _db().execute(
+        f"SELECT COALESCE(SUM(custo_usd), 0) FROM tarefas WHERE concluida_em >= ? {filtro}", (inicio, *params)
+    ).fetchone()
     return float(linha[0])
+
+
+def chat_rapido_liberado() -> bool:
+    """Haiku para tarefas simples, sem passar do teto reservado a elas (protege o orçamento do Gestor)."""
+    teto = config.CREDITO_MENSAL_ANTHROPIC_USD * config.FRACAO_CHAT_RAPIDO
+    return gasto_mes_usd("simples") < teto and not orcamento_pausado()
 
 
 def liberado_ate_hoje_usd() -> float:

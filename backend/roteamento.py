@@ -5,6 +5,7 @@ from enum import Enum
 
 import config
 import saude
+import tarefas
 
 
 class Dificuldade(str, Enum):
@@ -59,8 +60,11 @@ def _gratuitos() -> list[Etapa]:
 
 
 def etapas_imediatas(dificuldade: Dificuldade, agente_id: str) -> list[Etapa]:
-    """Gratuitos primeiro; o local só para simples/médias de agentes que ele atende bem."""
+    """Gratuitos primeiro. Simples: Haiku antes do local (rápido e barato, com teto próprio).
+    O local só para simples/médias de agentes que ele atende bem."""
     etapas = _gratuitos()
+    if dificuldade == Dificuldade.simples and tarefas.chat_rapido_liberado():
+        etapas.append(Etapa(config.MODELO_FILA_PADRAO, LIMITE_FILA))
     if dificuldade in LIMITE_LOCAL and agente_id not in AGENTES_SEM_LOCAL and config.MODELO_LOCAL:
         etapas.append(Etapa(config.MODELO_LOCAL, LIMITE_LOCAL[dificuldade]))
     return _utilizaveis(etapas)
