@@ -28,6 +28,9 @@ LAMBDA_MMR = 0.7
 PONTUACAO_LIMITE = 2.0
 PASSO_SUCESSO, PASSO_FALHA = 0.10, 0.15
 FATOR_PONTUACAO = 0.15     # multiplicador = 1 + 0.15 * pontuação  (0.7 a 1.3)
+# Documentos com identidade própria (cada página do site, cada lodge da planilha/acervo): só o
+# substituir_ref troca a versão. Lodges seguem o mesmo modelo de texto e não podem se substituir.
+FONTES_COM_REF = {"site", "drive"}
 LOTE_EMBEDDINGS = 8
 
 _ESQUEMA = """
@@ -156,6 +159,10 @@ def gerar_embeddings(ids: list[int]) -> int:
     return substituidos
 
 
+def _documentos_distintos(fonte_a: str, ref_a: str, fonte_b: str, ref_b: str) -> bool:
+    return fonte_a in FONTES_COM_REF and fonte_b in FONTES_COM_REF and ref_a != ref_b
+
+
 def _pode_substituir(novo: str, antigo: str) -> bool:
     """O novo vence, exceto fonte de menor autoridade sobre maior (ex.: o site não apaga o que o dono ensinou)."""
     return novo == "ensinado" or PESOS_FONTE[novo] >= PESOS_FONTE[antigo]
@@ -175,6 +182,7 @@ def _versionar(novo_id: int, vetor: np.ndarray) -> int:
                if indice.ids[i] != novo_id
                and (indice.fontes[i], indice.refs[i]) != (novo["fonte_tipo"], novo["fonte_ref"])
                and _pode_substituir(novo["fonte_tipo"], indice.fontes[i])
+               and not _documentos_distintos(novo["fonte_tipo"], novo["fonte_ref"], indice.fontes[i], indice.refs[i])
                and mesmo_assunto(novo["conteudo"], indice.conteudos[i])]
     _desativar(antigos, novo_id)
     return len(antigos)
@@ -322,6 +330,27 @@ def registrar_resultado(tarefa_id: int, sucesso: bool) -> int:
 
 # --- Consolidação ---------------------------------------------------------------------------------
 
+def restaurar_documentos_distintos() -> int:
+    """Reativa trechos de site/drive que outro documento desativou por engano (regra antiga de versões).
+    Só a versão mais recente de cada ref volta; as trocadas pelo próprio substituir_ref continuam fora."""
+    marcadores = ",".join("?" * len(FONTES_COM_REF))
+    with _trava, db() as conexao:
+        reativados = conexao.execute(f"""
+            UPDATE conhecimento SET ativo = 1, substituido_por = NULL WHERE id IN (
+              SELECT a.id FROM conhecimento a JOIN conhecimento b ON b.id = a.substituido_por
+              WHERE a.ativo = 0 AND a.fonte_tipo IN ({marcadores}) AND b.fonte_tipo IN ({marcadores})
+                AND a.fonte_ref != b.fonte_ref
+                AND a.id >= COALESCE((SELECT MAX(c.substituido_por) FROM conhecimento c
+                                      JOIN conhecimento d ON d.id = c.substituido_por
+                                      WHERE c.fonte_tipo = a.fonte_tipo AND c.fonte_ref = a.fonte_ref
+                                        AND d.fonte_ref = a.fonte_ref), 0))""",
+            [*FONTES_COM_REF, *FONTES_COM_REF]).rowcount
+    if reativados:
+        _mudou()
+        log.info("Cérebro: %s trecho(s) de site/drive reativados.", reativados)
+    return reativados
+
+
 def consolidar() -> dict:
     """Rotina diária: embeddings que faltam, duplicados quase idênticos e decaimento dos trechos de tarefa."""
     gerar_embeddings(pendentes())
@@ -336,7 +365,8 @@ def consolidar() -> dict:
                 b = com_vetor[coluna]
                 if b <= a or indice.ids[a] in removidos or indice.ids[b] in removidos:
                     continue
-                if not mesmo_assunto(indice.conteudos[a], indice.conteudos[b]):
+                if not mesmo_assunto(indice.conteudos[a], indice.conteudos[b]) or _documentos_distintos(
+                        indice.fontes[a], indice.refs[a], indice.fontes[b], indice.refs[b]):
                     continue
                 # Fica o de maior autoridade; empate: o mais novo.
                 fica, sai = sorted((a, b), key=lambda i: (indice.pesos[i], indice.ids[i]), reverse=True)

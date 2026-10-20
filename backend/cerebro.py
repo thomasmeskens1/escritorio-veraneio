@@ -212,6 +212,7 @@ def iniciar() -> None:
     """Na subida: tabelas, indexação inicial e embeddings em segundo plano, consolidação diária às 03:00."""
     global _trabalhador
     base.db()
+    base.restaurar_documentos_distintos()
     if _trabalhador is None or not _trabalhador.is_alive():
         _trabalhador = threading.Thread(target=_trabalhar, name="cerebro-embeddings", daemon=True)
         _trabalhador.start()
