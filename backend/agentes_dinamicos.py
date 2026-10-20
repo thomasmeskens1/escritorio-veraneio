@@ -24,11 +24,11 @@ from estado import ANDARES, Agente, Aparencia, Status, andar_do_agente, pode_ace
 
 log = logging.getLogger(__name__)
 
-# Andar -> setor -> mesas no canvas (mesmos ids de frontend/js/cenario/setores.js). Térreo não recebe.
+# Andar -> setor -> mesas no canvas (mesmos ids de frontend/js/cenario/setores.js).
+# Térreo e Cobertura (Cérebro e estagiários) não recebem agentes novos.
 SETORES = {
     "porao": {"oficina": 3, "operacoes": 3},
     "marketing": {"gestao": 2, "criacao": 3, "conteudo": 3, "video": 3, "performance": 3},
-    "cobertura": {"diretoria": 3},
 }
 NOMES_ANDARES = {"porao": "Porão", "marketing": "Marketing", "cobertura": "Cobertura"}
 NOMES_SETORES = {"oficina": "Oficina", "operacoes": "Operações", "gestao": "Gestão", "criacao": "Criação",
@@ -187,7 +187,7 @@ def validar(spec: dict) -> dict:
     andar = _snake(str(spec.get("andar") or ""))
     if andar not in SETORES:
         raise ErroValidacao(f"andar inválido {spec.get('andar')!r}; use um de: {', '.join(SETORES)} "
-                            "(o térreo não recebe agentes novos).")
+                            "(o térreo e a cobertura não recebem agentes novos).")
     setor = _snake(str(spec.get("setor") or ""))
     if setor not in SETORES[andar]:
         raise ErroValidacao(f"setor inválido {spec.get('setor')!r} para o andar {andar}; "

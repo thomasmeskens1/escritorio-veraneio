@@ -41,9 +41,10 @@ class Agente(BaseModel):
     setor: str
     descricao: str = ""
     exemplo: str = ""  # pedido curto de exemplo (aparece no popup do agente)
-    tipo: Literal["ia", "sistema", "conhecimento"] = "ia"  # sistema: painel; conhecimento: sem interação
+    tipo: Literal["ia", "sistema", "estagiario"] = "ia"  # sistema: painel; estagiario: sem interação
+    visual: Literal["humano", "cerebro"] = "humano"  # "cerebro": o frontend desenha o rato do laboratório
     status: Status = Status.disponivel
-    visitando: dict | None = None  # {"andar", "agente"} enquanto a Diretora atende em outro andar
+    visitando: dict | None = None  # {"andar", "agente"} enquanto um estagiário atende em outro andar
 
 
 # Campos que não vão no `estado` transmitido a cada mudança (o popup busca em /api/agentes).
@@ -79,10 +80,6 @@ ANDARES: dict[str, dict[str, Agente]] = {
                setor="escola", descricao="Ajuda a transformar pedidos vagos em briefings claros, com exemplos.",
                exemplo="Como peço um post para o Instagram do jeito certo?",
                aparencia=_ap("#e0ac69", "curto", "#9e9e9e", "camisa", "#6d597a", "#355070", "oculos")),
-        Agente(id="diretora", nome="Diretora", funcao="Conhecimento da empresa (consultada pelos agentes)",
-               setor="escola", tipo="conhecimento",
-               descricao="Guarda os documentos da empresa (marca, produtos, regras). Só os agentes a consultam.",
-               aparencia=_ap("#e0ac69", "coque", "#3b2f2f", "blazer", "#7b2d26", "#1b1b1b", "oculos")),
     ),
     "marketing": _andar(
         Agente(id="gestor", nome="Gestor", funcao="Coordena, delega e revisa o time", setor="gestao",
@@ -122,7 +119,24 @@ ANDARES: dict[str, dict[str, Agente]] = {
                exemplo="Quais métricas devo acompanhar na campanha de verão?",
                aparencia=_ap("#e0ac69", "curto", "#6f4e37", "camisa", "#90be6d", "#22333b", "cracha")),
     ),
-    "cobertura": {},
+    "cobertura": _andar(
+        Agente(id="cerebro", nome="Cérebro", funcao="Conhecimento central da Casa Veraneio", setor="laboratorio",
+               visual="cerebro",
+               descricao="Guarda e aprende o conhecimento da empresa: lodges, serviços do Hotel Privativo, marca, "
+                         "regras e o trabalho do time. Responde citando a fonte; os agentes o consultam sempre.",
+               exemplo="Quais serviços exclusivos estão incluídos na estadia dos lodges?",
+               aparencia=_ap("#d9d9d9", "careca", "#9e9e9e", "avental", "#ffffff", "#5c677d", "oculos")),
+        *(Agente(id=f"estagiario_{n}", nome=f"Estagiário {n}", funcao="Repassa o conhecimento do Cérebro aos agentes",
+                 setor="estagiarios", tipo="estagiario",
+                 descricao="Leva as respostas do Cérebro até a mesa de quem consultou e volta à Cobertura.",
+                 aparencia=aparencia)
+          for n, aparencia in enumerate([
+              _ap("#f1c27d", "cacheado", "#6f4e37", "camiseta", "#06d6a0", "#2b2d42", "cracha"),
+              _ap("#8d5524", "curto", "#1b1b1b", "moletom", "#ffd166", "#3d405b", "cracha"),
+              _ap("#ffdbac", "longo", "#e9c46a", "camisa", "#118ab2", "#264653", "cracha"),
+              _ap("#c68642", "moicano", "#ef476f", "camiseta", "#8338ec", "#1d3557", "cracha"),
+          ], start=1)),
+    ),
 }
 
 # Agentes que produzem arquivos (PNG/MP4) pelo Claude Code do dono do plano Max.
@@ -146,12 +160,13 @@ def andar_do_agente(agente_id: str) -> str | None:
 
 
 def snapshot(role: str) -> dict:
-    """Mensagem de estado; andares restritos vão vazios para quem não tem acesso."""
+    """Mensagem de estado. Andar restrito, para quem não tem acesso, leva só os estagiários
+    (para as visitas deles aparecerem nos outros andares)."""
     return {
         "tipo": "estado",
         "andares": {
-            andar: {i: a.model_dump(mode="json", exclude=_SO_NO_DETALHE) for i, a in agentes.items()}
-            if pode_acessar(role, andar) else {}
+            andar: {i: a.model_dump(mode="json", exclude=_SO_NO_DETALHE) for i, a in agentes.items()
+                    if pode_acessar(role, andar) or a.tipo == "estagiario"}
             for andar, agentes in ANDARES.items()
         },
     }

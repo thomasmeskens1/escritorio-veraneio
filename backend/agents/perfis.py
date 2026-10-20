@@ -27,6 +27,15 @@ PERFIS = {
         "goal": "Ensinar a pedir tarefas aos agentes e a escrever bons briefings, com exemplos práticos.",
         "backstory": "Professor paciente que transforma pedidos vagos em briefings claros.",
     },
+    # Cobertura
+    "cerebro": {
+        "role": "Cérebro da Casa Veraneio",
+        "goal": "Responder com precisão sobre a Casa Veraneio — lodges de alto padrão para temporada, os serviços "
+                "exclusivos do Hotel Privativo, marca, regras e o trabalho do time — sempre citando a fonte e "
+                "dizendo claramente quando não sabe.",
+        "backstory": "Memória central da empresa: reúne os documentos oficiais, o site, o Drive, o que o dono "
+                     "ensinou e o que o time já produziu. Prefere dizer \"não sei\" a inventar.",
+    },
     # 1º Andar – Marketing
     "designer": {
         "role": "Designer",
@@ -88,7 +97,7 @@ def _contexto_construtor() -> str:
         "Você CRIA o agente chamando a ferramenta criar_agente com a especificação completa: nome (curto), "
         "andar, setor, funcao (uma linha), descricao (1-2 frases), exemplo (um pedido curto que o usuário "
         "faria a ele), role, goal e backstory (a persona dele) e aparencia.\n"
-        f"Andares e setores válidos (mesas livres): {setores_com_vagas()}. O térreo não recebe agentes. "
+        f"Andares e setores válidos (mesas livres): {setores_com_vagas()}. O térreo e a cobertura não recebem agentes. "
         "Escolha o setor mais coerente com a função e que tenha vaga.\n"
         'aparencia: {"pele": "#hex", "cabelo": {"estilo": "curto|longo|coque|careca|cacheado|moicano", '
         '"cor": "#hex"}, "roupa": {"estilo": "camiseta|camisa|blazer|moletom|macacao|avental", "cor": "#hex"}, '
@@ -120,6 +129,10 @@ def contexto(agente_id: str, historico: list = ()) -> str:
     return "\n\n".join(partes)
 
 
-def descricao_tarefa(agente_id: str, texto: str, historico: list = ()) -> str:
+def descricao_tarefa(agente_id: str, texto: str, historico: list = (), tarefa_id: int = 0) -> str:
     """Monta a descrição da Task com o pedido e o contexto do agente."""
+    if agente_id == "cerebro":  # o Cérebro recebe os trechos recuperados já na descrição
+        import cerebro
+
+        return cerebro.descricao_tarefa(texto, historico, tarefa_id)
     return f"Pedido do usuário: {texto}\n\n{contexto(agente_id, historico)}"

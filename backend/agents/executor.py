@@ -12,11 +12,10 @@ from pydantic import BaseModel, Field
 import agentes_dinamicos
 import atividade
 import config
-import diretora
+import cerebro
 import tarefas
 from agents import projeto
 from agents.perfis import PERFIS, contexto, descricao_tarefa
-from estado import andar_do_agente
 from roteamento import Etapa
 
 # O CrewAI repete chamadas com erro 429 (3x, sem opção de configurar). Desligado para não
@@ -43,22 +42,22 @@ class _Pergunta(BaseModel):
     pergunta: str = Field(description="O que você precisa saber sobre a empresa")
 
 
-class ConsultarDiretora(BaseTool):
-    name: str = "consultar_diretora"
-    description: str = ("Consulta a Diretora, que guarda os documentos da Casa Veraneio (marca, produtos, preços, "
-                        "regras e políticas). Use antes de afirmar qualquer fato sobre a empresa.")
+class ConsultarCerebro(BaseTool):
+    name: str = "consultar_cerebro"
+    description: str = ("Consulta o Cérebro, o conhecimento central da Casa Veraneio (lodges de alto padrão para "
+                        "temporada, serviços do Hotel Privativo, marca, preços, regras e trabalhos anteriores do time). "
+                        "Use antes de afirmar qualquer fato sobre a empresa e cite a fonte que ele devolver.")
     args_schema: type[BaseModel] = _Pergunta
-    andar: str
     agente: str
     tarefa_id: int
 
     def _run(self, pergunta: str) -> str:
-        return diretora.consultar(pergunta, self.andar, self.agente, self.tarefa_id)
+        return cerebro.consultar(pergunta, self.agente, self.tarefa_id)
 
 
 class _Especificacao(BaseModel):
     nome: str = Field(description="Nome curto do agente, ex.: Vendedor")
-    andar: str = Field(description="porao | marketing | cobertura")
+    andar: str = Field(description="porao | marketing")
     setor: str = Field(description="Setor válido do andar (veja a lista nas instruções)")
     funcao: str = Field(description="Função em uma linha")
     descricao: str = Field(description="O que ele faz, em 1-2 frases")
@@ -100,9 +99,8 @@ def _llm(modelo: str, limite_s: int) -> LLM:
 def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s: int, total: Resultado,
           tarefa_id: int) -> str:
     """Roda um agente (Crew de uma tarefa) e acumula tokens e custo no `total`."""
-    ferramentas = []
-    if diretora.tem_documentos():  # sem documentos, a ferramenta só gastaria chamadas
-        ferramentas.append(ConsultarDiretora(andar=andar_do_agente(agente_id) or "", agente=agente_id, tarefa_id=tarefa_id))
+    # Todos os agentes de IA consultam o Cérebro (ele mesmo recebe os trechos já na descrição).
+    ferramentas = [] if agente_id == cerebro.ID else [ConsultarCerebro(agente=agente_id, tarefa_id=tarefa_id)]
     if agente_id == "construtor":
         ferramentas.append(CriarAgente(tarefa_id=tarefa_id))
     agente = Agent(**PERFIS[agente_id], llm=_llm(modelo, limite_s), tools=ferramentas,
@@ -135,7 +133,7 @@ def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa,
     else:
         esperado = ("Confirmação amigável, em texto (sem JSON), do agente criado: nome, andar, setor e função."
                     if agente_id == "construtor" else "Resposta completa ao pedido.")
-        total.texto = _rodar(agente_id, descricao_tarefa(agente_id, texto, historico), esperado,
+        total.texto = _rodar(agente_id, descricao_tarefa(agente_id, texto, historico, tarefa_id), esperado,
                              etapa.modelo, etapa.limite_s, total, tarefa_id)
     return total
 

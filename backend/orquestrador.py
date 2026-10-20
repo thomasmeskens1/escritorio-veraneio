@@ -10,7 +10,7 @@ import time
 
 import aprendizado
 import atividade
-import diretora
+import cerebro
 import saude
 import tarefas
 from conexoes import gerenciador
@@ -65,7 +65,6 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
         saude.registrar_falha(etapa.modelo, erro)  # estourou? sai da rota até a cota voltar
     finally:
         tarefas.registrar_tentativa(tarefa["id"], time.monotonic() - inicio)
-        _em_segundo_plano(diretora.encerrar_consulta(agente.id))  # Diretora volta ao Térreo
     tarefas.registrar_evento(tarefa["id"], "falha_modelo", agente.id, etapa.modelo, erro)
     log.warning("Tarefa %s: %s falhou (%s).", tarefa["id"], etapa.modelo, erro[:200])
     return None, erro
@@ -102,12 +101,15 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
     tarefas.atualizar(tarefa_id, status="concluida", modelo=modelo, resposta=resultado.texto,
                       tokens_entrada=resultado.tokens_entrada, tokens_saida=resultado.tokens_saida, custo_usd=resultado.custo_usd)
     tarefas.registrar_evento(tarefa_id, "concluida", modelo=modelo)
+    cerebro.registrar_resultado(tarefa_id, True)  # trechos usados ganham pontos
+    cerebro.aprender_tarefa(tarefa_id)            # o trabalho concluído vira conhecimento
     await _entregar(tarefas.obter(tarefa_id))
 
 
 def _falhar(tarefa_id: int, motivo: str) -> None:
     tarefas.atualizar(tarefa_id, status="falhou", motivo=motivo)
     tarefas.registrar_evento(tarefa_id, "falhou", detalhe=motivo)
+    cerebro.registrar_resultado(tarefa_id, False)
 
 
 def _mensagem(linha) -> dict:

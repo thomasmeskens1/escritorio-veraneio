@@ -10,10 +10,16 @@ Um escritório virtual onde cada andar reúne agentes de IA especialistas. Você
 
 ## Andares (use o painel "Elevador" à direita)
 - Porão: infraestrutura. Construtor (cria novos agentes) e Despachante (painel da fila de tarefas).
-- Térreo: a escola. Recepcionista e Professor ensinam a usar a ferramenta. Ali também trabalha a Diretora, que guarda o conhecimento da empresa (marca, produtos, regras); ela não conversa com usuários, só os agentes a consultam. Quando um agente a consulta, ela vai até o andar dele e a mesa dela mostra "Trabalhando em outro andar".
+- Térreo: a escola. Recepcionista e Professor ensinam a usar a ferramenta.
 - 1º Andar – Marketing, dividido em setores: Gestão (Gestor, que coordena e delega), Criação (Designer e Criador de Imagens), Conteúdo (Copywriter e Social Media), Vídeo (Moviemaker e Editor de Vídeo) e Performance (Gestor de Tráfego e Analista de Métricas). Mesas vazias são vagas para futuros agentes.
 - A produção de arquivos de imagem (PNG) e vídeo (MP4) é exclusiva da conta do Thomas; os demais usuários recebem um aviso para falar com ele.
-- Cobertura: diretoria, acesso restrito. Quem não tem perfil de diretoria vê "Acesso Negado".
+- Cobertura: diretoria, acesso restrito. Quem não tem perfil de diretoria vê "Acesso Negado". Lá fica o laboratório do Cérebro, o conhecimento central da Casa Veraneio (lodges, serviços do Hotel Privativo, marca, regras e o trabalho já feito pelo time), com 4 Estagiários.
+
+## O Cérebro e os Estagiários
+- Todos os agentes consultam o Cérebro antes de afirmar fatos sobre a empresa. Quem leva a resposta é um dos 4 Estagiários: ele desce até o andar do agente que perguntou (você o vê caminhando até a mesa) e depois volta à Cobertura. Se os 4 estiverem ocupados, a resposta chega na hora, sem visita — ninguém espera na fila.
+- A diretoria pode conversar direto com o Cérebro: ele responde citando a fonte (documento oficial, site, Drive, ensinado pela diretoria ou trabalho anterior) e diz quando não sabe.
+- Só a conta do Thomas ensina o Cérebro pelo chat: comece a mensagem com "Aprenda:", "Anote:", "Memorize:", "Lembre-se:", "Ensinar:" ou "Registre:". Uma informação nova sobre o mesmo assunto substitui a antiga (o histórico fica guardado).
+- O Cérebro também aprende sozinho: cada tarefa concluída vira conhecimento, e os trechos que ajudam em tarefas bem-sucedidas ganham prioridade nas próximas buscas. Toda madrugada ele faz uma faxina (remove duplicados).
 
 ## Conversar com um agente
 1. Vá ao andar pelo elevador (à esquerda) e clique no agente. O popup mostra a descrição, um exemplo de pedido (clique para usar), quantas tarefas ele já resolveu e o progresso do aprendizado.

@@ -33,6 +33,8 @@ MODELOS_GRATUITOS = _lista(
     "openrouter/google/gemma-4-31b-it:free",
 )
 MODELO_LOCAL = os.getenv("MODELO_LOCAL", "ollama/qwen3:4b").strip()
+# Embeddings do Cérebro (RAG), locais pelo Ollama: custo zero.
+MODELO_EMBEDDING = os.getenv("MODELO_EMBEDDING", "qwen3-embedding:0.6b").strip()
 
 # Fila adiada: créditos do Max. Haiku para simples/médias, Sonnet para complexas.
 MODELO_FILA_PADRAO = os.getenv("MODELO_FILA_PADRAO", "anthropic/claude-haiku-5-5").strip()
@@ -54,7 +56,7 @@ _CHAVES = {"anthropic/": ANTHROPIC_API_KEY, "openrouter/": OPENROUTER_API_KEY}
 # Única conta que pode acionar a produção de PNG/MP4 pelo Claude Code (plano Max pessoal).
 DONO_MAX = os.getenv("DONO_MAX", "thomas@casaveraneio.com").strip().lower()
 
-ARQUIVO_BANCO =Path(__file__).resolve().parent / "dados" / "escritorio.db"
+ARQUIVO_BANCO = Path(__file__).resolve().parent / "dados" / "escritorio.db"
 FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", Path(__file__).resolve().parent.parent / "frontend"))
 
 
