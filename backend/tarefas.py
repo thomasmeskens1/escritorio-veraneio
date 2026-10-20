@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS eventos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tarefa_id INTEGER NOT NULL,
     em TEXT NOT NULL,
-    tipo TEXT NOT NULL,   -- recebida | tentativa | falha_modelo | consulta_diretora | etapa_iniciada | etapa_salva | adiada | concluida | falhou
+    tipo TEXT NOT NULL,   -- recebida | tentativa | falha_modelo | consulta_cerebro | etapa_iniciada | etapa_salva | adiada | concluida | falhou
     agente TEXT,
     modelo TEXT,
     detalhe TEXT
@@ -185,10 +185,6 @@ def etapas_do_agente(agente: str) -> int:
     """Etapas de projetos do Gestor entregues por este agente."""
     return _db().execute("SELECT COUNT(*) FROM eventos WHERE tipo = 'etapa_salva' AND agente = ?",
                          (agente,)).fetchone()[0]
-
-
-def consultas_diretora() -> int:
-    return _db().execute("SELECT COUNT(*) FROM eventos WHERE tipo = 'consulta_diretora'").fetchone()[0]
 
 
 # --- Orçamento Anthropic ---------------------------------------------------------------

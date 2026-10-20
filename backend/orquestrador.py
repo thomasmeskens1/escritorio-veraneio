@@ -128,6 +128,9 @@ async def _entregar(linha) -> None:
         _em_segundo_plano(aprendizado.talvez_treinar())
 
 
+entregar = _entregar  # entrega pública (usada pelo ensino do Cérebro)
+
+
 async def entregar_pendentes(login: str) -> None:
     """Respostas que ficaram prontas enquanto o usuário estava fora."""
     for linha in tarefas.nao_entregues(login):

@@ -4,7 +4,6 @@ from fastapi import APIRouter, Header, HTTPException
 
 import aprendizado
 import config
-import diretora
 import saude
 import tarefas
 from auth import validar_token
@@ -84,8 +83,6 @@ def detalhar_agente(andar: str, agente_id: str, authorization: str = Header(""))
         },
         "pode_treinar": usuario["role"] == "diretoria",
         "producao_restrita": agente_id in AGENTES_PRODUCAO and usuario["sub"] != config.DONO_MAX,
-        "diretora": ({"documentos": diretora.documentos(), "consultas": tarefas.consultas_diretora()}
-                     if agente.tipo == "conhecimento" else None),
     }
 
 

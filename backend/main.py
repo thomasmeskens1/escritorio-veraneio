@@ -14,7 +14,7 @@ import agentes_dinamicos
 import aprendizado
 import atividade
 import config
-import diretora
+import cerebro
 import historico
 import orquestrador
 import producao
@@ -36,8 +36,8 @@ async def ciclo_de_vida(_: FastAPI):
     producao.iniciar()
     agentes_dinamicos.carregar()  # agentes criados pelo Construtor voltam ao prédio
     aprendizado.carregar()
-    diretora.vincular_loop(asyncio.get_running_loop())
     atividade.vincular_loop(asyncio.get_running_loop())
+    cerebro.iniciar()  # conhecimento: tabelas, indexação inicial e consolidação diária
     fila = asyncio.create_task(orquestrador.processar_fila())
     agendamentos.iniciar()  # rotinas agendadas (recarrega as ativas do banco)
     yield
@@ -51,6 +51,7 @@ app.include_router(producao.rotas)
 app.include_router(historico.rotas)
 app.include_router(agentes_dinamicos.rotas)
 app.include_router(agendamentos.rotas)
+app.include_router(cerebro.rotas)
 
 
 class Credenciais(BaseModel):
@@ -107,6 +108,19 @@ async def autenticar_ws(ws: WebSocket) -> dict | None:
     return validar_token(str(msg.get("token", "")))
 
 
+async def ensinar_cerebro(ws: WebSocket, usuario: dict, andar: str, agente, texto: str) -> None:
+    """Grava o ensinamento e registra como tarefa concluída (aparece no histórico e no registro)."""
+    alvo = {"andar": andar, "agente": agente.id}
+    try:
+        resposta = await cerebro.ensinar(usuario["sub"], texto)
+    except (PermissionError, ValueError) as e:
+        return await gerenciador.enviar(ws, {"tipo": "erro", "texto": str(e), **alvo})
+    tarefa_id = tarefas.criar(usuario["sub"], andar, agente.id, texto, "simples")
+    tarefas.atualizar(tarefa_id, status="concluida", modelo="cerebro/ensino", resposta=resposta)
+    tarefas.registrar_evento(tarefa_id, "concluida", agente.id, "cerebro/ensino", "Conhecimento ensinado pelo dono")
+    await orquestrador.entregar(tarefas.obter(tarefa_id))
+
+
 async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     async def erro(texto: str, **extra) -> None:
         await gerenciador.enviar(ws, {"tipo": "erro", "texto": texto, **extra})
@@ -134,6 +148,8 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
                           "Fale com ele para solicitar.", **alvo)
     if not texto or len(texto) > TAMANHO_MAX_TEXTO:
         return await erro(f"A tarefa deve ter entre 1 e {TAMANHO_MAX_TEXTO} caracteres.", **alvo)
+    if agente.id == cerebro.ID and cerebro.e_ensino(texto):  # "Aprenda: ..." (só o dono)
+        return await ensinar_cerebro(ws, usuario, andar, agente, texto)
     # "...todos os dias às 8h" vira rotina agendada (vale mesmo com o agente ocupado agora).
     if agendamentos.e_agendamento(texto) and await agendamentos.criar(usuario["sub"], andar, agente.id, texto):
         return
