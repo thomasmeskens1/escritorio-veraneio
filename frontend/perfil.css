@@ -212,6 +212,81 @@
   color: #ffa8a8;
 }
 
+/* Rotinas agendadas */
+.perfil-rotinas h4 {
+  margin: 0 0 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #ced4da;
+}
+
+.perfil-rotinas ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid #343a40;
+  border-radius: 8px;
+}
+
+.perfil-rotinas li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+}
+
+.perfil-rotinas li + li {
+  border-top: 1px solid #2b3035;
+}
+
+.rotina-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.rotina-info strong {
+  color: #f4a261;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.rotina-tarefa {
+  overflow-wrap: anywhere;
+  color: #e9ecef;
+  font-style: italic;
+}
+
+.rotina-info small {
+  color: #868e96;
+  font-size: 0.72rem;
+}
+
+.rotina-cancelar {
+  flex: none;
+  padding: 5px 10px;
+  font-size: 0.75rem;
+}
+
+.rotinas-nota {
+  margin: 0;
+  padding: 7px 10px;
+  background: #212529;
+  border: 1px dashed #495057;
+  border-radius: 8px;
+  color: #868e96;
+  font-size: 0.78rem;
+}
+
+.rotinas-nota.erro {
+  margin-top: 6px;
+  border-style: solid;
+  border-color: rgba(250, 82, 82, 0.4);
+  color: #ffa8a8;
+}
+
 /* Aviso de produção restrita (envio desativado) */
 .aviso-restrito {
   flex: none;
