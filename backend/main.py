@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import agendamentos
 import agentes_dinamicos
 import aprendizado
 import atividade
@@ -38,7 +39,9 @@ async def ciclo_de_vida(_: FastAPI):
     diretora.vincular_loop(asyncio.get_running_loop())
     atividade.vincular_loop(asyncio.get_running_loop())
     fila = asyncio.create_task(orquestrador.processar_fila())
+    agendamentos.iniciar()  # rotinas agendadas (recarrega as ativas do banco)
     yield
+    agendamentos.parar()
     fila.cancel()
 
 
@@ -47,6 +50,7 @@ app.include_router(rotas_painel)
 app.include_router(producao.rotas)
 app.include_router(historico.rotas)
 app.include_router(agentes_dinamicos.rotas)
+app.include_router(agendamentos.rotas)
 
 
 class Credenciais(BaseModel):
@@ -130,6 +134,9 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
                           "Fale com ele para solicitar.", **alvo)
     if not texto or len(texto) > TAMANHO_MAX_TEXTO:
         return await erro(f"A tarefa deve ter entre 1 e {TAMANHO_MAX_TEXTO} caracteres.", **alvo)
+    # "...todos os dias às 8h" vira rotina agendada (vale mesmo com o agente ocupado agora).
+    if agendamentos.e_agendamento(texto) and await agendamentos.criar(usuario["sub"], andar, agente.id, texto):
+        return
     if agente.status == Status.trabalhando:
         return await erro(f"{agente.nome} já está trabalhando em outra tarefa.", **alvo)
     if not orquestrador.ha_modelo_disponivel():

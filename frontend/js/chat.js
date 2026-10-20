@@ -233,6 +233,7 @@ function receberAviso({ andar, agente, texto, titulo }) {
   }
   adicionarMensagem(andar, agente, { autor: 'sistema', texto, tipo: 'sistema' });
   if (!chatEstaAberto(andar, agente)) mostrarToast(andar, agente, texto, titulo || 'Aviso');
+  if (titulo === 'Rotina agendada') atualizarRotinas(andar, agente); // lista do popup do agente
   atualizarChat();
 }
 

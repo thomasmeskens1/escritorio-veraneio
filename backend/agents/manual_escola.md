@@ -38,6 +38,11 @@ Cores do status: cinza = dormindo, verde = disponível, laranja = trabalhando.
 - Na fila, o Claude atende primeiro: Haiku para tarefas simples e médias, Sonnet só para as complexas. Ele usa um crédito mensal com ritmo diário; quando esse ritmo ou o crédito acabam, a fila continua com os modelos gratuitos e o local (nunca para).
 - Clique no Despachante, no Porão, para ver o painel com todas as tarefas, tempos e o uso do crédito.
 
+## Histórico, rotinas e novos agentes
+- O chat guarda o histórico: ao abrir um agente, a conversa anterior volta (inclusive em outro computador).
+- Rotinas: escreva o pedido com a frequência, por exemplo "Analise as métricas todos os dias às 08:00", "toda segunda às 9h", "a cada 2 horas" ou "amanhã às 10h". O agente executa sozinho no horário e a resposta chega no chat. As rotinas aparecem no popup do agente, com o botão Cancelar.
+- O Construtor (Porão) cria novos agentes a pedido da diretoria: eles ocupam uma vaga do setor escolhido, com visual próprio.
+
 ## Barra superior e registro
 - No topo aparecem os agentes por status (disponíveis, trabalhando, em construção e pausados), o relógio e o status do servidor (AO VIVO ou FECHADO).
 - O ícone de registro abre o "Registro de atividade": cada pedido com hora, usuário, agentes acionados, resumo e modelo; clique na linha para ver os detalhes.
