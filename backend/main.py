@@ -3,9 +3,10 @@
 import asyncio
 import json
 import logging
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -29,6 +30,10 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("veraneio")
 
 TAMANHO_MAX_TEXTO = 4000
+MAX_FALHAS_LOGIN = 5          # senhas erradas seguidas por usuário/IP antes do bloqueio
+BLOQUEIO_LOGIN_S = 15 * 60
+
+_falhas_login: dict[tuple[str, str], list[float]] = {}  # (usuário, IP) -> horários das falhas
 
 
 @asynccontextmanager
@@ -46,7 +51,8 @@ async def ciclo_de_vida(_: FastAPI):
     fila.cancel()
 
 
-app = FastAPI(title="Escritório Veraneio", lifespan=ciclo_de_vida)
+# Sem /docs, /redoc e /openapi.json: não expõe o mapa da API.
+app = FastAPI(title="Escritório Veraneio", lifespan=ciclo_de_vida, docs_url=None, redoc_url=None, openapi_url=None)
 app.include_router(rotas_painel)
 app.include_router(producao.rotas)
 app.include_router(historico.rotas)
@@ -62,21 +68,18 @@ class Credenciais(BaseModel):
 
 
 @app.post("/api/login")
-def login(credenciais: Credenciais):
+def login(credenciais: Credenciais, request: Request):
+    chave = (credenciais.usuario.strip().lower(), request.client.host if request.client else "")
+    agora = time.monotonic()
+    falhas = [t for t in _falhas_login.get(chave, []) if agora - t < BLOQUEIO_LOGIN_S]
+    if len(falhas) >= MAX_FALHAS_LOGIN:
+        raise HTTPException(status_code=429, detail="Muitas tentativas. Tente de novo em alguns minutos.")
     usuario = autenticar(credenciais.usuario, credenciais.senha)
     if not usuario:
+        _falhas_login[chave] = [*falhas, agora]
         raise HTTPException(status_code=401, detail="Usuário ou senha inválidos")
+    _falhas_login.pop(chave, None)
     return {"token": criar_token(usuario), "usuario": usuario["nome"], "role": usuario["role"]}
-
-
-@app.get("/test/{andar}/{agente_id}/{status}")
-async def testar_status(andar: str, agente_id: str, status: Status):
-    """Rota de desenvolvimento: muda o status de um agente e transmite o novo estado."""
-    agente = buscar_agente(andar, agente_id)
-    if not agente:
-        raise HTTPException(status_code=404, detail="Agente não encontrado")
-    await orquestrador.atualizar_status(agente, status)
-    return agente
 
 
 @app.websocket("/ws")
