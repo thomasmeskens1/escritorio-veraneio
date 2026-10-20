@@ -396,7 +396,3 @@ function criarConhecimento() {
   }
   return bloco;
 }
-
-// Compatibilidade: rede.js e auth.js ainda chamam estas funções da antiga Diretora.
-function atualizarCabecalhoDiretora() {}
-function fecharDiretora() {}

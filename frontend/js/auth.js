@@ -112,7 +112,6 @@ function encerrarSessao(aviso = '') {
   fecharChat();
   fecharPainel();
   limparRegistro();
-  fecharDiretora();
   limparChat();
   limparPerfis();
   atualizarContadores({});

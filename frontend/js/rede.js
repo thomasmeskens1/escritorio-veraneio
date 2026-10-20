@@ -26,7 +26,6 @@ function tratarMensagem(msg) {
     case 'estado':
       aplicarEstado(msg.andares);
       atualizarContadores(msg.andares);
-      atualizarCabecalhoDiretora();
       break;
     case 'resposta_agente':
       receberResposta(msg);

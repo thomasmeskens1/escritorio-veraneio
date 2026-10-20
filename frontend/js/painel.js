@@ -85,7 +85,6 @@ function abrirAgente(andar, id) {
 
 function abrirPainel() {
   if (typeof fecharChat === 'function') fecharChat();
-  if (typeof fecharDiretora === 'function') fecharDiretora();
   painelAberto = true;
   painel.classList.add('aberto');
   if (!painelConteudo.childElementCount) painelConteudo.append(novoEl('p', 'painel-aviso', 'Carregando tarefas...'));
