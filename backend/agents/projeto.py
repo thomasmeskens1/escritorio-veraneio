@@ -12,13 +12,9 @@ from pathlib import Path
 from typing import Callable
 
 import config
+from estado import ANDARES
 
 PASTA_PROJETOS = config.ARQUIVO_BANCO.parent / "projetos"
-EQUIPE = {
-    "designer": "Designer", "criador_imagens": "Criador de Imagens", "copywriter": "Copywriter",
-    "social_media": "Social Media", "moviemaker": "Moviemaker", "editor_video": "Editor de Vídeo",
-    "gestor_trafego": "Gestor de Tráfego", "analista_metricas": "Analista de Métricas",
-}
 MAX_ETAPAS = 8  # micro-tarefas: cada especialista com uma entrega focada
 TRECHO_ETAPA = 1500   # caracteres de cada etapa anterior enviados à próxima
 TRECHO_FINAL = 2500   # caracteres de cada etapa enviados à consolidação
@@ -48,17 +44,25 @@ def _chave(nome: str) -> str:
     return re.sub(r"[^a-z]", "", sem_acento.lower())
 
 
-# Aceita o id ("gestor_trafego") ou o nome ("Gestor de Tráfego"), sem diferenciar maiúsculas/acentos.
-_IDS_POR_CHAVE = {**{_chave(i): i for i in EQUIPE}, **{_chave(n): i for i, n in EQUIPE.items()}}
+def equipe() -> dict[str, str]:
+    """Especialistas do andar do Gestor (id -> nome), incluindo os criados pelo Construtor."""
+    return {i: a.nome for i, a in ANDARES["marketing"].items() if a.tipo == "ia" and i != "gestor"}
+
+
+def _nome(agente_id: str) -> str:
+    return equipe().get(agente_id, agente_id)
 
 
 def _extrair_plano(texto: str) -> list[dict]:
     bloco = re.search(r"\[.*\]", texto, re.DOTALL)
     if not bloco:
         raise ValueError("O Gestor não devolveu um plano em JSON.")
+    # Aceita o id ("gestor_trafego") ou o nome ("Gestor de Tráfego"), sem diferenciar maiúsculas/acentos.
+    time = equipe()
+    ids_por_chave = {**{_chave(i): i for i in time}, **{_chave(n): i for i, n in time.items()}}
     plano = []
     for passo in json.loads(bloco.group(0)):
-        agente = _IDS_POR_CHAVE.get(_chave(passo.get("agente", ""))) if isinstance(passo, dict) else None
+        agente = ids_por_chave.get(_chave(passo.get("agente", ""))) if isinstance(passo, dict) else None
         if agente:
             plano.append({"agente": agente, "instrucao": str(passo.get("instrucao", ""))})
     if not plano:
@@ -69,10 +73,10 @@ def _extrair_plano(texto: str) -> list[dict]:
 def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar) -> list[dict]:
     arquivo = pasta / "plano.json"
     if not arquivo.exists():
-        equipe = ", ".join(f"{i} ({nome})" for i, nome in EQUIPE.items())
+        equipe_txt = ", ".join(f"{i} ({nome})" for i, nome in equipe().items())
         descricao = (
             f"{contexto}\n\nPedido do usuário: {pedido}\n\n"
-            f"Divida o trabalho em até {MAX_ETAPAS} etapas para a sua equipe: {equipe}. "
+            f"Divida o trabalho em até {MAX_ETAPAS} etapas para a sua equipe: {equipe_txt}. "
             "Prefira micro-tarefas: cada etapa é uma entrega focada de um único especialista "
             "(ex.: post de rede social = Designer define o conceito, Copywriter escreve a legenda, "
             "Criador de Imagens especifica a arte). Acione só quem for necessário. "
@@ -81,7 +85,7 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar) -> list[
         )
         plano = _extrair_plano(executar("gestor", descricao, "JSON com a lista de etapas.", "gestor"))
         _gravar(arquivo, json.dumps(plano, ensure_ascii=False, indent=2))
-        linhas = [f"{n}. **{EQUIPE[p['agente']]}**: {p['instrucao']}" for n, p in enumerate(plano, 1)]
+        linhas = [f"{n}. **{_nome(p['agente'])}**: {p['instrucao']}" for n, p in enumerate(plano, 1)]
         _gravar(pasta / "plano.md", f"# Plano\n\nPedido: {pedido}\n\n" + "\n".join(linhas) + "\n")
     return json.loads(arquivo.read_text(encoding="utf-8"))
 
@@ -97,9 +101,9 @@ def _passagem(pasta: Path, plano: list[dict]) -> str:
         arquivo = _arquivo_etapa(pasta, n, passo["agente"])
         if arquivo.exists():
             inicio = arquivo.read_text(encoding="utf-8")[:300].replace("\n", " ")
-            linhas.append(f"- [x] {n}. {EQUIPE[passo['agente']]}: {inicio}...")
+            linhas.append(f"- [x] {n}. {_nome(passo['agente'])}: {inicio}...")
         else:
-            linhas.append(f"- [ ] {n}. {EQUIPE[passo['agente']]}: {passo['instrucao']}")
+            linhas.append(f"- [ ] {n}. {_nome(passo['agente'])}: {passo['instrucao']}")
     texto = "# Passagem\n\n" + "\n".join(linhas) + "\n"
     (pasta / "passagem.md").write_text(texto, encoding="utf-8")
     return texto
@@ -123,7 +127,7 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
         if cancelar.is_set():
             raise Cancelado
         anteriores = "\n\n".join(
-            f"## Etapa {i} ({EQUIPE[p['agente']]})\n{_arquivo_etapa(pasta, i, p['agente']).read_text(encoding='utf-8')[:TRECHO_ETAPA]}"
+            f"## Etapa {i} ({_nome(p['agente'])})\n{_arquivo_etapa(pasta, i, p['agente']).read_text(encoding='utf-8')[:TRECHO_ETAPA]}"
             for i, p in enumerate(plano[:n - 1], 1)
         )
         descricao = (
@@ -146,7 +150,7 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
         if cancelar.is_set():
             raise Cancelado
         entregas = "\n\n".join(
-            f"## {EQUIPE[p['agente']]}\n{_arquivo_etapa(pasta, i, p['agente']).read_text(encoding='utf-8')[:TRECHO_FINAL]}"
+            f"## {_nome(p['agente'])}\n{_arquivo_etapa(pasta, i, p['agente']).read_text(encoding='utf-8')[:TRECHO_FINAL]}"
             for i, p in enumerate(plano, 1)
         )
         descricao = (f"{contexto}\n\nPedido do usuário: {pedido}\n\nEntregas da equipe:\n{entregas}\n\n"

@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import agentes_dinamicos
 import aprendizado
 import atividade
 import config
@@ -32,6 +33,7 @@ TAMANHO_MAX_TEXTO = 4000
 async def ciclo_de_vida(_: FastAPI):
     tarefas.iniciar()
     producao.iniciar()
+    agentes_dinamicos.carregar()  # agentes criados pelo Construtor voltam ao prédio
     aprendizado.carregar()
     diretora.vincular_loop(asyncio.get_running_loop())
     atividade.vincular_loop(asyncio.get_running_loop())
@@ -44,6 +46,7 @@ app = FastAPI(title="Escritório Veraneio", lifespan=ciclo_de_vida)
 app.include_router(rotas_painel)
 app.include_router(producao.rotas)
 app.include_router(historico.rotas)
+app.include_router(agentes_dinamicos.rotas)
 
 
 class Credenciais(BaseModel):
