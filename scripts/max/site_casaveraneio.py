@@ -14,6 +14,7 @@ import json
 import re
 import subprocess
 import tempfile
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -36,7 +37,8 @@ ARQUIVO_FALHAS = comum.DADOS / "site.falhas.json"  # páginas que não carregara
 
 
 def renderizar(caminho: str, tentativas: int = 2) -> str:
-    """HTML depois do JavaScript; perfil temporário para várias instâncias em paralelo. "" se não carregar."""
+    """HTML depois do JavaScript; perfil temporário para várias instâncias em paralelo.
+    Se o Chrome travar, usa o HTML do servidor (menos completo: sem a tabela de valores por época)."""
     for _ in range(tentativas):
         with tempfile.TemporaryDirectory(prefix="chrome-site-", ignore_cleanup_errors=True) as perfil:
             try:
@@ -46,7 +48,18 @@ def renderizar(caminho: str, tentativas: int = 2) -> str:
                     capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=TEMPO_PAGINA).stdout
             except subprocess.TimeoutExpired:
                 log(f"   site: {caminho} não carregou em {TEMPO_PAGINA} s")
-    return ""
+    return html_do_servidor(caminho)
+
+
+def html_do_servidor(caminho: str) -> str:
+    try:
+        requisicao = urllib.request.Request(SITE + caminho, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(requisicao, timeout=60) as resposta:
+            log(f"   site: {caminho} lido pelo HTML do servidor")
+            return resposta.read().decode("utf-8", errors="replace")
+    except OSError as erro:
+        log(f"   site: {caminho} também falhou no servidor ({erro})")
+        return ""
 
 
 def links_internos(pagina: str) -> set[str]:
@@ -101,8 +114,8 @@ def resumo_lodge(caminho: str, titulo: str, corpo: str) -> dict | None:
         return None
     achar = lambda padrao: (m.group(1).strip() if (m := re.search(padrao, corpo)) else "—")
     return {"lodge": titulo.split(" - ")[0] or caminho.rsplit("/", 1)[-1], "url": SITE + caminho,
-            "local": achar(r"Favoritar\n(.+)"), "quartos": achar(r"(\d+) quartos?"),
-            "pessoas": achar(r"(\d+) pessoas?"), "diaria": achar(r"A partir de (.+?)\n")}
+            "local": achar(r"Favoritar\n(.+)"), "quartos": achar(r"(\d+)\s*quartos?"),
+            "pessoas": achar(r"(\d+)\s*pessoas?"), "diaria": achar(r"A partir de (.+?)\n")}
 
 
 def tabela_lodges(resumos: list[dict]) -> str:
