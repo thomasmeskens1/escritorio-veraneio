@@ -6,7 +6,7 @@
         "/c",
         "npx",
         "-y",
-        "ruflo@latest",
+        "ruflo@3.58.1",
         "mcp",
         "start"
       ],
