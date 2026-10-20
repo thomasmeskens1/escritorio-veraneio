@@ -131,6 +131,18 @@ function receberAdiada({ andar, agente, texto }) {
   avisarPainel();
 }
 
+// Aviso do servidor ligado a um agente (ex.: agente criado, agendamento criado): mensagem de sistema
+// no chat dele e toast se o chat não estiver aberto.
+function receberAviso({ andar, agente, texto, titulo }) {
+  if (!andar || !agente) {
+    console.info('Aviso do servidor:', texto);
+    return;
+  }
+  adicionarMensagem(andar, agente, { autor: 'sistema', texto, tipo: 'sistema' });
+  if (!chatEstaAberto(andar, agente)) mostrarToast(andar, agente, texto, titulo || 'Aviso');
+  atualizarChat();
+}
+
 function receberErro({ andar, agente, texto }) {
   if (!andar || !agente) {
     console.warn('Erro do servidor:', texto);

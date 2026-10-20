@@ -273,11 +273,12 @@ function criarLinhaTarefa(t) {
 }
 
 // ---------- Toasts ----------
-function mostrarToast(andar, agente, texto) {
+// `titulo` é opcional (padrão: "Nova resposta de <agente>").
+function mostrarToast(andar, agente, texto, titulo) {
   const nome = dadosAgente(andar, agente).nome;
   const toast = novoEl('button', 'toast');
   toast.type = 'button';
-  toast.append(novoEl('strong', null, `Nova resposta de ${nome}`));
+  toast.append(novoEl('strong', null, titulo || `Nova resposta de ${nome}`));
   if (texto) toast.append(novoEl('span', null, texto.length > 80 ? `${texto.slice(0, 80)}…` : texto));
   toast.addEventListener('click', () => {
     removerToast(toast);

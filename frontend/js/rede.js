@@ -34,6 +34,9 @@ function tratarMensagem(msg) {
     case 'tarefa_adiada':
       receberAdiada(msg);
       break;
+    case 'aviso':
+      receberAviso(msg);
+      break;
     case 'erro':
       receberErro(msg);
       break;
