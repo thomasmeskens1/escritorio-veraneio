@@ -57,6 +57,8 @@ _CHAVES = {"anthropic/": ANTHROPIC_API_KEY, "openrouter/": OPENROUTER_API_KEY}
 DONO_MAX = os.getenv("DONO_MAX", "thomas@casaveraneio.com").strip().lower()
 
 ARQUIVO_BANCO = Path(__file__).resolve().parent / "dados" / "escritorio.db"
+# Documentos oficiais e diretrizes dos agentes (fora do git: o repositório é público).
+PASTA_CONHECIMENTO = Path(__file__).resolve().parent / "dados" / "conhecimento"
 FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", Path(__file__).resolve().parent.parent / "frontend"))
 
 

@@ -14,7 +14,7 @@ import atividade
 import config
 import cerebro
 import tarefas
-from agents import projeto
+from agents import diretrizes, projeto
 from agents.perfis import PERFIS, contexto, descricao_tarefa
 from roteamento import Etapa
 
@@ -103,7 +103,11 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
     ferramentas = [] if agente_id == cerebro.ID else [ConsultarCerebro(agente=agente_id, tarefa_id=tarefa_id)]
     if agente_id == "construtor":
         ferramentas.append(CriarAgente(tarefa_id=tarefa_id))
-    agente = Agent(**PERFIS[agente_id], llm=_llm(modelo, limite_s), tools=ferramentas,
+    perfil = dict(PERFIS[agente_id])
+    # Diretrizes da Casa Veraneio (regras, marca e manual da função); versão curta no modelo local.
+    if (extras := diretrizes.para(agente_id, compacto=modelo.startswith("ollama/"))):
+        perfil["backstory"] = f"{perfil['backstory']}\n\n{extras}"
+    agente = Agent(**perfil, llm=_llm(modelo, limite_s), tools=ferramentas,
                    max_iter=MAX_ITERACOES, max_retry_limit=0, verbose=False)
     saida = Crew(agents=[agente], tasks=[Task(description=descricao, expected_output=esperado, agent=agente)]).kickoff()
 

@@ -30,7 +30,7 @@ from estado import AGENTES_PRODUCAO, andar_do_agente, buscar_agente
 log = logging.getLogger(__name__)
 
 ID = "cerebro"
-PASTA_CONHECIMENTO = Path(__file__).resolve().parent / "conhecimento"
+PASTA_CONHECIMENTO = config.PASTA_CONHECIMENTO
 FUSO = ZoneInfo("America/Sao_Paulo")
 HORA_CONSOLIDACAO = 3
 MAX_CARACTERES_FERRAMENTA = 3000  # resposta da ferramenta (tokens dos agentes)
@@ -161,7 +161,7 @@ def aprender_tarefa(tarefa_id: int) -> int | None:
 # --- Subida, trabalhador de embeddings e consolidação ----------------------------------------------------
 
 def indexar_oficiais() -> int:
-    """Indexa os .md de backend/conhecimento/ como "oficial" (só os que mudaram). Devolve o nº de trechos."""
+    """Indexa os .md de backend/dados/conhecimento/ como "oficial" (só os que mudaram). Devolve o nº de trechos."""
     total, refs = 0, set()
     for arquivo in sorted(PASTA_CONHECIMENTO.glob("*.md")):
         refs.add(arquivo.name)

@@ -31,6 +31,9 @@ TEMPO_LIMITE = 30 * 60        # por produção
 INTERVALO_CATALOGO = 6 * 3600
 EXTENSOES_ENTREGA = {".png", ".jpg", ".jpeg", ".mp4", ".mov", ".pdf"}
 PASTA_ANEXOS = "anexos"       # subpasta da requisição com os arquivos enviados no chat
+PASTA_ACERVO = "acervo"       # cópias das fotos/vídeos do acervo usadas na peça
+PASTA_DIRETRIZES = comum.DADOS / "conhecimento"   # manuais da Casa Veraneio (fora do git)
+DIRETRIZES = {"criador_imagens": ("00", "01", "04"), "editor_video": ("00", "01", "06", "05")}
 
 INSTRUCOES = {
     "criador_imagens": (
@@ -79,6 +82,24 @@ def copiar_anexos(producao: dict, pasta: Path) -> list[str]:
     return copiados
 
 
+def diretrizes(agente: str) -> str:
+    """Manuais da Casa Veraneio para o agente de produção (regras, marca e função)."""
+    partes = []
+    for prefixo in DIRETRIZES.get(agente, ()):
+        achados = sorted(PASTA_DIRETRIZES.glob(f"{prefixo}_*.md"))
+        if achados:
+            partes.append(achados[0].read_text(encoding="utf-8").strip())
+    return ("DIRETRIZES DA CASA VERANEIO (siga à risca):\n\n" + "\n\n".join(partes)) if partes else ""
+
+
+def regras_acervo() -> str:
+    return (f"Fotos e vídeos reais dos Lodges ficam no acervo, SOMENTE LEITURA: {comum.ACERVO} "
+            "(só as pastas numeradas \"Lodges N - M\" > pasta do Lodge; o índice, para ler com python, está em "
+            f"{comum.CEREBRO / 'catalogo_lodges.md'}). Para usar um arquivo, COPIE-o com python (shutil.copy2) "
+            f"para a subpasta {PASTA_ACERVO}/ desta requisição e trabalhe na cópia. Nunca grave, mova, renomeie ou "
+            "apague nada no acervo. Arquivos grandes: copie um por vez, só os que vai usar.")
+
+
 def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None) -> str:
     historico = "\n".join(f"- Usuário: {h['texto'][:300]}\n  Resposta: {(h['resposta'] or '')[:400]}"
                           for h in producao.get("historico") or [])
@@ -91,9 +112,11 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None) 
         (f"O usuário enviou estes arquivos junto com o pedido (copiados na subpasta {PASTA_ANEXOS}/):\n"
          f"{lista_anexos}\nAbra-os com Read e USE-OS na peça (fotos como imagens do layout, PDFs como fonte "
          "de textos e dados), conforme o pedido. Não altere os originais.") if lista_anexos else "",
-        f"Trabalhe SOMENTE dentro da pasta atual ({pasta}) e salve nela os arquivos finais. "
-        "O acervo de fotos e vídeos dos produtos ainda não está disponível: use apenas arquivos citados "
-        "no pedido ou enviados como anexo, ou construa a peça com tipografia, cores e formas.",
+        diretrizes(producao["agente"]),
+        regras_acervo(),
+        f"Grave SOMENTE dentro da pasta atual ({pasta}) e salve nela os arquivos finais (PNG, MP4 ou PDF). "
+        "O PPTX editável e o Google Doc de legenda citados nas diretrizes ainda não são gerados por este "
+        "sistema: entregue a arte final e, no resumo, liste os textos da peça para a equipe.",
         "Ao terminar, responda com um resumo curto (até 5 linhas) do que foi entregue.",
     ]))
 

@@ -28,9 +28,10 @@ LAMBDA_MMR = 0.7
 PONTUACAO_LIMITE = 2.0
 PASSO_SUCESSO, PASSO_FALHA = 0.10, 0.15
 FATOR_PONTUACAO = 0.15     # multiplicador = 1 + 0.15 * pontuação  (0.7 a 1.3)
-# Documentos com identidade própria (cada página do site, cada lodge da planilha/acervo): só o
-# substituir_ref troca a versão. Lodges seguem o mesmo modelo de texto e não podem se substituir.
-FONTES_COM_REF = {"site", "drive"}
+# Documentos com identidade própria (cada página do site, cada lodge da planilha/acervo, cada documento
+# oficial): só o substituir_ref troca a versão. Lodges seguem o mesmo modelo de texto e não podem se
+# substituir, e o catálogo de um documento oficial não apaga a página atualizada do site.
+FONTES_COM_REF = {"site", "drive", "oficial"}
 LOTE_EMBEDDINGS = 8
 
 _ESQUEMA = """
@@ -340,7 +341,7 @@ def registrar_resultado(tarefa_id: int, sucesso: bool) -> int:
 # --- Consolidação ---------------------------------------------------------------------------------
 
 def restaurar_documentos_distintos() -> int:
-    """Reativa trechos de site/drive que outro documento desativou por engano (regra antiga de versões).
+    """Reativa trechos de site/drive/oficial que outro documento desativou por engano (regra antiga de versões).
     Só a versão mais recente de cada ref volta; as trocadas pelo próprio substituir_ref continuam fora."""
     marcadores = ",".join("?" * len(FONTES_COM_REF))
     with _trava, db() as conexao:
