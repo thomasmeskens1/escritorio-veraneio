@@ -2,6 +2,7 @@
 // `area` = [x, y, largura, profundidade] em tiles. `mesas` = tiles das estações, na ordem
 // em que os agentes do setor ocupam; as que sobram viram "vagas". Setores sem mesas são só decoração.
 // `estacao` é o estilo para agentes sem estação própria; `vaga`, o da mesa vazia.
+// `semVagas`: mesas sem dono ficam só com a estação (sem a pílula "Vaga").
 
 const SETORES = {
   porao: [
@@ -21,7 +22,9 @@ const SETORES = {
   ],
   cobertura: [
     { id: 'reuniao', nome: 'Reunião', area: [1, 1, 8, 4], cor: 0x8ecae6 },
-    { id: 'diretoria', nome: 'Diretoria', area: [1, 7, 10, 4], cor: 0xd4af37, estacao: 'executiva', vaga: 'vagaExecutiva', mesas: [[2, 8], [5, 8], [8, 8]] },
+    // Laboratório do Cérebro (RAG central) e as mesas dos estagiários, sem vagas extras.
+    { id: 'laboratorio', nome: 'Laboratório', area: [0, 6, 6, 6], cor: 0xff8fab, estacao: 'pedestal', mesas: [[3, 9]], semVagas: true },
+    { id: 'estagiarios', nome: 'Estagiários', area: [7, 6, 5, 6], cor: 0x74c0fc, estacao: 'estagiario', mesas: [[7, 7], [10, 7], [7, 10], [10, 10]], semVagas: true },
   ],
 };
 
@@ -43,9 +46,10 @@ function desenharEstacao(ctx, nome, x, y) {
   ctx.extras.push(frente);
 }
 
-// Mesa vazia esperando um agente, com a pílula "Vaga" (não interativa).
-function desenharVaga(ctx, { x, y, estacao }, escala) {
+// Mesa vazia esperando um agente, com a pílula "Vaga" (não interativa; `semRotulo` omite a pílula).
+function desenharVaga(ctx, { x, y, estacao, semRotulo }, escala) {
   desenharEstacao(ctx, estacao, x, y);
+  if (semRotulo) return;
   const pes = isoParaTela(x + AGENTE_NO_TILE, y + AGENTE_NO_TILE);
   const t = ctx.cena.add.text(0, 0, 'Vaga', {
     fontFamily: 'system-ui, sans-serif', fontSize: '10px', color: '#ced4da',

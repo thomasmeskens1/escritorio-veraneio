@@ -17,7 +17,6 @@ const ANDARES = {
     agentes: [
       { id: 'recepcionista', nome: 'Recepcionista', setor: 'escola', x: 6, y: 3, estacao: 'balcao' },
       { id: 'professor', nome: 'Professor', setor: 'escola', x: 1, y: 2, estacao: 'pulpito' },
-      { id: 'diretora', nome: 'Diretora', setor: 'escola', x: 1, y: 5, estacao: 'arquivo', tipo: 'conhecimento' },
     ],
   },
   marketing: {
@@ -34,7 +33,15 @@ const ANDARES = {
       { id: 'analista_metricas', nome: 'Analista de Métricas', setor: 'performance', estacao: 'metricas' },
     ],
   },
-  cobertura: { nome: 'Cobertura', agentes: [], restrito: true },
+  // Cérebro (RAG central) e os estagiários que levam o conhecimento aos outros andares.
+  cobertura: {
+    nome: 'Cobertura',
+    restrito: true,
+    agentes: [
+      { id: 'cerebro', nome: 'Cérebro', setor: 'laboratorio', estacao: 'pedestal', visual: 'cerebro' },
+      ...[1, 2, 3, 4].map((n) => ({ id: `estagiario_${n}`, nome: `Estagiário ${n}`, setor: 'estagiarios', estacao: 'estagiario', tipo: 'estagiario' })),
+    ],
+  },
 };
 
 // Espaço ocupado pela interface sobre o canvas (px de tela).
@@ -48,13 +55,14 @@ let andarAtual = 'terreo';
 let elementos = []; // objetos do andar renderizado
 let avatares = {}; // id -> avatar do andar renderizado
 let assinaturaAtual = ''; // agentes/aparências do andar renderizado
-let estadoAgentes = {}; // último "estado" recebido: { andar: { id: {nome, funcao, status, tipo, aparencia, visitando, setor} } }
+let estadoAgentes = {}; // último "estado" recebido: { andar: { id: {nome, funcao, status, tipo, aparencia, visitando, setor, visual} } }
 let posicoesAndar = {}; // id -> { x, y } (tile) dos agentes do andar renderizado
 let ocupadasAndar = new Set(); // células com móveis/agentes no andar renderizado
 let setoresAndar = {}; // setor -> tapete/brilho desenhado no andar renderizado
 let setorDosAgentes = {}; // id -> setor da mesa ocupada no andar renderizado
 
-const TIPOS_AGENTE = ['ia', 'sistema', 'conhecimento'];
+const TIPOS_AGENTE = ['ia', 'sistema', 'estagiario'];
+const VISUAIS = ['humano', 'cerebro'];
 
 function podeAcessar(nivel) {
   return !ANDARES[nivel]?.restrito || sessao?.role === 'diretoria';
@@ -79,7 +87,17 @@ function dadosAgente(nivel, id) {
     aparencia: remoto.aparencia && typeof remoto.aparencia === 'object' ? remoto.aparencia : null,
     visitando: lerVisita(remoto.visitando),
     setor: typeof remoto.setor === 'string' && remoto.setor ? remoto.setor : local?.setor || '',
+    visual: VISUAIS.includes(remoto.visual) ? remoto.visual : local?.visual || 'humano',
   };
+}
+
+// Agentes que andam pelo prédio (estagiários, ou quem estiver visitando): o avatar
+// fica a cargo de js/visitas.js, na estação ou ao lado de quem ele atende.
+const ehVisitante = (dados) => dados.tipo === 'estagiario' || !!dados.visitando;
+
+// Estagiários não são interativos (sem área de clique).
+function cliqueDoAgente(nivel, id, dados) {
+  return dados.tipo === 'estagiario' ? undefined : () => clicarAgente(nivel, id);
 }
 
 // Converte coordenadas da grade (x, y) para pixels do mundo, centralizando chão + paredes
@@ -166,19 +184,22 @@ function posicionarAgentes(nivel, ocupadas) {
     posicionados.push({ id, setor: '', estacao: 'mesa', x: celula.x, y: celula.y });
   });
   const vagas = [];
-  setores.forEach((s) => livres[s.id].forEach(([x, y]) => vagas.push({ x, y, estacao: s.vaga || 'vaga', setor: s.id })));
+  setores.forEach((s) => livres[s.id].forEach(([x, y]) => vagas.push(s.semVagas
+    ? { x, y, estacao: s.estacao || 'mesa', setor: s.id, semRotulo: true }
+    : { x, y, estacao: s.vaga || 'vaga', setor: s.id })));
   return { agentes: posicionados, vagas };
 }
 
 // Muda quando entram/saem agentes ou mudam nome/aparência/setor (status não conta).
 function assinatura(nivel) {
   return JSON.stringify(idsDoAndar(nivel).sort().map((id) => {
-    const { nome, tipo, aparencia, setor } = dadosAgente(nivel, id);
-    return [id, nome, tipo, aparencia, setor];
+    const dados = dadosAgente(nivel, id);
+    const { nome, tipo, aparencia, setor, visual } = dados;
+    return [id, nome, tipo, aparencia, setor, visual, ehVisitante(dados)];
   }));
 }
 
-// abrirAgente (UI) decide: chat para os agentes, popup informativo para a Diretora.
+// abrirAgente (UI) decide: chat, painel do Despachante ou nada (estagiários).
 function clicarAgente(nivel, id) {
   if (typeof abrirAgente === 'function') abrirAgente(nivel, id);
   else abrirChat(nivel, id);
@@ -264,14 +285,15 @@ function renderizarAndar(nivel) {
     const pes = isoParaTela(pos.x, pos.y);
 
     const dados = dadosAgente(nivel, a.id);
-    if (dados.tipo === 'conhecimento') {
+    if (ehVisitante(dados)) {
       registrarCasa(a.id, pos, escalaRotulo); // avatar fica a cargo de js/visitas.js
       return;
     }
-    const avatar = criarAvatar(cena, pes.x, pes.y, {
+    const avatar = criarBoneco(cena, pes.x, pes.y, {
       ...dados,
       escalaRotulo,
-      aoClicar: () => clicarAgente(nivel, a.id),
+      elevacao: a.estacao === 'pedestal' ? ELEVACAO_PEDESTAL : 0,
+      aoClicar: cliqueDoAgente(nivel, a.id, dados),
     });
     avatares[a.id] = avatar;
     elementos.push(...avatar.objetos);

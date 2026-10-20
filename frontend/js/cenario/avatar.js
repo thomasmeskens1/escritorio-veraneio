@@ -45,8 +45,10 @@ function normalizarAparencia(ap, id) {
 }
 
 // Rótulo com bolinha de status; fica acima de tudo para continuar legível.
-// Borda azul: sistema (Despachante); dourada: conhecimento (Diretora).
-const BORDAS_ROTULO = { sistema: [0x8ecae6, 0.55], conhecimento: [0xd4af37, 0.6], ia: [0xffffff, 0.12] };
+// Borda azul: sistema (Despachante); rosa: o Cérebro; verde: estagiários.
+const BORDAS_ROTULO = {
+  sistema: [0x8ecae6, 0.55], cerebro: [0xff8fab, 0.75], estagiario: [0x8ce99a, 0.4], ia: [0xffffff, 0.12],
+};
 
 function criarRotulo(cena, x, y, nome, tipo = 'ia') {
   const texto = cena.add.text(5, 0, tipo === 'sistema' ? `⚙ ${nome}` : nome, {

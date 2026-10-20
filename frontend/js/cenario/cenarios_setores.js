@@ -79,15 +79,16 @@ CENARIOS.marketing = {
   ],
 };
 
-// Diretoria: sala de reuniões do conselho, mesas executivas e lounge.
+// Cobertura: reunião do conselho, laboratório do Cérebro, mesas dos estagiários e lounge.
 CENARIOS.cobertura = {
   grade: 12,
   chao: { estilo: 'marmore', cor: 0x2b2d42 },
   parede: { cor: 0x1f2235, acabamento: 'painel', rodape: 0xd4af37 },
   paredes: [
     { tipo: 'janela', lado: 'esq', t0: 0.5, t1: 5.6, z0: 26, z1: 108, skyline: true, ceu: 0x23365f, moldura: 0x2b2b2b },
-    { tipo: 'quadro', lado: 'esq', t0: 6.4, t1: 8.0, z0: 62, z1: 104, moldura: 0xd4af37, fundo: 0x14182b, cores: [0xd4af37, 0x9d0208, 0xf8f9fa] },
-    { tipo: 'janela', lado: 'esq', t0: 8.6, t1: 11.5, z0: 26, z1: 108, skyline: true, ceu: 0x23365f, moldura: 0x2b2b2b },
+    { tipo: 'formulas', lado: 'esq', t0: 6.2, t1: 8.8, z0: 44, z1: 108 },
+    { tipo: 'mapaEmpresa', lado: 'esq', t0: 9.2, t1: 11.7, z0: 62, z1: 108 },
+    { tipo: 'prateleira', lado: 'esq', t0: 9.3, t1: 11.6, z: 44, itens: [0x63e6be, 0xff8fab, 0xc77dff, 0xffd43b, 0xe3fafc] },
     { tipo: 'janela', lado: 'dir', t0: 0.5, t1: 9.4, z0: 26, z1: 108, skyline: true, ceu: 0x23365f, moldura: 0x2b2b2b },
     { tipo: 'elevador', lado: 'dir', t0: 10.2, t1: 11.4, letra: 'C', moldura: 0xd4af37 },
   ],
@@ -98,12 +99,17 @@ CENARIOS.cobertura = {
     { tipo: 'mesaReuniao', x: 5, y: 1.6 },
     { tipo: 'cadeirasFrente', x: 2, y: 3 },
     { tipo: 'cadeirasFrente', x: 5, y: 3 },
+    { tipo: 'bar', x: 0, y: 2.5 },
+    // Laboratório
+    { tipo: 'bancadaLab', x: 0, y: 6.4 },
+    { tipo: 'tanque', x: 1, y: 6, reserva: true },
+    { tipo: 'monitoresCerebro', x: 2, y: 6 },
+    { tipo: 'tanque', x: 4, y: 6, cor: 0xc77dff },
     // Lounge
-    { tipo: 'bar', x: 0, y: 5 },
     { tipo: 'poltrona', x: 9, y: 4, cor: 0x7f5539 },
     { tipo: 'mesinha', x: 10, y: 4 },
     { tipo: 'poltrona', x: 10, y: 5, cor: 0x7f5539 },
     { tipo: 'abajur', x: 11, y: 3 },
-    { tipo: 'planta', x: 11, y: 11, alta: true },
+    { tipo: 'planta', x: 6, y: 11, alta: true },
   ],
 };

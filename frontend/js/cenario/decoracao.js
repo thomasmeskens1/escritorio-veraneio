@@ -3,7 +3,7 @@
 // na parede da direita. Porão, Marketing e Cobertura estão em cenarios_setores.js.
 
 const CENARIOS = {
-  // Escola do escritório e o arquivo da Diretora.
+  // Escola do escritório e o canto de leitura (biblioteca).
   terreo: {
     grade: 8,
     chao: { estilo: 'madeira', cor: 0xc8a27a },
@@ -21,10 +21,13 @@ const CENARIOS = {
       { tipo: 'tapete', x: 2.6, y: 0.8, w: 3.2, d: 3.6, cores: [0x8ecae6, 0xa8dadc] },
       { tipo: 'tapete', x: 6.25, y: 0.15, w: 1.1, d: 0.8, cores: [0x9d0208, 0xc92a2a], texto: 'BEM-VINDO' },
       { tipo: 'planta', x: 0, y: 0, alta: true },
-      // Canto do arquivo (Diretora): arquivos de aço ao redor da estante.
-      { tipo: 'arquivo', x: 0, y: 4 },
-      { tipo: 'estante', x: 0, y: 5 },
-      { tipo: 'arquivo', x: 0, y: 7 },
+      // Canto de leitura: estantes, tapete, poltrona e abajur.
+      { tipo: 'tapete', x: 0.7, y: 4.3, w: 1.8, d: 2.6, cores: [0x6d597a, 0xb5838d] },
+      { tipo: 'estante', x: 0, y: 4 },
+      { tipo: 'estante', x: 0, y: 6 },
+      { tipo: 'poltrona', x: 1, y: 5, cor: 0x2a9d8f },
+      { tipo: 'abajur', x: 1, y: 4 },
+      { tipo: 'mesinha', x: 1, y: 6 },
       { tipo: 'planta', x: 7, y: 5 },
       { tipo: 'carteira', x: 3, y: 1 },
       { tipo: 'carteira', x: 3, y: 3 },

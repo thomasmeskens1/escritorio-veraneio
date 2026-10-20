@@ -35,16 +35,22 @@ function setorNoPonto(xMundo, yMundo) {
   return setorNoTile((u + v) / 2, (v - u) / 2);
 }
 
+// Avatares de visitantes (js/visitas.js) que estão dentro do setor agora.
+function objetosDeVisitantes(setor) {
+  return Object.values(presencas).filter((p) => setorNoTile(p.g.x, p.g.y) === setor).flatMap((p) => p.avatar.objetos);
+}
+
 function aplicarDestaque(id, ativo) {
   const reg = setoresAndar[id];
   if (!reg) return;
+  if (ativo) reg.visitantes = objetosDeVisitantes(id);
   // Chão: fundo sólido, tapete e brilho logo acima do resto do andar (e abaixo dos objetos do setor).
   reg.fundo.setVisible(ativo).setDepth(ELEVACAO_DESTAQUE);
   [reg.tapete, reg.brilho].forEach((g) => {
     if (ativo) g.profundidadeBase = g.depth;
     g.setDepth(ativo ? ELEVACAO_DESTAQUE + 1 : g.profundidadeBase);
   });
-  (reg.objetos || []).forEach((obj) => {
+  [...(reg.objetos || []), ...(reg.visitantes || [])].forEach((obj) => {
     if (!obj.active) return;
     if (ativo) {
       obj.profundidadeBase = obj.depth;

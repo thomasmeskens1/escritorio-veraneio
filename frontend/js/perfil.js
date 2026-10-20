@@ -1,4 +1,5 @@
-// Ficha do agente (descrição, exemplo, tarefas, aprendizado, treino) e janela da Diretora.
+// Ficha do agente (descrição, exemplo, tarefas, aprendizado, rotinas, treino) e, no popup
+// do Cérebro, a seção "Conhecimento" (GET /api/cerebro/estatisticas).
 
 const AVISO_PRODUCAO = 'A produção de imagens e vídeos é exclusiva da conta do Thomas. Fale com ele para solicitar.';
 
@@ -7,7 +8,6 @@ const errosPerfil = {}; // 'andar/agente' -> mensagem de erro do último carrega
 let perfilExpandido = !window.matchMedia('(max-width: 640px)').matches;
 let resultadoTreino = null; // { chave, texto, erro }
 let treinando = false;
-let diretoraAberta = null; // { andar, agente }
 const rotinas = {}; // 'andar/agente' -> lista de GET /api/agendamentos (só as ativas)
 const errosRotinas = {};
 const cancelandoRotinas = new Set(); // ids com DELETE em andamento
@@ -15,8 +15,6 @@ const DICA_ROTINA = 'Para agendar, escreva por exemplo: "Analise as campanhas to
 
 const modalPerfil = document.getElementById('modal-perfil');
 const modalRestrito = document.getElementById('modal-restrito');
-const janelaDiretora = document.getElementById('diretora');
-const diretoraConteudo = document.getElementById('diretora-conteudo');
 
 // ---------- API ----------
 class ErroApi extends Error {}
@@ -41,6 +39,7 @@ function limparPerfis() {
   Object.keys(errosPerfil).forEach((k) => delete errosPerfil[k]);
   Object.keys(rotinas).forEach((k) => delete rotinas[k]);
   Object.keys(errosRotinas).forEach((k) => delete errosRotinas[k]);
+  Object.assign(conhecimento, { dados: null, erro: '', oculto: false });
   resultadoTreino = null;
 }
 
@@ -50,6 +49,7 @@ async function carregarPerfil(andar, agente) {
   delete errosPerfil[k];
   renderizarPerfil();
   carregarRotinas(andar, agente);
+  if (ehCerebro(andar, agente)) carregarConhecimento(andar, agente);
   try {
     const dados = await buscarAgente(andar, agente);
     if (!dados) return;
@@ -83,6 +83,7 @@ function renderizarPerfil() {
   if (dados.descricao) corpo.append(novoEl('p', 'perfil-descricao', dados.descricao));
   if (dados.exemplo) corpo.append(criarExemplo(dados.exemplo));
   corpo.append(criarFatos(dados));
+  if (ehCerebro(chatAberto.andar, chatAberto.agente) && !conhecimento.oculto) corpo.append(criarConhecimento());
   if (dados.tipo === 'ia') corpo.append(criarRotinas(chatAberto.andar, chatAberto.agente));
   const ajustes = dados.aprendizado?.ajustes;
   if (Array.isArray(ajustes) && ajustes.length) corpo.append(criarAjustesAgente(ajustes));
@@ -313,88 +314,89 @@ async function cancelarRotina(andar, agente, id) {
   }
 }
 
-// ---------- Janela da Diretora (só leitura) ----------
-function formatarTamanho(kb) {
-  const n = Number(kb) || 0;
-  if (n >= 1024) return `${(n / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`;
-  return `${n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} KB`;
-}
+// ---------- Conhecimento do Cérebro ----------
+const FONTES_CONHECIMENTO = { oficial: 'Oficial', ensinado: 'Ensinado', site: 'Site', drive: 'Drive', tarefa: 'Tarefas' };
+const conhecimento = { dados: null, erro: '', oculto: false }; // estatísticas do RAG central
 
-function atualizarCabecalhoDiretora() {
-  if (!diretoraAberta) return;
-  const dados = dadosAgente(diretoraAberta.andar, diretoraAberta.agente);
-  document.getElementById('diretora-nome').textContent = dados.nome;
-  document.getElementById('diretora-funcao').textContent = dados.funcao || 'Conhecimento da empresa';
-  const status = document.getElementById('diretora-status');
-  status.className = `status status-${dados.status}`;
-  status.title = ROTULOS_STATUS[dados.status] || '';
-}
+const ehCerebro = (andar, agente) => dadosAgente(andar, agente).visual === 'cerebro';
+const numero = (n) => (Number(n) || 0).toLocaleString('pt-BR');
 
-function renderizarDiretora(dados, erro) {
-  if (erro || !dados) {
-    diretoraConteudo.replaceChildren(novoEl('p', `perfil-carregando${erro ? ' erro' : ''}`, erro || 'Carregando informações...'));
-    return;
+async function carregarConhecimento(andar, agente) {
+  if (!sessao) return;
+  try {
+    const resposta = await fetch('/api/cerebro/estatisticas', { headers: { Authorization: `Bearer ${sessao.token}` } });
+    if (resposta.status === 401) return encerrarSessao('Sessão expirada. Entre novamente.');
+    if (resposta.status === 403 || resposta.status === 404) {
+      Object.assign(conhecimento, { dados: null, erro: '', oculto: true });
+    } else if (!resposta.ok) {
+      Object.assign(conhecimento, { erro: 'Não foi possível carregar o conhecimento.', oculto: false });
+    } else {
+      Object.assign(conhecimento, { dados: await resposta.json(), erro: '', oculto: false });
+    }
+  } catch {
+    Object.assign(conhecimento, { erro: 'Servidor indisponível.', oculto: false });
   }
-  const info = dados.diretora || {};
-  const documentos = Array.isArray(info.documentos) ? info.documentos : [];
-  const blocos = [];
-  if (dados.descricao) blocos.push(novoEl('p', 'perfil-descricao', dados.descricao));
+  if (chatEstaAberto(andar, agente)) renderizarPerfil();
+}
 
-  const numeros = novoEl('div', 'resumo');
-  [[documentos.length, documentos.length === 1 ? 'Documento' : 'Documentos'], [info.consultas ?? 0, 'Consultas']].forEach(([n, rotulo]) => {
-    const cartao = novoEl('div', 'resumo-cartao resumo-fila');
-    cartao.append(novoEl('strong', null, n), novoEl('span', null, rotulo));
+function criarConhecimento() {
+  const bloco = novoEl('div', 'perfil-conhecimento');
+  bloco.append(novoEl('h4', null, 'Conhecimento'));
+  const d = conhecimento.dados;
+  if (!d) {
+    bloco.append(novoEl('p', `rotinas-nota${conhecimento.erro ? ' erro' : ''}`, conhecimento.erro || 'Carregando...'));
+    return bloco;
+  }
+  const numeros = novoEl('div', 'conhecimento-numeros');
+  [[d.total, 'itens'], [d.consultas_hoje, 'consultas hoje'], [d.consultas_total, 'consultas no total']].forEach(([n, rotulo]) => {
+    const cartao = novoEl('div', 'conhecimento-cartao');
+    cartao.append(novoEl('strong', null, numero(n)), novoEl('span', null, rotulo));
     numeros.append(cartao);
   });
-  blocos.push(numeros);
+  bloco.append(numeros);
 
-  const secao = novoEl('section', 'diretora-documentos');
-  secao.append(novoEl('h3', null, 'Documentos que ela guarda'));
-  if (!documentos.length) {
-    secao.append(novoEl('p', 'aprendizado-nota', 'Nenhum documento cadastrado ainda.'));
-  } else {
-    const lista = novoEl('ul');
-    documentos.forEach((d) => {
-      const item = novoEl('li');
-      item.append(novoEl('span', 'doc-nome', d.nome || '—'), novoEl('span', 'doc-tamanho', formatarTamanho(d.tamanho_kb)));
-      lista.append(item);
+  const fontes = d.por_fonte && typeof d.por_fonte === 'object' ? d.por_fonte : {};
+  const maior = Math.max(1, ...Object.keys(FONTES_CONHECIMENTO).map((f) => Number(fontes[f]) || 0));
+  const lista = novoEl('ul', 'conhecimento-fontes');
+  Object.entries(FONTES_CONHECIMENTO).forEach(([fonte, rotulo]) => {
+    const n = Number(fontes[fonte]) || 0;
+    const item = novoEl('li', `fonte-${fonte}`);
+    const barra = novoEl('span', 'fonte-barra');
+    const cheio = novoEl('i');
+    cheio.style.width = `${Math.round((n / maior) * 100)}%`;
+    barra.append(cheio);
+    item.append(novoEl('span', 'fonte-nome', rotulo), barra, novoEl('strong', null, numero(n)));
+    lista.append(item);
+  });
+  bloco.append(lista);
+
+  const meta = [];
+  if (d.ultima_atualizacao) meta.push(`atualizado ${formatarQuando(d.ultima_atualizacao)}`);
+  const emb = d.embeddings;
+  if (emb && typeof emb === 'object') {
+    const partes = [emb.modelo || 'embeddings'];
+    if (emb.pendentes) partes.push(`${numero(emb.pendentes)} pendentes`);
+    partes.push(emb.ollama_ok ? 'Ollama ok' : 'Ollama fora do ar');
+    meta.push(partes.join(' · '));
+  }
+  if (meta.length) bloco.append(novoEl('small', 'conhecimento-meta', meta.join(' — ')));
+
+  if (d.pode_ensinar) {
+    const dica = novoEl('button', 'conhecimento-dica');
+    dica.type = 'button';
+    dica.title = 'Começar uma mensagem com “Aprenda:”';
+    dica.append(document.createTextNode('Para ensinar, comece a mensagem com '), novoEl('strong', null, '“Aprenda:”'),
+      document.createTextNode(' (ex.: “Aprenda: o check-in é às 15h”).'));
+    dica.addEventListener('click', () => {
+      if (modalInput.disabled) return;
+      if (!/^aprenda:/i.test(modalInput.value)) modalInput.value = `Aprenda: ${modalInput.value}`;
+      modalInput.focus();
     });
-    secao.append(lista);
+    bloco.append(dica);
   }
-  blocos.push(secao, novoEl('p', 'diretora-nota', 'Ela é consultada apenas pelos agentes.'));
-  diretoraConteudo.replaceChildren(...blocos);
+  return bloco;
 }
 
-async function abrirDiretora(andar, agente) {
-  if (typeof fecharChat === 'function') fecharChat();
-  fecharPainel();
-  diretoraAberta = { andar, agente };
-  atualizarCabecalhoDiretora();
-  const k = chave(andar, agente);
-  renderizarDiretora(perfis[k]);
-  janelaDiretora.classList.add('aberto');
-  document.getElementById('diretora-fechar').focus();
-  try {
-    const dados = await buscarAgente(andar, agente);
-    if (!dados) return;
-    perfis[k] = dados;
-    if (diretoraAberta?.agente === agente) renderizarDiretora(dados);
-  } catch (erro) {
-    if (diretoraAberta?.agente === agente && !perfis[k]) {
-      renderizarDiretora(null, erro instanceof ErroApi ? erro.message : 'Servidor indisponível.');
-    }
-  }
-}
-
-function fecharDiretora() {
-  diretoraAberta = null;
-  janelaDiretora.classList.remove('aberto');
-}
-
-document.getElementById('diretora-fechar').addEventListener('click', fecharDiretora);
-janelaDiretora.addEventListener('click', (e) => {
-  if (e.target === janelaDiretora) fecharDiretora();
-});
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && diretoraAberta) fecharDiretora();
-});
+// Compatibilidade: rede.js e auth.js ainda chamam estas funções da antiga Diretora.
+function atualizarCabecalhoDiretora() {}
+function fecharDiretora() {}
