@@ -79,7 +79,7 @@ CENARIOS.marketing = {
   ],
 };
 
-// Cobertura: reunião do conselho, laboratório do Cérebro, mesas dos estagiários e lounge.
+// Cobertura: reunião do conselho (onde ficam os estagiários), laboratório do Cérebro e lounge.
 CENARIOS.cobertura = {
   grade: 12,
   chao: { estilo: 'marmore', cor: 0x2b2d42 },

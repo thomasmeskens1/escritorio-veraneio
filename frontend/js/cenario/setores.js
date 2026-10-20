@@ -21,10 +21,10 @@ const SETORES = {
     { id: 'performance', nome: 'Performance', area: [7, 10, 7, 4], cor: 0x2a9d8f, estacao: 'graficos', mesas: [[8, 11], [10, 11], [12, 11]] },
   ],
   cobertura: [
-    { id: 'reuniao', nome: 'Reunião', area: [1, 1, 8, 4], cor: 0x8ecae6 },
-    // Laboratório do Cérebro (RAG central) e as mesas dos estagiários, sem vagas extras.
+    // Os estagiários dividem a mesa de reunião (lugares nas cadeiras do fundo, sem estação própria).
+    { id: 'reuniao', nome: 'Reunião', area: [1, 1, 8, 4], cor: 0x8ecae6, estacao: 'nenhuma', mesas: [[2.2, 1.45], [4.2, 1.45], [5.2, 1.45], [7.2, 1.45]], semVagas: true },
+    // Laboratório do Cérebro (RAG central), sem vagas extras.
     { id: 'laboratorio', nome: 'Laboratório', area: [0, 6, 6, 6], cor: 0xff8fab, estacao: 'pedestal', mesas: [[3, 9]], semVagas: true },
-    { id: 'estagiarios', nome: 'Estagiários', area: [7, 6, 5, 6], cor: 0x74c0fc, estacao: 'estagiario', mesas: [[7, 7], [10, 7], [7, 10], [10, 10]], semVagas: true },
   ],
 };
 

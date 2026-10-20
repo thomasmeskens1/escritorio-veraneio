@@ -64,18 +64,8 @@ Object.assign(ESTACOES, {
     },
   },
 
-  // Estagiário: mesa simples, notebook, papéis e post-its.
-  estagiario: {
-    atras: cadeiraAtras(0x4dabf7),
-    frente(g, x, y) {
-      const z = mesaPadrao(g, x, y, 0xe9d8a6);
-      desenharNotebook(g, x + 0.64, y + 0.48, z);
-      [0, 1].forEach((i) => caixaIso(g, x + 0.46, y + 0.7, x + 0.62, y + 0.9, z + i, z + i + 1, 0xf8f9fa, false));
-      caixaIso(g, x + 0.47, y + 0.5, x + 0.53, y + 0.56, z, z + 0.6, 0xffe066, false);
-      caixaIso(g, x + 0.5, y + 0.58, x + 0.56, y + 0.64, z, z + 0.6, 0xff8fab, false);
-      desenharCaneca(g, x + 0.84, y + 0.84, z, 0x4dabf7);
-    },
-  },
+  // Sem estação: o agente usa um móvel do cenário (os estagiários, na mesa de reunião).
+  nenhuma: { frente() {} },
 });
 
 Object.assign(MOVEIS, {

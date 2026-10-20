@@ -39,7 +39,7 @@ const ANDARES = {
     restrito: true,
     agentes: [
       { id: 'cerebro', nome: 'Cérebro', setor: 'laboratorio', estacao: 'pedestal', visual: 'cerebro' },
-      ...[1, 2, 3, 4].map((n) => ({ id: `estagiario_${n}`, nome: `Estagiário ${n}`, setor: 'estagiarios', estacao: 'estagiario', tipo: 'estagiario' })),
+      ...[1, 2, 3, 4].map((n) => ({ id: `estagiario_${n}`, nome: `Estagiário ${n}`, setor: 'reuniao', estacao: 'nenhuma', tipo: 'estagiario' })),
     ],
   },
 };
