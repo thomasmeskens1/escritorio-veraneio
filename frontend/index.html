@@ -120,6 +120,17 @@
         <p id="modal-pensando" class="pensando" hidden>pensando<span>...</span></p>
 
         <form id="modal-form" class="janela-rodape">
+          <div id="modal-anexos" class="anexos-chips" aria-label="Arquivos anexados" hidden></div>
+          <p id="modal-anexos-aviso" class="anexos-aviso" role="alert" hidden></p>
+          <div id="modal-progresso" class="anexos-progresso" role="progressbar" aria-label="Envio dos anexos"
+            aria-valuemin="0" aria-valuemax="100" hidden><span></span></div>
+          <input id="modal-arquivo" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" multiple hidden>
+          <button id="modal-anexar" class="botao-anexar" type="button" aria-label="Anexar imagem ou PDF"
+            title="Anexar imagem ou PDF (até 4 arquivos, 15 MB cada)">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+              d="M21 11.5 12.6 19.9a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>
+          </button>
           <input id="modal-input" autocomplete="off" placeholder="Descreva a tarefa..." aria-label="Tarefa">
           <button id="modal-enviar" class="botao-primario" type="submit">Enviar Tarefa</button>
         </form>

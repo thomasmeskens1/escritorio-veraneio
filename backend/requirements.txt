@@ -7,3 +7,4 @@ crewai[anthropic]==1.15.28
 scikit-learn==1.9.1
 apscheduler==3.11.3
 tzdata==2026.5
+python-multipart==0.0.32

@@ -15,16 +15,32 @@ const modal = document.getElementById('modal');
 const modalHistorico = document.getElementById('modal-historico');
 const modalInput = document.getElementById('modal-input');
 const modalEnviar = document.getElementById('modal-enviar');
+const modalAnexar = document.getElementById('modal-anexar');
+const modalArquivo = document.getElementById('modal-arquivo');
+const modalAnexos = document.getElementById('modal-anexos');
+const modalAviso = document.getElementById('modal-anexos-aviso');
+const modalProgresso = document.getElementById('modal-progresso');
+
+// Anexos: imagens e PDF, até 4 por mensagem e 15 MB cada (o servidor valida de novo).
+const TIPOS_ANEXO = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
+const MAX_ANEXOS = 4;
+const TAMANHO_MAX_ANEXO = 15 * 1024 * 1024;
+const selecionados = {}; // 'andar/agente' -> [{ arquivo: File, url? }] ainda não enviados
+const urlsAnexo = {}; // id do anexo -> Promise<blob URL> (miniaturas no histórico)
+let enviandoAnexos = false;
 
 const chave = (andar, agente) => `${andar}/${agente}`;
 
-function criarMensagem({ autor, texto, tipo, meta }) {
+const tamanhoLegivel = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+function criarMensagem({ autor, texto, tipo, meta, anexos }) {
   const div = document.createElement('div');
   div.className = `msg msg-${tipo}`;
   const nome = document.createElement('span');
   nome.className = 'msg-autor';
   nome.textContent = autor;
   div.append(nome, document.createTextNode(texto));
+  if (anexos?.length) div.append(criarAnexosDaMensagem(anexos));
   if (meta) {
     const linha = document.createElement('span');
     linha.className = 'msg-meta';
@@ -83,9 +99,11 @@ function atualizarChat() {
 
   document.getElementById('modal-pensando').hidden = !ocupado;
   // Envio espera o histórico chegar, para a pergunta nova não se repetir ao mesclar.
-  const bloqueado = ocupado || !online || restrito || carregando;
+  const bloqueado = ocupado || !online || restrito || carregando || enviandoAnexos;
   modalInput.disabled = bloqueado;
   modalEnviar.disabled = bloqueado;
+  modalAnexar.disabled = bloqueado;
+  modalAnexos.querySelectorAll('button').forEach((b) => { b.disabled = enviandoAnexos; });
   if (restrito) modalInput.placeholder = 'Envio indisponível para esta conta';
   else if (!online) modalInput.placeholder = 'Sem conexão com o servidor...';
   else modalInput.placeholder = carregando ? 'Carregando histórico…' : 'Descreva a tarefa...';
@@ -108,6 +126,8 @@ function abrirChat(andar, agente) {
   if (chatAberto) rascunhos[chave(chatAberto.andar, chatAberto.agente)] = modalInput.value;
   chatAberto = { andar, agente };
   modalInput.value = rascunhos[chave(andar, agente)] || '';
+  avisarAnexo('');
+  renderizarSelecao();
   carregarHistorico(andar, agente);
   renderizarHistorico(andar, agente);
   modal.classList.add('aberto');
@@ -125,7 +145,7 @@ function mensagemDoAgente(andar, agente, dados) {
 }
 
 function converterDoServidor(andar, agente, m) {
-  if (m.autor === 'voce') return { autor: 'Você', texto: m.texto, tipo: 'voce', tarefa_id: m.tarefa_id };
+  if (m.autor === 'voce') return { autor: 'Você', texto: m.texto, tipo: 'voce', tarefa_id: m.tarefa_id, anexos: m.anexos };
   if (m.autor === 'agente') return mensagemDoAgente(andar, agente, { ...m.meta, texto: m.texto, tarefa_id: m.tarefa_id });
   return { autor: 'sistema', texto: m.texto, tipo: 'sistema', tarefa_id: m.tarefa_id };
 }
@@ -188,19 +208,192 @@ function limparChat() {
   geracaoHistorico += 1;
   modalInput.value = '';
   pendentes.clear();
+  Object.values(selecionados).flat().forEach((s) => s.url && URL.revokeObjectURL(s.url));
+  Object.keys(selecionados).forEach((k) => delete selecionados[k]);
+  Object.values(urlsAnexo).forEach((p) => p.then((url) => url && URL.revokeObjectURL(url)));
+  Object.keys(urlsAnexo).forEach((k) => delete urlsAnexo[k]);
+  renderizarSelecao();
 }
 
-function enviarTarefa(evento) {
+// ---------- Anexos ----------
+
+function avisarAnexo(texto) {
+  modalAviso.textContent = texto;
+  modalAviso.hidden = !texto;
+}
+
+function mostrarProgresso(fracao) {
+  modalProgresso.hidden = fracao == null;
+  const pct = Math.round((fracao || 0) * 100);
+  modalProgresso.firstElementChild.style.width = `${pct}%`;
+  modalProgresso.setAttribute('aria-valuenow', pct);
+}
+
+const iconePdf = () => {
+  const i = document.createElement('span');
+  i.className = 'anexo-icone-pdf';
+  i.textContent = 'PDF';
+  return i;
+};
+
+// Chips dos arquivos escolhidos (ainda não enviados) do agente aberto.
+function renderizarSelecao() {
+  const lista = chatAberto ? selecionados[chave(chatAberto.andar, chatAberto.agente)] || [] : [];
+  modalAnexos.hidden = !lista.length;
+  modalAnexos.replaceChildren(...lista.map((s, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'anexo-chip';
+    if (s.url) {
+      const img = document.createElement('img');
+      img.src = s.url;
+      img.alt = '';
+      chip.append(img);
+    } else chip.append(iconePdf());
+    const info = document.createElement('span');
+    info.className = 'anexo-info';
+    const nome = document.createElement('span');
+    nome.className = 'anexo-nome';
+    nome.textContent = s.arquivo.name;
+    nome.title = s.arquivo.name;
+    const tamanho = document.createElement('span');
+    tamanho.className = 'anexo-tamanho';
+    tamanho.textContent = tamanhoLegivel(s.arquivo.size);
+    info.append(nome, tamanho);
+    const remover = document.createElement('button');
+    remover.type = 'button';
+    remover.className = 'anexo-remover';
+    remover.textContent = '×';
+    remover.setAttribute('aria-label', `Remover ${s.arquivo.name}`);
+    remover.disabled = enviandoAnexos;
+    remover.addEventListener('click', () => {
+      if (s.url) URL.revokeObjectURL(s.url);
+      lista.splice(i, 1);
+      avisarAnexo('');
+      renderizarSelecao();
+    });
+    chip.append(info, remover);
+    return chip;
+  }));
+}
+
+function escolherArquivos() {
+  if (!chatAberto) return;
+  const lista = (selecionados[chave(chatAberto.andar, chatAberto.agente)] ||= []);
+  const avisos = [];
+  for (const arquivo of modalArquivo.files) {
+    if (!TIPOS_ANEXO.includes(arquivo.type)) avisos.push(`${arquivo.name}: envie apenas imagens (PNG, JPG, WEBP) ou PDF.`);
+    else if (arquivo.size > TAMANHO_MAX_ANEXO) avisos.push(`${arquivo.name} tem ${tamanhoLegivel(arquivo.size)}; o limite é 15 MB.`);
+    else if (lista.length >= MAX_ANEXOS) { avisos.push(`Máximo de ${MAX_ANEXOS} arquivos por mensagem.`); break; }
+    else lista.push({ arquivo, url: arquivo.type.startsWith('image/') ? URL.createObjectURL(arquivo) : null });
+  }
+  modalArquivo.value = '';
+  avisarAnexo(avisos.join(' '));
+  renderizarSelecao();
+  modalInput.focus();
+}
+
+// Upload (XHR para ter progresso) -> [{ id, nome, mime, tamanho }].
+function enviarArquivos(arquivos) {
+  return new Promise((resolve, reject) => {
+    const dados = new FormData();
+    arquivos.forEach((a) => dados.append('arquivos', a, a.name));
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/anexos');
+    xhr.setRequestHeader('Authorization', `Bearer ${sessao.token}`);
+    xhr.upload.addEventListener('progress', (e) => e.lengthComputable && mostrarProgresso(e.loaded / e.total));
+    xhr.addEventListener('load', () => {
+      let corpo = null;
+      try { corpo = JSON.parse(xhr.responseText); } catch { /* resposta sem JSON */ }
+      if (xhr.status === 401) encerrarSessao('Sessão expirada. Entre novamente.');
+      if (xhr.status >= 200 && xhr.status < 300 && Array.isArray(corpo)) resolve(corpo);
+      else reject(new Error(typeof corpo?.detail === 'string' ? corpo.detail : 'Não foi possível enviar os anexos.'));
+    });
+    xhr.addEventListener('error', () => reject(new Error('Falha de rede ao enviar os anexos.')));
+    mostrarProgresso(0);
+    xhr.send(dados);
+  });
+}
+
+// Blob URL do anexo (GET com o token), buscado uma vez.
+function urlDoAnexo(id) {
+  urlsAnexo[id] ||= fetch(`/api/anexos/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${sessao?.token}` } })
+    .then((r) => (r.ok ? r.blob() : null))
+    .then((blob) => (blob ? URL.createObjectURL(blob) : null))
+    .catch(() => null);
+  return urlsAnexo[id];
+}
+
+// Anexos dentro da mensagem "Você": miniatura (imagem) ou ícone (PDF); clique abre o arquivo.
+function criarAnexosDaMensagem(anexos) {
+  const caixa = document.createElement('div');
+  caixa.className = 'msg-anexos';
+  anexos.forEach((a) => {
+    const link = document.createElement('a');
+    link.className = 'msg-anexo';
+    link.href = '#';
+    link.title = `${a.nome} (${tamanhoLegivel(a.tamanho || 0)})`;
+    if (a.mime?.startsWith('image/')) {
+      const img = document.createElement('img');
+      img.alt = a.nome;
+      link.append(img);
+      urlDoAnexo(a.id).then((url) => { if (url) img.src = url; else link.classList.add('msg-anexo-erro'); });
+    } else {
+      const nome = document.createElement('span');
+      nome.textContent = a.nome;
+      link.append(iconePdf(), nome);
+    }
+    link.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const url = await urlDoAnexo(a.id);
+      if (url) window.open(url, '_blank', 'noopener');
+    });
+    caixa.append(link);
+  });
+  return caixa;
+}
+
+async function enviarTarefa(evento) {
   evento.preventDefault();
-  const texto = modalInput.value.trim();
-  if (!chatAberto || !texto || modalEnviar.disabled) return;
-
+  if (!chatAberto || modalEnviar.disabled) return;
   const { andar, agente } = chatAberto;
-  if (!enviar({ tipo: 'mensagem', andar, agente, texto })) return;
+  const k = chave(andar, agente);
+  const escolhidos = [...(selecionados[k] || [])];
+  // O servidor exige texto: com anexo e sem texto, vai uma frase padrão.
+  const texto = modalInput.value.trim() || (escolhidos.length ? 'Veja o anexo.' : '');
+  if (!texto) return;
 
-  modalInput.value = '';
-  pendentes.add(chave(andar, agente));
-  adicionarMensagem(andar, agente, { autor: 'Você', texto, tipo: 'voce' });
+  let anexos = [];
+  if (escolhidos.length) {
+    enviandoAnexos = true;
+    avisarAnexo('');
+    atualizarChat();
+    try {
+      anexos = await enviarArquivos(escolhidos.map((s) => s.arquivo));
+    } catch (erro) {
+      avisarAnexo(erro.message);
+      return;
+    } finally {
+      enviandoAnexos = false;
+      mostrarProgresso(null);
+      atualizarChat();
+    }
+    // A miniatura local já serve para o histórico (evita baixar de novo).
+    anexos.forEach((a, i) => { if (escolhidos[i]?.url) urlsAnexo[a.id] = Promise.resolve(escolhidos[i].url); });
+  }
+
+  const mensagem = { tipo: 'mensagem', andar, agente, texto };
+  if (anexos.length) mensagem.anexos = anexos.map((a) => a.id);
+  if (!enviar(mensagem)) {
+    avisarAnexo('Sem conexão com o servidor. Tente de novo.');
+    return;
+  }
+
+  selecionados[k] = [];
+  rascunhos[k] = '';
+  if (chatEstaAberto(andar, agente)) modalInput.value = '';
+  renderizarSelecao();
+  pendentes.add(k);
+  adicionarMensagem(andar, agente, { autor: 'Você', texto, tipo: 'voce', anexos });
   atualizarChat();
 }
 
@@ -255,6 +448,8 @@ function liberarPendentes() {
 }
 
 document.getElementById('modal-form').addEventListener('submit', enviarTarefa);
+modalAnexar.addEventListener('click', () => modalArquivo.click());
+modalArquivo.addEventListener('change', escolherArquivos);
 document.getElementById('modal-fechar').addEventListener('click', fecharChat);
 modal.addEventListener('click', (e) => {
   if (e.target === modal) fecharChat();
