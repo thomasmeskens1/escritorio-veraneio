@@ -9,6 +9,7 @@ from crewai import LLM, Agent, Crew, Task
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 
+import agentes_dinamicos
 import atividade
 import config
 import diretora
@@ -55,6 +56,31 @@ class ConsultarDiretora(BaseTool):
         return diretora.consultar(pergunta, self.andar, self.agente, self.tarefa_id)
 
 
+class _Especificacao(BaseModel):
+    nome: str = Field(description="Nome curto do agente, ex.: Vendedor")
+    andar: str = Field(description="porao | marketing | cobertura")
+    setor: str = Field(description="Setor válido do andar (veja a lista nas instruções)")
+    funcao: str = Field(description="Função em uma linha")
+    descricao: str = Field(description="O que ele faz, em 1-2 frases")
+    exemplo: str = Field(description="Pedido curto de exemplo que o usuário faria a ele")
+    role: str = Field(description="Papel (persona) do agente")
+    goal: str = Field(description="Objetivo do agente")
+    backstory: str = Field(description="História/experiência do agente")
+    aparencia: dict = Field(description="Objeto com pele, cabelo {estilo, cor}, roupa {estilo, cor}, calca e acessorio")
+
+
+class CriarAgente(BaseTool):
+    name: str = "criar_agente"
+    description: str = ("Cria de verdade um novo agente no escritório a partir da especificação completa. "
+                        "Devolve a confirmação ou o erro de validação a corrigir.")
+    args_schema: type[BaseModel] = _Especificacao
+    tarefa_id: int
+
+    def _run(self, **spec) -> str:
+        tarefa = tarefas.obter(self.tarefa_id) if self.tarefa_id else None
+        return agentes_dinamicos.criar_em_thread(spec, tarefa["usuario"] if tarefa else "", self.tarefa_id or None)
+
+
 _trava_local = asyncio.Lock()
 
 
@@ -77,6 +103,8 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
     ferramentas = []
     if diretora.tem_documentos():  # sem documentos, a ferramenta só gastaria chamadas
         ferramentas.append(ConsultarDiretora(andar=andar_do_agente(agente_id) or "", agente=agente_id, tarefa_id=tarefa_id))
+    if agente_id == "construtor":
+        ferramentas.append(CriarAgente(tarefa_id=tarefa_id))
     agente = Agent(**PERFIS[agente_id], llm=_llm(modelo, limite_s), tools=ferramentas,
                    max_iter=MAX_ITERACOES, max_retry_limit=0, verbose=False)
     saida = Crew(agents=[agente], tasks=[Task(description=descricao, expected_output=esperado, agent=agente)]).kickoff()
@@ -105,7 +133,8 @@ def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa,
         total.texto = projeto.executar_projeto(tarefa_id, texto, contexto("gestor", historico), executar,
                                                cancelar, avisar)
     else:
-        esperado = "JSON com a especificação do novo agente." if agente_id == "construtor" else "Resposta completa ao pedido."
+        esperado = ("Confirmação amigável, em texto (sem JSON), do agente criado: nome, andar, setor e função."
+                    if agente_id == "construtor" else "Resposta completa ao pedido.")
         total.texto = _rodar(agente_id, descricao_tarefa(agente_id, texto, historico), esperado,
                              etapa.modelo, etapa.limite_s, total, tarefa_id)
     return total

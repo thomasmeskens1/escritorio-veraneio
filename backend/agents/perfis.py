@@ -11,8 +11,8 @@ PERFIS = {
     # Porão
     "construtor": {
         "role": "Construtor",
-        "goal": "Transformar o briefing do usuário na especificação completa de um novo agente, "
-                "incluindo um visual exclusivo para o avatar dele.",
+        "goal": "Criar de verdade novos agentes para o escritório: montar a especificação completa a partir do "
+                "briefing do usuário, com um visual exclusivo, e registrá-la com a ferramenta criar_agente.",
         "backstory": "Arquiteto do escritório; constrói novos membros do time sob medida e cuida para que "
                      "cada um tenha aparência própria, diferente de todos os colegas.",
     },
@@ -80,15 +80,26 @@ AGENTES_ESCOLA = {"recepcionista", "professor"}
 
 
 def _contexto_construtor() -> str:
-    aparencias = {a.nome: a.aparencia.model_dump() for agentes in ANDARES.values() for a in agentes.values()}
+    from agentes_dinamicos import setores_com_vagas  # import tardio: o módulo depende de PERFIS
+
+    equipe = [f"- {a.id} ({a.nome}, {andar}/{a.setor}): {json.dumps(a.aparencia.model_dump(), ensure_ascii=False)}"
+              for andar, agentes in ANDARES.items() for a in agentes.values()]
     return (
-        "Entregue SOMENTE um JSON com as chaves: id (snake_case), nome, andar (porao|terreo|marketing|cobertura), "
-        "funcao, role, goal, backstory e aparencia.\n"
-        'aparencia segue o formato {"pele": "#hex", "cabelo": {"estilo": "curto|longo|coque|careca|cacheado|moicano", '
+        "Você CRIA o agente chamando a ferramenta criar_agente com a especificação completa: nome (curto), "
+        "andar, setor, funcao (uma linha), descricao (1-2 frases), exemplo (um pedido curto que o usuário "
+        "faria a ele), role, goal e backstory (a persona dele) e aparencia.\n"
+        f"Andares e setores válidos (mesas livres): {setores_com_vagas()}. O térreo não recebe agentes. "
+        "Escolha o setor mais coerente com a função e que tenha vaga.\n"
+        'aparencia: {"pele": "#hex", "cabelo": {"estilo": "curto|longo|coque|careca|cacheado|moicano", '
         '"cor": "#hex"}, "roupa": {"estilo": "camiseta|camisa|blazer|moletom|macacao|avental", "cor": "#hex"}, '
-        '"calca": "#hex", "acessorio": "nenhum|oculos|fone|bone|capacete|cracha|gravata|camera|lapis"}.\n'
-        "Crie um visual que combine com a função e seja DIFERENTE de todos os agentes atuais:\n"
-        f"{json.dumps(aparencias, ensure_ascii=False)}"
+        '"calca": "#hex", "acessorio": "nenhum|oculos|fone|bone|capacete|cracha|gravata|camera|lapis"}. '
+        "Pele em tom humano (ex.: #ffdbac, #e0ac69, #a0522d, #6b4226). O visual deve combinar com a função "
+        "e ser DIFERENTE de todos os agentes atuais:\n" + "\n".join(equipe) + "\n"
+        "Se a ferramenta devolver erro de validação, corrija o que ela apontar e chame de novo. "
+        "Se ela disser que não há autorização, explique ao usuário e pare. "
+        "Se o agente pedido já estiver na lista acima, não crie de novo: apenas confirme.\n"
+        "Resposta final: confirme em texto amigável (sem JSON) o nome, o andar e o setor do novo agente, "
+        "a função dele e um exemplo de pedido."
     )
 
 
