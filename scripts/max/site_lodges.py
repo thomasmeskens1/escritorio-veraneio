@@ -77,7 +77,7 @@ def estruturar_lodge(titulo: str, url: str, corpo: str) -> str:
         f"{p} pessoas" if (p := achar(r"(\d+)\s*pessoas?")) else "",
         f"{e} estrelas" if (e := achar(r"(\d+)\s*estrelas?")) else "",
         f"a partir de {d}" + (" + taxa" if "+ taxa" in linhas else "") if (d := achar(r"A partir de (.+)")) else "",
-        d if (d := achar(r"^(Diária a combinar)$")) else "",
+        d if (d := achar(r"(?m)^(Diária a combinar)$")) else "",
     ]))
     suites = _suites(_depois(linhas, local)) if local else []
     sobre = _depois(linhas, "Valores")

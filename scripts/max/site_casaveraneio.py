@@ -227,7 +227,7 @@ def resumo_texto(r: dict) -> str:
     situacao = (f"{r['enviados']} enviada(s) ao Cérebro" if r["enviados"] or not r["mudados"]
                 else "envio ao Cérebro pendente")
     pendentes = f" {r['falhas']} página(s) não carregaram e ficam para a próxima leitura." if r["falhas"] else ""
-    return (f"Site lido pelo Chrome: {r['paginas']} páginas com conteúdo ({r['lodges']} lodges no resumo). "
+    return (f"Site: {r['paginas']} páginas com conteúdo ({r['lodges']} lodges no resumo). "
             f"{r['mudados']} documento(s) novo(s) ou alterado(s); {situacao}. Arquivos em CÉREBRO/SITE.{pendentes}")
 
 
