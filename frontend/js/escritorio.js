@@ -153,21 +153,44 @@ function ordenarIds(nivel, ids) {
   return [...ids].sort((a, b) => ordem(a) - ordem(b) || a.localeCompare(b));
 }
 
+// Mesas do setor garantindo uma vaga: se os agentes ocupam todas, acrescenta mesas seguindo o
+// espaçamento da fileira (e depois uma fileira nova) dentro da área. Sem espaço: o layout precisa de ajuste.
+function mesasComVaga(setor, agentes, ocupadas) {
+  const mesas = [...(setor.mesas || [])];
+  if (setor.semVagas || !mesas.length) return mesas;
+  const [ax, ay, largura, profundidade] = setor.area;
+  const passo = mesas.length > 1 && mesas[1][0] > mesas[0][0] ? mesas[1][0] - mesas[0][0] : 2;
+  while (mesas.length < agentes + 1) {
+    const [ux, uy] = mesas[mesas.length - 1];
+    let proxima = [ux + passo, uy];
+    if (proxima[0] > ax + largura - 1) proxima = [mesas[0][0], uy + 2];
+    const [px, py] = proxima;
+    if (py > ay + profundidade - 1 || ocupadas.has(`${px},${py}`)) {
+      console.warn(`Setor "${setor.nome}" sem espaço para mais uma mesa: ajuste o layout do andar.`);
+      break;
+    }
+    mesas.push(proxima);
+  }
+  return mesas;
+}
+
 // Posição e estação de cada agente: mesa do seu setor, posição fixa (Térreo) ou, sem
 // nenhuma das duas, uma mesa padrão numa célula livre. Mesas de setor que sobram viram vagas.
 function posicionarAgentes(nivel, ocupadas) {
   const locais = ANDARES[nivel].agentes;
   const setores = setoresDoAndar(nivel);
+  const ids = idsDoAndar(nivel);
   const livres = {};
   setores.forEach((s) => {
-    livres[s.id] = [...(s.mesas || [])];
+    const agentes = ids.filter((id) => dadosAgente(nivel, id).setor === s.id).length;
+    livres[s.id] = mesasComVaga(s, agentes, ocupadas);
     livres[s.id].forEach(([x, y]) => ocupadas.add(`${x},${y}`));
   });
   locais.forEach((a) => a.x !== undefined && ocupadas.add(`${a.x},${a.y}`));
 
   const posicionados = [];
   const semLugar = [];
-  ordenarIds(nivel, idsDoAndar(nivel)).forEach((id) => {
+  ordenarIds(nivel, ids).forEach((id) => {
     const local = locais.find((a) => a.id === id);
     const setor = setores.find((s) => s.id === dadosAgente(nivel, id).setor);
     const mesa = setor && livres[setor.id].shift();

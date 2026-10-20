@@ -234,26 +234,6 @@ const MOVEIS = {
     },
   },
 
-  tripe: {
-    w: 1, d: 1,
-    desenhar(g, { x, y }) {
-      const cx = x + 0.5, cy = y + 0.5;
-      const topo = pIso(cx, cy, 62);
-      g.lineStyle(2, 0x212529);
-      [[cx - 0.3, cy], [cx + 0.2, cy - 0.25], [cx + 0.15, cy + 0.3]].forEach(([px, py]) => {
-        const p = pIso(px, py);
-        g.lineBetween(p.x, p.y, topo.x, topo.y + 16);
-      });
-      g.lineBetween(topo.x, topo.y + 16, topo.x, topo.y);
-      g.lineStyle(5, 0xfff3bf);
-      g.strokeCircle(topo.x, topo.y - 12, 13);
-      g.lineStyle(1.5, 0xffffff, 0.8);
-      g.strokeCircle(topo.x, topo.y - 12, 13);
-      g.fillStyle(0x212529);
-      g.fillRoundedRect(topo.x - 5, topo.y - 16, 10, 8, 2);
-    },
-  },
-
   mesaReuniao: {
     w: 3, d: 2,
     desenhar(g, { x, y }) {

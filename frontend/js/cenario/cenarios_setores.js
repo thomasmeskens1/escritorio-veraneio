@@ -73,8 +73,7 @@ CENARIOS.marketing = {
     { tipo: 'mesinha', x: 11.5, y: 6.1 },
     { tipo: 'poltrona', x: 13, y: 6.5, cor: 0xe76f51 },
     { tipo: 'planta', x: 13, y: 8 },
-    // Vídeo e performance
-    { tipo: 'tripe', x: 6, y: 12 },
+    // Performance
     { tipo: 'planta', x: 13, y: 13 },
   ],
 };

@@ -24,11 +24,13 @@ from estado import ANDARES, Agente, Aparencia, Status, andar_do_agente, pode_ace
 
 log = logging.getLogger(__name__)
 
-# Andar -> setor -> mesas no canvas (mesmos ids de frontend/js/cenario/setores.js).
+# Andar -> setor -> mesas que cabem na área do setor (mesmos ids de frontend/js/cenario/setores.js).
+# O frontend sempre mostra uma mesa vaga e acrescenta outra quando o setor lota (mesasComVaga), até
+# este limite; passou disso, o layout do andar precisa de ajuste.
 # Térreo e Cobertura (Cérebro e estagiários) não recebem agentes novos.
 SETORES = {
-    "porao": {"oficina": 3, "operacoes": 3},
-    "marketing": {"gestao": 2, "criacao": 3, "conteudo": 3, "video": 3, "performance": 3},
+    "porao": {"oficina": 4, "operacoes": 4},
+    "marketing": {"gestao": 4, "criacao": 6, "conteudo": 6, "video": 6, "performance": 6},
 }
 NOMES_ANDARES = {"porao": "Porão", "marketing": "Marketing", "cobertura": "Cobertura"}
 NOMES_SETORES = {"oficina": "Oficina", "operacoes": "Operações", "gestao": "Gestão", "criacao": "Criação",
@@ -193,7 +195,8 @@ def validar(spec: dict) -> dict:
         raise ErroValidacao(f"setor inválido {spec.get('setor')!r} para o andar {andar}; "
                             f"use um de: {', '.join(SETORES[andar])}.")
     if vagas(andar, setor) <= 0:
-        raise ErroValidacao(f"o setor {setor} ({andar}) não tem mesa livre. Setores: {setores_com_vagas()}.")
+        raise ErroValidacao(f"o setor {setor} ({andar}) está lotado (o layout do andar precisa ser ampliado "
+                            f"pelo dono). Setores: {setores_com_vagas()}.")
     agente_id = _snake(str(spec.get("id") or "")) or _snake(nome)
     if not re.fullmatch(r"[a-z][a-z0-9_]{1,39}", agente_id):
         raise ErroValidacao(f"id inválido {agente_id!r}: use snake_case começando por letra (2 a 40 caracteres).")

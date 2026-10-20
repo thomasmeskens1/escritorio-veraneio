@@ -46,7 +46,7 @@ Object.assign(ESTACOES, {
     },
   },
 
-  // Social Media: celular no suporte, ring light e tela com curtidas.
+  // Social Media: celular no suporte e tela com curtidas.
   social: {
     atras: cadeiraAtras(0xff006e),
     frente(g, x, y) {
@@ -62,10 +62,6 @@ Object.assign(ESTACOES, {
       });
       caixaIso(g, x + 0.5, y + 0.78, x + 0.56, y + 0.84, z, z + 4, 0x343a40, false);
       caixaIso(g, x + 0.47, y + 0.8, x + 0.59, y + 0.82, z + 4, z + 18, 0x111317, false);
-      const anel = pIso(x + 0.5, y + 0.62, z + 30);
-      caixaIso(g, x + 0.49, y + 0.61, x + 0.51, y + 0.63, z, z + 22, 0x343a40, false);
-      g.lineStyle(3, 0xfff3bf, 0.95);
-      g.strokeEllipse(anel.x, anel.y, 16, 16);
     },
   },
 
