@@ -13,6 +13,7 @@ import aprendizado
 import atividade
 import config
 import diretora
+import historico
 import orquestrador
 import producao
 import tarefas
@@ -42,6 +43,7 @@ async def ciclo_de_vida(_: FastAPI):
 app = FastAPI(title="Escritório Veraneio", lifespan=ciclo_de_vida)
 app.include_router(rotas_painel)
 app.include_router(producao.rotas)
+app.include_router(historico.rotas)
 
 
 class Credenciais(BaseModel):
