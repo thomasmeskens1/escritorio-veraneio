@@ -19,7 +19,8 @@ CEREBRO = DRIVE / "CÉREBRO"   # toda gravação de conhecimento vai para cá
 # Acervo de fotos/vídeos dos lodges: SOMENTE LEITURA.
 ACERVO = Path(os.getenv("ESCRITORIO_ACERVO",
                         r"G:\Drives compartilhados\(NOVO) CASA VERANEIO\LODGES\FOTOS E VIDEOS LODGES"))
-LOTE_CEREBRO = 20  # documentos por chamada de ingestão
+LOTE_CEREBRO = 10           # documentos por chamada de ingestão
+TEMPO_INGESTAO = 300        # o Cérebro calcula os embeddings na hora
 
 
 def log(texto: str) -> None:
@@ -38,12 +39,12 @@ def claude_exe() -> str:
     return encontrado or "claude"
 
 
-def chamar(metodo: str, caminho: str, corpo: dict | None = None) -> dict:
+def chamar(metodo: str, caminho: str, corpo: dict | None = None, timeout: int = 60) -> dict:
     token = ARQUIVO_TOKEN.read_text(encoding="utf-8").strip()
     dados = json.dumps(corpo).encode() if corpo is not None else None
     req = urllib.request.Request(f"{BACKEND}{caminho}", data=dados, method=metodo, headers={
         "Authorization": f"Bearer {token}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as resposta:
+    with urllib.request.urlopen(req, timeout=timeout) as resposta:
         return json.load(resposta)
 
 
@@ -62,7 +63,7 @@ def rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: 
 
 def enviar_ao_cerebro(documentos: list[dict], chamar_api=None) -> bool:
     """POST /api/cerebro/ingerir em lotes. False (com aviso) se o endpoint não existe ou o backend falhou."""
-    chamar_api = chamar_api or chamar
+    chamar_api = chamar_api or (lambda *args: chamar(*args, timeout=TEMPO_INGESTAO))
     for inicio in range(0, len(documentos), LOTE_CEREBRO):
         lote = documentos[inicio:inicio + LOTE_CEREBRO]
         try:

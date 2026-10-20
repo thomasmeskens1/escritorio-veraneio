@@ -1,31 +1,12 @@
-"""Trabalhos do Max além da produção: ler anexos do chat e ler o site da Casa Veraneio para o Cérebro."""
+"""Trabalhos do Max além da produção: ler anexos do chat (Claude Code) e reler o site para o Cérebro."""
 
 from pathlib import Path
 
 import comum
+import site_casaveraneio
 from comum import log
 
 TEMPO_ANEXO = 170          # o backend espera até 180 s pela descrição
-TEMPO_SITE = 40 * 60
-PASTA_SITE = comum.CEREBRO / "SITE"
-DOMINIOS_SITE = ("casaveraneio.com", "www.casaveraneio.com")
-FERRAMENTAS_SITE = ",".join([*(f"WebFetch(domain:{d})" for d in DOMINIOS_SITE), "Read", "Write", "Glob"])
-
-PROMPT_SITE = """Você é o pesquisador do Escritório Veraneio. Leia o site oficial https://www.casaveraneio.com \
-(ÚNICO site permitido: não acesse nenhum outro domínio) e registre o conhecimento para o Cérebro da empresa.
-
-1. Comece pela página inicial e siga os links internos do próprio site: páginas principais, cada lodge/casa, \
-preços e tarifas, capacidade (hóspedes, quartos, camas, banheiros), comodidades e serviços, regras e políticas \
-(reserva, pagamento, cancelamento, check-in/out, pets, eventos), localização, perguntas frequentes e contatos.
-2. Grave na pasta atual um arquivo .md por assunto ou página (nomes curtos, minúsculos, com hífen, \
-ex.: lodge-01-jundiai.md, precos.md, politicas.md, contatos.md). Cada arquivo começa com "# Título", \
-depois "Fonte: <URL>" e o conteúdo em português do Brasil, em tópicos objetivos, com números exatos \
-(valores, datas, capacidades, telefones, e-mails) como aparecem no site.
-3. Se um arquivo com o mesmo assunto já existir, substitua pelo conteúdo atual do site. Não invente nada: \
-o que não estiver no site fica de fora.
-4. Grave somente arquivos .md e somente na pasta atual.
-
-Ao terminar, responda com um resumo curto (até 6 linhas): quantas páginas leu e quais arquivos gravou."""
 
 
 # --- anexo ---------------------------------------------------------------------------------
@@ -62,41 +43,10 @@ def executar_anexo(payload: dict) -> str:
 
 # --- site ----------------------------------------------------------------------------------
 
-def montar_site(payload: dict) -> tuple[list[str], str, Path]:
-    comando = [comum.claude_exe(), "-p", "--output-format", "json", "--permission-mode", "acceptEdits",
-               "--max-turns", "120", "--allowedTools", FERRAMENTAS_SITE]
-    prompt = PROMPT_SITE
-    if (extra := str(payload.get("instrucoes") or "").strip()):
-        prompt += f"\n\nInstruções adicionais do dono: {extra[:1000]}"
-    return comando, prompt, PASTA_SITE
-
-
-def documentos_do_site(pasta: Path) -> list[dict]:
-    """Um documento do Cérebro por .md gravado na pasta SITE."""
-    documentos = []
-    for arquivo in sorted(pasta.glob("*.md")):
-        conteudo = arquivo.read_text(encoding="utf-8", errors="replace").strip()
-        if not conteudo:
-            continue
-        primeira = conteudo.splitlines()[0].strip()
-        titulo = primeira.lstrip("#").strip() if primeira.startswith("#") else arquivo.stem.replace("-", " ")
-        documentos.append({"fonte_tipo": "site", "fonte_ref": f"site/{arquivo.name}",
-                           "titulo": titulo[:200], "conteudo": conteudo})
-    return documentos
-
-
-def executar_site(payload: dict, enviar=comum.enviar_ao_cerebro) -> str:
-    comando, prompt, pasta = montar_site(payload)
-    pasta.mkdir(parents=True, exist_ok=True)
-    log(f"   lendo o site -> {pasta}")
-    resumo = comum.rodar_claude(comando, prompt, pasta, TEMPO_SITE).strip()
-    documentos = documentos_do_site(pasta)
-    if not documentos:
-        raise RuntimeError("Nenhum arquivo .md foi gravado a partir do site.")
-    enviado = enviar(documentos)
-    situacao = (f"{len(documentos)} documento(s) enviados ao Cérebro." if enviado else
-                f"{len(documentos)} documento(s) gravados em CÉREBRO/SITE; o envio ao Cérebro ficou pendente.")
-    return f"{resumo}\n\n{situacao}"
+def executar_site(payload: dict) -> str:
+    """O site é renderizado pelo Chrome e lido direto (sem o Claude Code): números exatos e sem custo."""
+    log("   lendo o site com o Chrome")
+    return site_casaveraneio.resumo_texto(site_casaveraneio.sincronizar())
 
 
 EXECUTORES = {"anexo": executar_anexo, "site": executar_site}

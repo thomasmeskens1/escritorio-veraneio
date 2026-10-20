@@ -4,8 +4,9 @@ Roda no PC do dono. A cada poucos segundos pede ao backend o próximo item:
   - produção (PNG/MP4/PDF): cria a pasta da requisição no Drive, roda o Claude Code (login Max) nela e
     devolve o resultado, que aparece no chat e no registro como "pedido concluído";
   - trabalho "anexo": o Claude Code lê a imagem/PDF enviado no chat e devolve a descrição;
-  - trabalho "site": o Claude Code lê www.casaveraneio.com e ensina o Cérebro (trabalhos_max.py).
-Na subida e a cada 6 h, cataloga o acervo de fotos/vídeos dos lodges para o Cérebro (catalogo_lodges.py).
+  - trabalho "site": o Chrome renderiza www.casaveraneio.com e o texto vai ao Cérebro (site_casaveraneio.py).
+Na subida e a cada 6 h, cataloga o acervo de fotos/vídeos dos lodges (catalogo_lodges.py) e lê a planilha
+Info Lodges (planilha_lodges.py) para o Cérebro.
 
 Uso: python scripts/max/trabalhador_max.py
 """
@@ -20,6 +21,7 @@ from pathlib import Path
 
 import catalogo_lodges
 import comum
+import planilha_lodges
 import trabalhos_max
 from comum import DRIVE, log
 
@@ -144,13 +146,14 @@ _catalogo_rodando = threading.Lock()
 
 
 def catalogo_em_segundo_plano() -> None:
-    """O acervo é grande: cataloga numa thread para não segurar a fila."""
+    """O acervo é grande: cataloga (e lê a planilha) numa thread para não segurar a fila."""
     if not _catalogo_rodando.acquire(blocking=False):
         return
 
     def rodar():
         try:
             catalogo_lodges.rodar()
+            planilha_lodges.rodar()
         finally:
             _catalogo_rodando.release()
 
