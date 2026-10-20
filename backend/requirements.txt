@@ -5,3 +5,5 @@ pydantic==2.12.5
 pyjwt==2.15.1
 crewai[anthropic]==1.15.28
 scikit-learn==1.9.1
+apscheduler==3.11.3
+tzdata==2026.5

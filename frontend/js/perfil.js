@@ -8,6 +8,10 @@ let perfilExpandido = !window.matchMedia('(max-width: 640px)').matches;
 let resultadoTreino = null; // { chave, texto, erro }
 let treinando = false;
 let diretoraAberta = null; // { andar, agente }
+const rotinas = {}; // 'andar/agente' -> lista de GET /api/agendamentos (só as ativas)
+const errosRotinas = {};
+const cancelandoRotinas = new Set(); // ids com DELETE em andamento
+const DICA_ROTINA = 'Para agendar, escreva por exemplo: "Analise as campanhas todos os dias às 08:00".';
 
 const modalPerfil = document.getElementById('modal-perfil');
 const modalRestrito = document.getElementById('modal-restrito');
@@ -35,6 +39,8 @@ const producaoRestrita = (andar, agente) => !!perfis[chave(andar, agente)]?.prod
 function limparPerfis() {
   Object.keys(perfis).forEach((k) => delete perfis[k]);
   Object.keys(errosPerfil).forEach((k) => delete errosPerfil[k]);
+  Object.keys(rotinas).forEach((k) => delete rotinas[k]);
+  Object.keys(errosRotinas).forEach((k) => delete errosRotinas[k]);
   resultadoTreino = null;
 }
 
@@ -43,6 +49,7 @@ async function carregarPerfil(andar, agente) {
   const k = chave(andar, agente);
   delete errosPerfil[k];
   renderizarPerfil();
+  carregarRotinas(andar, agente);
   try {
     const dados = await buscarAgente(andar, agente);
     if (!dados) return;
@@ -76,6 +83,7 @@ function renderizarPerfil() {
   if (dados.descricao) corpo.append(novoEl('p', 'perfil-descricao', dados.descricao));
   if (dados.exemplo) corpo.append(criarExemplo(dados.exemplo));
   corpo.append(criarFatos(dados));
+  if (dados.tipo === 'ia') corpo.append(criarRotinas(chatAberto.andar, chatAberto.agente));
   const ajustes = dados.aprendizado?.ajustes;
   if (Array.isArray(ajustes) && ajustes.length) corpo.append(criarAjustesAgente(ajustes));
   if (dados.pode_treinar) corpo.append(criarTreino(k));
@@ -91,6 +99,8 @@ function criarAlternador(dados) {
   const resumo = [`${dados.tarefas_concluidas ?? 0} resolvidas`];
   const proximo = dados.aprendizado?.proximo_treino_em;
   if (proximo != null) resumo.push(`próximo aprendizado em ${proximo}`);
+  const nRotinas = rotinas[chave(chatAberto.andar, chatAberto.agente)]?.length;
+  if (nRotinas) resumo.push(plural(nRotinas, 'rotina', 'rotinas'));
   botao.append(
     novoEl('span', 'perfil-alternar-titulo', 'Sobre o agente'),
     novoEl('small', 'perfil-alternar-resumo', resumo.join(' · ')),
@@ -206,6 +216,101 @@ async function treinarAgora() {
     treinando = false;
   }
   if (chatEstaAberto(andar, agente)) carregarPerfil(andar, agente); // números novos após o treino
+}
+
+// ---------- Rotinas agendadas ----------
+async function carregarRotinas(andar, agente) {
+  if (!sessao) return;
+  const k = chave(andar, agente);
+  try {
+    const params = new URLSearchParams({ andar, agente });
+    const resposta = await fetch(`/api/agendamentos?${params}`, { headers: { Authorization: `Bearer ${sessao.token}` } });
+    if (resposta.status === 401) return encerrarSessao('Sessão expirada. Entre novamente.');
+    if (!resposta.ok) throw new ErroApi('Não foi possível carregar as rotinas.');
+    const dados = await resposta.json();
+    rotinas[k] = Array.isArray(dados.agendamentos) ? dados.agendamentos : [];
+    delete errosRotinas[k];
+  } catch (erro) {
+    errosRotinas[k] = erro instanceof ErroApi ? erro.message : 'Servidor indisponível.';
+  }
+  if (chatEstaAberto(andar, agente)) renderizarPerfil();
+}
+
+// Chamada quando chega um aviso "Rotina agendada" (ou após cancelar).
+function atualizarRotinas(andar, agente) {
+  if (chatEstaAberto(andar, agente)) carregarRotinas(andar, agente);
+  else delete rotinas[chave(andar, agente)]; // recarrega ao abrir
+}
+
+function formatarProxima(iso) {
+  if (!iso) return 'sem próxima execução';
+  const data = new Date(iso);
+  if (Number.isNaN(data.getTime())) return '—';
+  const fuso = { timeZone: 'America/Sao_Paulo' };
+  const dia = data.toLocaleDateString('pt-BR', { ...fuso, day: '2-digit', month: '2-digit' });
+  const hora = data.toLocaleTimeString('pt-BR', { ...fuso, hour: '2-digit', minute: '2-digit' });
+  return `próxima: ${dia} às ${hora}`;
+}
+
+function criarRotinas(andar, agente) {
+  const k = chave(andar, agente);
+  const bloco = novoEl('div', 'perfil-rotinas');
+  bloco.append(novoEl('h4', null, 'Rotinas agendadas'));
+  const lista = rotinas[k];
+  if (!lista) {
+    bloco.append(novoEl('p', `rotinas-nota${errosRotinas[k] ? ' erro' : ''}`, errosRotinas[k] || 'Carregando...'));
+    return bloco;
+  }
+  if (!lista.length) {
+    bloco.append(novoEl('p', 'rotinas-nota', DICA_ROTINA));
+    return bloco;
+  }
+  const ul = novoEl('ul');
+  lista.forEach((r) => {
+    const item = novoEl('li');
+    const info = novoEl('div', 'rotina-info');
+    info.append(novoEl('strong', null, r.descricao), novoEl('span', 'rotina-tarefa', `“${r.tarefa}”`));
+    const meta = [formatarProxima(r.proxima_execucao)];
+    if (r.execucoes) meta.push(`${plural(r.execucoes, 'execução', 'execuções')}`);
+    if (sessao?.role === 'diretoria') meta.push(`por ${r.usuario}`);
+    info.append(novoEl('small', null, meta.join(' · ')));
+    const cancelando = cancelandoRotinas.has(r.id);
+    const botao = novoEl('button', 'botao-secundario rotina-cancelar', cancelando ? 'Cancelando...' : 'Cancelar');
+    botao.type = 'button';
+    botao.disabled = cancelando;
+    botao.setAttribute('aria-label', `Cancelar a rotina: ${r.descricao}`);
+    botao.addEventListener('click', () => cancelarRotina(andar, agente, r.id));
+    item.append(info, botao);
+    ul.append(item);
+  });
+  bloco.append(ul);
+  if (errosRotinas[k]) bloco.append(novoEl('p', 'rotinas-nota erro', errosRotinas[k]));
+  return bloco;
+}
+
+async function cancelarRotina(andar, agente, id) {
+  if (!sessao || cancelandoRotinas.has(id)) return;
+  cancelandoRotinas.add(id);
+  renderizarPerfil();
+  let erro = '';
+  try {
+    const resposta = await fetch(`/api/agendamentos/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${sessao.token}` },
+    });
+    if (resposta.status === 401) return encerrarSessao('Sessão expirada. Entre novamente.');
+    if (resposta.status === 403) erro = 'Só quem criou a rotina (ou a diretoria) pode cancelá-la.';
+    else if (!resposta.ok && resposta.status !== 404) erro = 'Não foi possível cancelar a rotina.';
+  } catch {
+    erro = 'Servidor indisponível.';
+  } finally {
+    cancelandoRotinas.delete(id);
+  }
+  await carregarRotinas(andar, agente);
+  if (erro) {
+    errosRotinas[chave(andar, agente)] = erro;
+    if (chatEstaAberto(andar, agente)) renderizarPerfil();
+  }
 }
 
 // ---------- Janela da Diretora (só leitura) ----------
