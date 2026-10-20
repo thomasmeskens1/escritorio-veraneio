@@ -251,21 +251,30 @@ class Documento(BaseModel):
     conteudo: str = Field(min_length=1, max_length=200_000)
 
 
+class Remocao(BaseModel):
+    fonte_tipo: Literal["site", "drive", "oficial"]
+    fonte_ref: str = Field(min_length=1, max_length=500)
+
+
 class Ingestao(BaseModel):
-    documentos: list[Documento] = Field(max_length=500)
+    documentos: list[Documento] = Field([], max_length=500)
+    remover: list[Remocao] = Field([], max_length=500)  # documentos que deixaram de existir na fonte
 
 
-def _ingerir(documentos: list[Documento]) -> int:
-    return sum(base.substituir_ref(d.fonte_tipo, d.fonte_ref.strip(), d.titulo.strip() or d.fonte_ref.strip(), d.conteudo)
-               for d in documentos)
+def _ingerir(ingestao: Ingestao) -> tuple[int, int]:
+    trechos = sum(base.substituir_ref(d.fonte_tipo, d.fonte_ref.strip(), d.titulo.strip() or d.fonte_ref.strip(),
+                                      d.conteudo) for d in ingestao.documentos)
+    removidos = sum(base.remover_ref(r.fonte_tipo, r.fonte_ref.strip()) for r in ingestao.remover)
+    return trechos, removidos
 
 
 @rotas.post("/ingerir")
 async def ingerir(ingestao: Ingestao, authorization: str = Header("")):
-    """Trabalhador do Max (site casaveraneio.com, catálogo de fotos): mesmo fonte_ref substitui o anterior."""
+    """Trabalhador do Max (site casaveraneio.com, catálogo de fotos): mesmo fonte_ref substitui o anterior;
+    `remover` desativa os documentos que sumiram da fonte."""
     from producao import _exigir_operador  # import tardio: produção depende do orquestrador na entrega
 
     _exigir_operador(authorization)
-    trechos = await asyncio.to_thread(_ingerir, ingestao.documentos)
+    trechos, removidos = await asyncio.to_thread(_ingerir, ingestao)
     _acordar.set()
-    return {"trechos": trechos}
+    return {"trechos": trechos, "removidos": removidos}

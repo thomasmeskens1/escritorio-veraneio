@@ -205,7 +205,13 @@ def sincronizar(caminhos: list[str] | None = None, enviar=comum.enviar_ao_cerebr
     enviados = len(mudados) if mudados and enviar(mudados) else 0
     if enviados:
         hashes.update({d["fonte_ref"]: _hash(d["conteudo"]) for d in mudados})
-        ARQUIVO_HASHES.write_text(json.dumps(hashes, ensure_ascii=False, indent=1), encoding="utf-8")
+    # Enviados antes e que não saem mais das páginas salvas (ex.: listagem só com filtros): saem do Cérebro.
+    atuais = {d["fonte_ref"] for d in documentos}
+    sumidos = [ref for ref in hashes if ref not in atuais]
+    if sumidos and comum.remover_do_cerebro("site", sumidos):
+        for ref in sumidos:
+            hashes.pop(ref)
+    ARQUIVO_HASHES.write_text(json.dumps(hashes, ensure_ascii=False, indent=1), encoding="utf-8")
     return {"paginas": len(documentos) - bool(resumos), "lodges": len(resumos), "falhas": len(falhas),
             "mudados": len(mudados), "enviados": enviados}
 

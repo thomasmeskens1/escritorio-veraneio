@@ -61,6 +61,18 @@ def rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: 
     return saida.get("result", "")
 
 
+def remover_do_cerebro(fonte_tipo: str, refs: list[str]) -> bool:
+    """Desativa no Cérebro os documentos que sumiram da fonte (ex.: página que deixou de existir)."""
+    try:
+        for inicio in range(0, len(refs), 100):
+            chamar("POST", "/api/cerebro/ingerir", {"remover": [{"fonte_tipo": fonte_tipo, "fonte_ref": r}
+                                                                for r in refs[inicio:inicio + 100]]})
+        return True
+    except Exception as erro:
+        log(f"   AVISO: não foi possível remover do Cérebro ({erro}); nova tentativa no próximo ciclo.")
+        return False
+
+
 def enviar_ao_cerebro(documentos: list[dict], chamar_api=None) -> bool:
     """POST /api/cerebro/ingerir em lotes. False (com aviso) se o endpoint não existe ou o backend falhou."""
     chamar_api = chamar_api or (lambda *args: chamar(*args, timeout=TEMPO_INGESTAO))

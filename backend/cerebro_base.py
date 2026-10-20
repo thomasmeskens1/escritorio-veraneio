@@ -131,6 +131,15 @@ def substituir_ref(fonte_tipo: str, fonte_ref: str, titulo: str, conteudo: str) 
     return len(ids)
 
 
+def remover_ref(fonte_tipo: str, fonte_ref: str) -> int:
+    """Desativa todos os trechos ativos de um documento que sumiu da fonte. Devolve quantos."""
+    with _trava:
+        ids = [l[0] for l in db().execute("SELECT id FROM conhecimento WHERE fonte_tipo = ? AND fonte_ref = ? AND ativo = 1",
+                                          (fonte_tipo, fonte_ref))]
+    _desativar(ids, None)
+    return len(ids)
+
+
 def pendentes(limite: int = 10_000) -> list[int]:
     with _trava:
         return [l[0] for l in db().execute(

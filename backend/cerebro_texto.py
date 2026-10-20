@@ -27,8 +27,12 @@ def _radical(palavra: str) -> str:
 
 
 def termos(texto: str) -> list[str]:
-    return [_radical(p) for p in re.findall(r"[a-z0-9]{2,}", sem_acento(texto))
-            if p not in _PALAVRAS_VAZIAS and (len(p) >= 3 or p.isdigit())]
+    """Palavras com radical leve; números sem zeros à esquerda ("01" = "1"). "Lodge 1" / "Lodge 01" também
+    vira o termo único "lodge#1", para a busca achar o lodge exato e não qualquer página com "lodge"."""
+    texto = sem_acento(texto)
+    palavras = [(p.lstrip("0") or "0") if p.isdigit() else _radical(p) for p in re.findall(r"[a-z0-9]+", texto)
+                if p not in _PALAVRAS_VAZIAS and (len(p) >= 3 or p.isdigit())]
+    return palavras + [f"lodge#{int(n)}" for n in re.findall(r"\blodges?\s*(?:n[ºo.]*\s*)?0*(\d+)", texto)]
 
 
 def nomes_proprios(texto: str) -> set[str]:
