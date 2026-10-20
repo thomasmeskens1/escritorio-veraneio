@@ -149,31 +149,4 @@ const ESTACOES = {
       caixaIso(g, x + 0.46, y + 0.5, x + 0.74, y + 0.52, 36, 38.5, 0xc92a2a, false);
     },
   },
-
-  // Diretora: mesa de leitura do arquivo, com pastas, documento aberto e luminária de banqueiro.
-  arquivo: {
-    atras: cadeiraAtras(0x5c3d2e),
-    frente(g, x, y) {
-      const z = mesaPadrao(g, x, y, 0x6f4e37);
-      quadChao(g, x + 0.4, y + 0.95, x + 0.98, y + 0.98, 0xd4af37, 1, z);
-      [[0xe9c46a, 0], [0xd4a373, 1], [0x9c6644, 2], [0xe9c46a, 3]].forEach(([cor, i]) =>
-        caixaIso(g, x + 0.74, y + 0.46, x + 0.94, y + 0.62, z + i * 2.5, z + i * 2.5 + 2.5, cor, false));
-      caixaIso(g, x + 0.46, y + 0.7, x + 0.64, y + 0.9, z, z + 1, 0xf8f9fa, false);
-      caixaIso(g, x + 0.64, y + 0.7, x + 0.82, y + 0.9, z, z + 1, 0xf1f3f5, false);
-      const linhas = [0.75, 0.8, 0.85];
-      g.lineStyle(1, 0x868e96, 0.8);
-      linhas.forEach((ly) => {
-        const a = pIso(x + 0.49, y + ly, z + 1), b = pIso(x + 0.6, y + ly, z + 1);
-        g.lineBetween(a.x, a.y, b.x, b.y);
-      });
-      // luminária: base dourada, haste e cúpula verde
-      caixaIso(g, x + 0.5, y + 0.5, x + 0.6, y + 0.58, z, z + 2, 0xd4af37, false);
-      caixaIso(g, x + 0.54, y + 0.53, x + 0.56, y + 0.55, z + 2, z + 14, 0xd4af37, false);
-      const c = pIso(x + 0.55, y + 0.56, z + 16);
-      g.fillStyle(0x2d6a4f);
-      g.fillEllipse(c.x, c.y, 18, 8);
-      g.fillStyle(0xffe066, 0.18);
-      g.fillEllipse(c.x, c.y + 10, 26, 10);
-    },
-  },
 };

@@ -301,70 +301,122 @@
   line-height: 1.45;
 }
 
-/* ---------- Janela da Diretora ---------- */
-.janela-diretora {
-  max-width: 520px;
-  height: auto;
-  max-height: 100%;
-}
-
-.diretora-conteudo {
+/* ---------- Conhecimento do Cérebro ---------- */
+.perfil-conhecimento {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px;
-  overflow-y: auto;
-  font-size: 0.85rem;
-}
-
-.diretora-conteudo h3 {
-  margin: 0 0 8px;
-  font-size: 0.7rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #868e96;
-}
-
-.diretora-documentos ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border: 1px solid #343a40;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 143, 171, 0.06);
+  border: 1px solid rgba(255, 143, 171, 0.3);
   border-radius: 8px;
 }
 
-.diretora-documentos li {
+.perfil-conhecimento h4 {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #ff8fab;
+}
+
+.conhecimento-numeros {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.conhecimento-cartao {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 12px;
+  flex-direction: column;
+  padding: 6px 8px;
+  background: #1b1e24;
+  border-radius: 6px;
 }
 
-.diretora-documentos li + li {
-  border-top: 1px solid #2b3035;
+.conhecimento-cartao strong {
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  color: #f8f9fa;
 }
 
-.doc-nome {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-  font-size: 0.8rem;
-}
-
-.doc-tamanho {
-  flex: none;
+.conhecimento-cartao span {
+  font-size: 0.7rem;
   color: #868e96;
+}
+
+.conhecimento-fontes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.78rem;
+}
+
+.conhecimento-fontes li {
+  display: grid;
+  grid-template-columns: 64px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+}
+
+.conhecimento-fontes strong {
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-.diretora-nota {
-  margin: 0;
-  padding: 8px 12px;
-  background: #1b1e24;
-  border-left: 3px solid #b197fc;
-  border-radius: 4px;
+.fonte-nome {
   color: #adb5bd;
-  font-style: italic;
+}
+
+.fonte-barra {
+  height: 6px;
+  background: #2b3035;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.fonte-barra i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: #ff8fab;
+  border-radius: 3px;
+}
+
+.fonte-oficial .fonte-barra i { background: #d4af37; }
+.fonte-ensinado .fonte-barra i { background: #ff8fab; }
+.fonte-site .fonte-barra i { background: #4dabf7; }
+.fonte-drive .fonte-barra i { background: #69db7c; }
+.fonte-tarefa .fonte-barra i { background: #c77dff; }
+
+.conhecimento-meta {
+  color: #868e96;
+  font-size: 0.72rem;
+}
+
+.conhecimento-dica {
+  padding: 7px 10px;
+  background: #1b1e24;
+  border: 0;
+  border-left: 3px solid #ff8fab;
+  border-radius: 4px;
+  color: #ced4da;
+  font: inherit;
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.conhecimento-dica:hover,
+.conhecimento-dica:focus-visible {
+  background: #23272e;
+}
+
+.conhecimento-dica strong {
+  color: #ff8fab;
 }
 
 @media (max-width: 640px) {

@@ -1,5 +1,6 @@
-// Agentes de "conhecimento" (Diretora): ficam no arquivo do Térreo e, quando outro
-// agente os consulta (`visitando`), caminham até ele. O clique abre o popup informativo.
+// Visitas: agentes com `visitando` (os estagiários da Cobertura) saem da sua mesa, aparecem
+// no elevador do andar visitado e caminham até ficar ao lado do agente atendido; depois voltam.
+// Vários podem visitar ao mesmo tempo (inclusive o mesmo agente): cada um num lugar livre.
 
 // Porta do elevador na parede da direita (y = 0), perto do fim da grade do andar.
 const portaElevador = () => ({ x: GRADE - 1.2, y: 0.15 });
@@ -7,60 +8,75 @@ const saidaElevador = () => ({ x: GRADE - 1.2, y: 0.85 });
 const VEL_CAMINHADA = 2.6; // tiles por segundo
 const ROTULO_VISITA = 22; // sobe o nome para não cobrir o do agente consultado
 
-let presencas = {}; // id -> { avatar, chave, g: {x, y}, tweens, saindo }
+let presencas = {}; // id -> { avatar, chave, alvo, g: {x, y}, tweens, saindo }
 let casasAndar = {}; // id -> { pos, etiqueta } estação no andar renderizado
 let escalaVisitas = 1;
 
 // Estação no andar renderizado: guarda a posição e cria a etiqueta "fora" (oculta).
 function registrarCasa(id, pos, escalaRotulo) {
   const pes = isoParaTela(pos.x, pos.y);
-  const etiqueta = criarEtiqueta(cena, pes.x, pes.y - 46, 'Trabalhando em outro andar', escalaRotulo)
+  const etiqueta = criarEtiqueta(cena, pes.x, pes.y - 46, 'Atendendo outro andar', escalaRotulo)
     .setVisible(false);
   elementos.push(etiqueta);
   casasAndar[id] = { pos, etiqueta };
 }
 
-// Todos os agentes de conhecimento conhecidos, com o andar de origem.
-function agentesConhecimento() {
+// Todos os agentes visitantes conhecidos (de qualquer andar), com o andar de origem.
+function agentesVisitantes() {
   const lista = [];
   Object.keys(ANDARES).forEach((casa) => {
     idsDoAndar(casa).forEach((id) => {
       const dados = dadosAgente(casa, id);
-      if (dados.tipo === 'conhecimento') lista.push({ id, casa, dados });
+      if (ehVisitante(dados)) lista.push({ id, casa, dados });
     });
   });
   return lista;
 }
 
+// Lugar já tomado por outro visitante perto de (x, y)?
+const lugarTomado = (reservados, x, y) => reservados.some((r) => Math.hypot(r.x - x, r.y - y) < 0.7);
+
 // Lugar livre ao lado do agente consultado (tile dele em `a`), virado para ele.
-function lugarAoLado(agenteId, a) {
+function lugarAoLado(agenteId, a, reservados = []) {
   const px = a.x + AGENTE_NO_TILE, py = a.y + AGENTE_NO_TILE;
   const outros = Object.entries(posicoesAndar).filter(([id]) => id !== agenteId).map(([, p]) => p);
-  const opcoes = [[0.85, -0.55, -1], [-0.55, 0.85, 1], [1.1, 0.05, -1], [0.05, 1.15, 1], [-0.75, 0.2, 1], [0.2, -0.75, -1]];
+  const opcoes = [[0.85, -0.55, -1], [-0.55, 0.85, 1], [1.1, 0.05, -1], [0.05, 1.15, 1], [-0.75, 0.2, 1], [0.2, -0.75, -1],
+    [1.0, 0.9, -1], [-0.8, -0.6, 1]];
   let melhor = null;
   opcoes.forEach(([dx, dy, sentido], i) => {
     const x = px + dx, y = py + dy;
     if (x < 0.2 || y < 0.2 || x > GRADE - 0.2 || y > GRADE - 0.2) return;
     const celula = `${Math.floor(x)},${Math.floor(y)}`;
     const propria = celula === `${a.x},${a.y}`;
-    const custo = i + (ocupadasAndar.has(celula) && !propria ? 50 : 0)
+    const custo = i + (ocupadasAndar.has(celula) && !propria ? 50 : 0) + (lugarTomado(reservados, x, y) ? 200 : 0)
       + 0.5 * outros.reduce((soma, o) => soma + sobreposicao(o, { x, y }), 0);
     if (!melhor || custo < melhor.custo) melhor = { x, y, sentido, custo };
   });
-  return melhor || { x: GRADE - 1.8, y: 1.45, sentido: -1 };
+  return melhor || lugarPerto(GRADE - 1.8, 1.45, reservados);
 }
 
-// Onde o agente deve estar no andar renderizado (null = fora dele).
-function alvoNoAndar(id, casa, dados) {
+// Perto do elevador quando o agente atendido não está no andar (um ao lado do outro).
+function lugarPerto(x, y, reservados) {
+  let n = 0;
+  while (n < 6 && lugarTomado(reservados, x - n * 0.8, y + n * 0.3)) n++;
+  return { x: x - n * 0.8, y: y + n * 0.3, sentido: -1 };
+}
+
+// Chave do lugar do agente no andar renderizado (null = fora dele).
+function chaveNoAndar(id, casa, dados) {
   const v = dados.visitando;
-  if (v && v.andar === andarAtual) {
-    const a = posicoesAndar[v.agente];
-    const lugar = a ? lugarAoLado(v.agente, a) : { x: GRADE - 2.4, y: 1.6, sentido: -1 };
-    return { chave: `visita:${v.agente}`, ...lugar, rotulo: ROTULO_VISITA };
-  }
-  const c = casasAndar[id];
-  if (!v && casa === andarAtual && c) return { chave: 'casa', ...c.pos, sentido: 1, rotulo: 0 };
+  if (v && v.andar === andarAtual) return `visita:${v.agente}`;
+  if (!v && casa === andarAtual && casasAndar[id]) return 'casa';
   return null;
+}
+
+// Alvo para a chave: estação (casa) ou um lugar livre ao lado do agente visitado.
+function alvoNoAndar(id, chaveAlvo, dados, reservados) {
+  if (chaveAlvo === 'casa') return { chave: 'casa', ...casasAndar[id].pos, sentido: 1, rotulo: 0 };
+  const agente = dados.visitando.agente;
+  const a = posicoesAndar[agente];
+  const lugar = a ? lugarAoLado(agente, a, reservados) : lugarPerto(GRADE - 2.4, 1.6, reservados);
+  return { chave: chaveAlvo, ...lugar, rotulo: ROTULO_VISITA };
 }
 
 function pararCaminhada(p) {
@@ -109,8 +125,8 @@ function posicionar(p) {
 
 function criarPresenca(id, casa, dados, inicio, rotulo) {
   const pes = isoParaTela(inicio.x, inicio.y);
-  const avatar = criarAvatar(cena, pes.x, pes.y, {
-    ...dados, escalaRotulo: escalaVisitas, rotuloAcima: rotulo, aoClicar: () => clicarAgente(casa, id),
+  const avatar = criarBoneco(cena, pes.x, pes.y, {
+    ...dados, escalaRotulo: escalaVisitas, rotuloAcima: rotulo, aoClicar: cliqueDoAgente(casa, id, dados),
   });
   return { avatar, g: { x: inicio.x, y: inicio.y }, tweens: [], chave: null, saindo: false };
 }
@@ -146,6 +162,7 @@ function irPara(id, casa, dados, alvo, animar) {
     }
   }
   p.chave = alvo.chave;
+  p.alvo = alvo;
   p.avatar.definirStatus(dados.status);
 }
 
@@ -174,22 +191,34 @@ function sairDoAndar(id, animar) {
 function sincronizarVisitas(animar, escalaRotulo) {
   if (!cena) return;
   if (escalaRotulo) escalaVisitas = escalaRotulo;
-  const vistos = new Set();
-  agentesConhecimento().forEach(({ id, casa, dados }) => {
-    vistos.add(id);
-    const alvo = alvoNoAndar(id, casa, dados);
-    const p = presencas[id];
-    if (!alvo) {
-      p?.avatar.definirStatus(dados.status);
+  const lista = agentesVisitantes();
+  const vistos = new Set(lista.map((v) => v.id));
+  // Quem já está no lugar certo fica onde está; os demais escolhem entre os lugares livres.
+  const reservados = [];
+  const mudancas = [];
+  lista.forEach((v) => {
+    const chaveAlvo = chaveNoAndar(v.id, v.casa, v.dados);
+    const p = presencas[v.id];
+    if (chaveAlvo && p && !p.saindo && p.chave === chaveAlvo) {
+      if (p.alvo) reservados.push(p.alvo);
+      p.avatar.definirStatus(v.dados.status);
+    } else mudancas.push({ ...v, chaveAlvo });
+  });
+  mudancas.forEach(({ id, casa, dados, chaveAlvo }) => {
+    if (!chaveAlvo) {
+      presencas[id]?.avatar.definirStatus(dados.status);
       sairDoAndar(id, animar);
-    } else if (p && !p.saindo && p.chave === alvo.chave) p.avatar.definirStatus(dados.status);
-    else irPara(id, casa, dados, alvo, animar);
+      return;
+    }
+    const alvo = alvoNoAndar(id, chaveAlvo, dados, reservados);
+    reservados.push(alvo);
+    irPara(id, casa, dados, alvo, animar);
   });
   Object.keys(presencas).filter((id) => !vistos.has(id)).forEach((id) => sairDoAndar(id, animar));
   Object.keys(casasAndar).forEach(atualizarEtiqueta);
 }
 
-// "Trabalhando em outro andar" aparece só depois que ela saiu da estação.
+// "Atendendo outro andar" aparece só depois que o visitante saiu da estação.
 function atualizarEtiqueta(id) {
   const casa = casasAndar[id];
   if (!casa) return;

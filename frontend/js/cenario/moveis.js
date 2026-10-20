@@ -326,7 +326,7 @@ const MOVEIS = {
     },
   },
 
-  // Arquivo de aço com gavetas etiquetadas (canto da Diretora).
+  // Arquivo de aço com gavetas etiquetadas.
   arquivo: {
     w: 1, d: 1,
     desenhar(g, { x, y, cor = 0x6c7a72 }) {

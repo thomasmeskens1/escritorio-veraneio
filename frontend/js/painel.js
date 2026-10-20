@@ -70,16 +70,15 @@ function novoEl(tag, classe, texto) {
 }
 
 // ---------- Abertura ----------
-// conhecimento -> ficha da Diretora; sistema -> painel de tarefas; ia -> popup do agente.
+// sistema -> painel de tarefas; estagiario -> nada (não interativos); ia (inclusive o
+// Cérebro) -> popup do agente com chat.
 function abrirAgente(andar, id) {
   const { tipo } = dadosAgente(andar, id);
-  if (tipo === 'conhecimento') {
-    abrirDiretora(andar, id);
-  } else if (tipo === 'sistema') {
+  if (tipo === 'estagiario') return;
+  if (tipo === 'sistema') {
     abrirPainel();
   } else {
     fecharPainel();
-    fecharDiretora();
     abrirChat(andar, id);
   }
 }
