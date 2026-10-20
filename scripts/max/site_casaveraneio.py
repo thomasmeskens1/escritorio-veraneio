@@ -1,11 +1,12 @@
 """Leitura do site oficial (www.casaveraneio.com) para o Cérebro, com o Chrome do PC.
 
 O site é Next.js e monta o conteúdo por JavaScript; por isso cada página é renderizada no Chrome headless
-(--dump-dom) e só então vira texto. Segue apenas links do próprio domínio. Cada página vira um documento do
-Cérebro (fonte "site"), gravado também em CÉREBRO/SITE/paginas; um resumo dos lodges (local, quartos, pessoas,
-diária) vai em CÉREBRO/SITE/resumo-lodges.md. Só envia o que mudou desde a última leitura.
+(--dump-dom) e só então vira texto. Segue apenas links do próprio domínio. A cópia bruta de cada página fica em
+CÉREBRO/SITE/paginas; ao Cérebro (fonte "site") vão só os dados do produto (site_lodges.py) e um resumo dos
+lodges (local, quartos, pessoas, diária) em CÉREBRO/SITE/resumo-lodges.md. Só envia o que mudou.
 
-Uso avulso: python scripts/max/site_casaveraneio.py [--falhas]  (--falhas: só as que não carregaram)
+Uso avulso: python scripts/max/site_casaveraneio.py [--falhas | --reprocessar]
+  --falhas: relê só as páginas que não carregaram; --reprocessar: refaz os documentos sem abrir o site.
 """
 
 import hashlib
@@ -19,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import comum
+import site_lodges
 from comum import log
 
 SITE = "https://www.casaveraneio.com"
@@ -92,7 +94,7 @@ def lodges_da_listagem(listagem: str) -> set[str]:
     achados: set[str] = set()
     for numero in range(1, MAX_PAGINACAO + 1):
         novos = {c for c in links_internos(renderizar(f"{listagem}?page={numero}"))
-                 if c.startswith(listagem + "/")} - achados
+                 if site_lodges.e_lodge(c)} - achados
         if not novos:
             break
         achados |= novos
@@ -110,12 +112,12 @@ def descobrir() -> list[str]:
 
 
 def resumo_lodge(caminho: str, titulo: str, corpo: str) -> dict | None:
-    if not caminho.startswith(("/lodges/", "/lodges-orlando/")):
+    if not site_lodges.e_lodge(caminho):
         return None
     achar = lambda padrao: (m.group(1).strip() if (m := re.search(padrao, corpo)) else "—")
     return {"lodge": titulo.split(" - ")[0] or caminho.rsplit("/", 1)[-1], "url": SITE + caminho,
             "local": achar(r"Favoritar\n(.+)"), "quartos": achar(r"(\d+)\s*quartos?"),
-            "pessoas": achar(r"(\d+)\s*pessoas?"), "diaria": achar(r"A partir de (.+?)\n")}
+            "pessoas": achar(r"(\d+)\s*pessoas?"), "diaria": achar(r"(A partir de .+?|Diária a combinar)\n")}
 
 
 def tabela_lodges(resumos: list[dict]) -> str:
@@ -143,44 +145,52 @@ def _ler(caminhos: list[str]) -> tuple[dict[str, str], list[str]]:
     return lidas, [c for c in falhas if len(texto(lidas[c])[1]) < 80]
 
 
-def _documento(caminho: str, conteudo: str) -> dict:
-    titulo = conteudo.splitlines()[0].lstrip("# ").strip()
-    return {"fonte_tipo": "site", "fonte_ref": f"site{caminho}", "titulo": titulo[:200], "conteudo": conteudo}
-
-
-def _resumos_salvos() -> list[dict]:
-    """Resumo de todos os lodges já gravados em paginas/ (inclusive de leituras anteriores)."""
-    resumos = []
-    for arquivo in (PASTA / "paginas").glob("lodges*.md"):
+def _paginas_salvas() -> list[tuple[str, str, str]]:
+    """(caminho, título, texto) de todas as páginas já gravadas em paginas/ (cópia bruta do site)."""
+    paginas = []
+    for arquivo in sorted((PASTA / "paginas").glob("*.md")):
         linhas = arquivo.read_text(encoding="utf-8").splitlines()
-        caminho = linhas[1].removeprefix(f"Fonte: {SITE}")
-        if (resumo := resumo_lodge(caminho, linhas[0].lstrip("# ").strip(), "\n".join(linhas[3:]))):
+        if len(linhas) > 3 and linhas[1].startswith(f"Fonte: {SITE}"):
+            paginas.append((linhas[1].removeprefix(f"Fonte: {SITE}"), linhas[0].lstrip("# ").strip(),
+                            "\n".join(linhas[3:])))
+    return paginas
+
+
+def _documentos() -> tuple[list[dict], int]:
+    """Documentos do Cérebro a partir das páginas salvas: só os dados do produto (site_lodges) + resumo."""
+    documentos, resumos = [], []
+    for caminho, titulo, corpo in _paginas_salvas():
+        if (conteudo := site_lodges.limpar_pagina(caminho, titulo, SITE + caminho, corpo)):
+            documentos.append({"fonte_tipo": "site", "fonte_ref": f"site{caminho}",
+                               "titulo": conteudo.splitlines()[0].lstrip("# ")[:200], "conteudo": conteudo})
+        if (resumo := resumo_lodge(caminho, titulo, corpo)):
             resumos.append(resumo)
-    return resumos
+    return documentos, resumos
 
 
-def sincronizar(caminhos: list[str] | None = None, enviar=comum.enviar_ao_cerebro) -> dict:
-    """Lê o site (ou só `caminhos`), grava em CÉREBRO/SITE e envia ao Cérebro o que mudou."""
-    if not CHROME.exists():
-        raise RuntimeError(f"Chrome não encontrado: {CHROME}")
-    caminhos = caminhos or descobrir()
-    log(f"   site: {len(caminhos)} páginas para ler")
-    lidas, falhas = _ler(caminhos)
-    ARQUIVO_FALHAS.write_text(json.dumps(falhas, indent=1), encoding="utf-8")
+def sincronizar(caminhos: list[str] | None = None, enviar=comum.enviar_ao_cerebro, ler: bool = True) -> dict:
+    """Lê o site (ou só `caminhos`), grava a cópia bruta em CÉREBRO/SITE/paginas e envia ao Cérebro o que mudou.
+    ler=False: só reprocessa as páginas já salvas (sem abrir o site)."""
+    falhas: list[str] = []
+    if ler:
+        if not CHROME.exists():
+            raise RuntimeError(f"Chrome não encontrado: {CHROME}")
+        caminhos = caminhos or descobrir()
+        log(f"   site: {len(caminhos)} páginas para ler")
+        lidas, falhas = _ler(caminhos)
+        ARQUIVO_FALHAS.write_text(json.dumps(falhas, indent=1), encoding="utf-8")
+        (PASTA / "paginas").mkdir(parents=True, exist_ok=True)
+        for caminho, pagina in lidas.items():
+            titulo, corpo = texto(pagina)
+            if len(corpo) < 80:  # não carregou: fica para a próxima leitura
+                continue
+            nome = caminho.strip("/").replace("/", "_") or "inicio"
+            (PASTA / "paginas" / f"{nome}.md").write_text(
+                f"# {titulo or caminho}\nFonte: {SITE}{caminho}\n\n{corpo}\n", encoding="utf-8")
 
-    documentos = []
-    (PASTA / "paginas").mkdir(parents=True, exist_ok=True)
-    for caminho, pagina in lidas.items():
-        titulo, corpo = texto(pagina)
-        if len(corpo) < 80:  # não carregou: fica para a próxima leitura
-            continue
-        conteudo = f"# {titulo or caminho}\nFonte: {SITE}{caminho}\n\n{corpo}"
-        nome = caminho.strip("/").replace("/", "_") or "inicio"
-        (PASTA / "paginas" / f"{nome}.md").write_text(conteudo + "\n", encoding="utf-8")
-        documentos.append(_documento(caminho, conteudo))
+    documentos, resumos = _documentos()
     if not documentos:
         raise RuntimeError("Nenhuma página do site trouxe conteúdo.")
-    resumos = _resumos_salvos()
     if resumos:
         tabela = tabela_lodges(resumos)
         (PASTA / "resumo-lodges.md").write_text(tabela, encoding="utf-8")
@@ -198,6 +208,11 @@ def sincronizar(caminhos: list[str] | None = None, enviar=comum.enviar_ao_cerebr
         ARQUIVO_HASHES.write_text(json.dumps(hashes, ensure_ascii=False, indent=1), encoding="utf-8")
     return {"paginas": len(documentos) - bool(resumos), "lodges": len(resumos), "falhas": len(falhas),
             "mudados": len(mudados), "enviados": enviados}
+
+
+def reprocessar() -> dict:
+    """Refaz os documentos a partir das páginas já salvas (ex.: depois de mudar a limpeza), sem abrir o site."""
+    return sincronizar(ler=False)
 
 
 def repescar() -> dict:
@@ -218,4 +233,5 @@ def resumo_texto(r: dict) -> str:
 
 if __name__ == "__main__":
     import sys
-    log(resumo_texto(repescar() if "--falhas" in sys.argv else sincronizar()))
+    modo = {"--falhas": repescar, "--reprocessar": reprocessar}.get(sys.argv[-1], sincronizar)
+    log(resumo_texto(modo()))
