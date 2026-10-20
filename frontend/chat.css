@@ -228,3 +228,11 @@
     padding: 10px 12px;
   }
 }
+
+.msg-carregando {
+  margin: 0;
+  font-size: 0.75rem;
+  font-style: italic;
+  color: #868e96;
+  text-align: center;
+}
