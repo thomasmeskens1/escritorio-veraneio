@@ -5,6 +5,7 @@ esgotado ou ritmo diário atingido), segue em contingência com os gratuitos e o
 """
 
 import asyncio
+import json
 import logging
 import time
 
@@ -33,9 +34,11 @@ def ha_modelo_disponivel() -> bool:
     return bool(etapas_contingencia() or etapa_fila(Dificuldade.simples))
 
 
-async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str) -> None:
+async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str, anexos_ids: list[str] = ()) -> None:
     dificuldade = classificar(agente.id, texto)
     tarefa_id = tarefas.criar(login, andar, agente.id, texto, dificuldade.value)
+    if anexos_ids:
+        tarefas.atualizar(tarefa_id, anexos=json.dumps(list(anexos_ids)))
     tarefas.registrar_evento(tarefa_id, "recebida", agente.id, detalhe=f"Dificuldade: {dificuldade.value}")
     await atividade.ocupar(agente.id)
     _em_segundo_plano(_executar_imediata(tarefa_id, agente, dificuldade))
@@ -55,7 +58,8 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
     inicio = time.monotonic()
     try:
         tarefas.registrar_evento(tarefa["id"], "tentativa", agente.id, etapa.modelo)
-        return await executar(agente.id, tarefa["texto"], etapa, historico, tarefa["id"]), ""
+        texto = tarefa["texto"] + (f"\n\n{tarefa['contexto_anexos']}" if tarefa["contexto_anexos"] else "")
+        return await executar(agente.id, texto, etapa, historico, tarefa["id"]), ""
     except LocalOcupado:
         return None, "modelo local ocupado"
     except asyncio.TimeoutError:
@@ -83,6 +87,11 @@ async def _executar_etapas(tarefa, agente: Agente, etapas: list[Etapa]) -> bool:
 async def _executar_imediata(tarefa_id: int, agente: Agente, dificuldade: Dificuldade) -> None:
     tarefa = tarefas.obter(tarefa_id)
     try:
+        if tarefa["anexos"]:  # descreve os anexos uma vez (Max para o dono, API para os demais)
+            import anexos
+            contexto = await anexos.descrever(json.loads(tarefa["anexos"]), tarefa["usuario"])
+            tarefas.atualizar(tarefa_id, contexto_anexos=contexto or None)
+            tarefa = tarefas.obter(tarefa_id)
         if await _executar_etapas(tarefa, agente, etapas_imediatas(dificuldade, agente.id)):
             return
         destino = "fila do Claude" if etapa_fila(dificuldade) else "fila de contingência (gratuitos e local)"

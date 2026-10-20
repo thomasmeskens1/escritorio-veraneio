@@ -43,7 +43,8 @@ CREATE INDEX IF NOT EXISTS idx_eventos_tarefa ON eventos(tarefa_id);
 """
 
 # Colunas adicionadas depois da primeira versão do banco (migração simples).
-_COLUNAS_NOVAS = {"tentativas_fila": "INTEGER NOT NULL DEFAULT 0", "proxima_tentativa": "TEXT"}
+_COLUNAS_NOVAS = {"tentativas_fila": "INTEGER NOT NULL DEFAULT 0", "proxima_tentativa": "TEXT",
+                  "anexos": "TEXT", "contexto_anexos": "TEXT"}  # anexos: JSON com os ids
 
 MAX_TENTATIVAS_FILA = 6
 INTERVALO_REAGENDAMENTO = timedelta(minutes=30)

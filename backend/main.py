@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import agendamentos
+import anexos
 import agentes_dinamicos
 import aprendizado
 import atividade
@@ -52,6 +53,7 @@ app.include_router(historico.rotas)
 app.include_router(agentes_dinamicos.rotas)
 app.include_router(agendamentos.rotas)
 app.include_router(cerebro.rotas)
+app.include_router(anexos.rotas)
 
 
 class Credenciais(BaseModel):
@@ -134,6 +136,7 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
 
     andar, agente_id = str(msg.get("andar", "")), str(msg.get("agente", ""))
     texto = str(msg.get("texto", "")).strip()
+    anexos_ids = [str(i) for i in msg.get("anexos") or [] if isinstance(i, str)][:4]
     alvo = {"andar": andar, "agente": agente_id}
 
     if not pode_acessar(usuario["role"], andar):
@@ -159,9 +162,9 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         return await erro("Nenhum modelo de IA configurado no servidor.", **alvo)
 
     if agente.id in AGENTES_PRODUCAO:  # só chega aqui o dono do plano Max (checado acima)
-        await producao.enfileirar(usuario["sub"], andar, agente, texto)
+        await producao.enfileirar(usuario["sub"], andar, agente, texto, anexos=anexos.caminhos(anexos_ids))
     else:
-        await orquestrador.nova_tarefa(usuario["sub"], andar, agente, texto)
+        await orquestrador.nova_tarefa(usuario["sub"], andar, agente, texto, anexos_ids)
 
 
 class FrontendSemCacheVelho(StaticFiles):

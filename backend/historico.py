@@ -1,5 +1,7 @@
 """Memória do chat: conversa de cada usuário com um agente, reconstruída a partir das tarefas salvas."""
 
+import json
+
 from fastapi import APIRouter, Header, HTTPException
 
 import auth
@@ -19,9 +21,21 @@ AVISOS_ANDAMENTO = {
 }
 
 
+def _anexos(linha) -> list[dict]:
+    """Metadados dos anexos da tarefa, para as miniaturas no chat."""
+    ids = json.loads(linha["anexos"]) if linha["anexos"] else []
+    if not ids:
+        return []
+    marcadores = ",".join("?" * len(ids))
+    linhas = tarefas._db().execute(
+        f"SELECT id, nome_original, mime, tamanho FROM anexos WHERE id IN ({marcadores})", ids).fetchall()
+    return [{"id": a["id"], "nome": a["nome_original"], "mime": a["mime"], "tamanho": a["tamanho"]} for a in linhas]
+
+
 def _mensagens_da_tarefa(linha) -> list[dict]:
     tarefa_id = linha["id"]
-    mensagens = [{"autor": "voce", "texto": linha["texto"], "em": linha["criada_em"], "tarefa_id": tarefa_id}]
+    mensagens = [{"autor": "voce", "texto": linha["texto"], "em": linha["criada_em"], "tarefa_id": tarefa_id,
+                  "anexos": _anexos(linha)}]
     status = linha["status"]
     if status == "concluida":
         mensagens.append({
