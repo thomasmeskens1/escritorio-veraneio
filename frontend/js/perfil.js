@@ -70,6 +70,8 @@ function renderizarPerfil() {
   const dados = perfis[k];
   modalRestrito.hidden = !dados?.producao_restrita;
   modalRestrito.textContent = AVISO_PRODUCAO;
+  // Cérebro: janela larga, ficha em duas colunas (Conhecimento à direita) para não precisar rolar.
+  modalPerfil.closest('.janela-agente')?.classList.toggle('janela-larga', ehCerebro(chatAberto.andar, chatAberto.agente));
 
   if (!dados) {
     const texto = errosPerfil[k] || 'Carregando informações...';

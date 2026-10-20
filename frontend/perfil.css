@@ -419,6 +419,34 @@
   color: #ff8fab;
 }
 
+/* Cérebro: janela larga, ficha em duas colunas (Conhecimento à direita) */
+.janela-agente.janela-larga {
+  max-width: 980px;
+}
+
+@media (min-width: 900px) {
+  .janela-larga .perfil {
+    max-height: 60%;
+  }
+
+  .janela-larga .perfil-corpo:not([hidden]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-auto-flow: dense;
+    align-items: start;
+    gap: 10px 16px;
+  }
+
+  .janela-larga .perfil-corpo > * {
+    grid-column: 1;
+  }
+
+  .janela-larga .perfil-corpo > .perfil-conhecimento {
+    grid-column: 2;
+    grid-row: 1 / span 6;
+  }
+}
+
 @media (max-width: 640px) {
   .perfil {
     max-height: 40%;
