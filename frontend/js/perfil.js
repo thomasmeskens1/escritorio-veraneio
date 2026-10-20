@@ -92,6 +92,17 @@ function renderizarPerfil() {
   if (dados.pode_treinar) corpo.append(criarTreino(k));
 
   modalPerfil.replaceChildren(criarAlternador(dados), corpo);
+  if (chatAberto.agente === 'recepcionista') modalPerfil.prepend(criarChamadaOnboarding());
+}
+
+// Recepcionista: convite para o tour guiado (js/onboarding.js).
+function criarChamadaOnboarding() {
+  const chamada = novoEl('div', 'onboarding-chamada');
+  const botao = novoEl('button', 'botao-primario', 'Iniciar Onboarding');
+  botao.type = 'button';
+  botao.addEventListener('click', iniciarOnboarding);
+  chamada.append(novoEl('p', null, 'Primeira vez por aqui? Faça um tour rápido pelo sistema comigo.'), botao);
+  return chamada;
 }
 
 function criarAlternador(dados) {

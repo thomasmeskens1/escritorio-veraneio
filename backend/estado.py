@@ -72,9 +72,10 @@ ANDARES: dict[str, dict[str, Agente]] = {
                aparencia=_ap("#8d5524", "careca", "#000000", "camisa", "#457b9d", "#1d3557", "fone")),
     ),
     "terreo": _andar(
-        Agente(id="recepcionista", nome="Recepcionista", funcao="Boas-vindas e visão geral do escritório",
-               setor="escola", descricao="Explica como o escritório funciona: andares, agentes, status, fila e limites.",
-               exemplo="Sou novo aqui. Por onde começo?",
+        Agente(id="recepcionista", nome="Recepcionista", funcao="Especialista em onboarding",
+               setor="escola", descricao="Apresenta o sistema num tour guiado (botão “Iniciar Onboarding”) e tira "
+                                         "dúvidas sobre o uso do escritório no chat.",
+               exemplo="Como acompanho o andamento de uma tarefa?",
                aparencia=_ap("#ffdbac", "longo", "#b5651d", "blazer", "#2a9d8f", "#264653", "cracha")),
         Agente(id="professor", nome="Professor", funcao="Ensina a pedir tarefas e escrever bons briefings",
                setor="escola", descricao="Ajuda a transformar pedidos vagos em briefings claros, com exemplos.",

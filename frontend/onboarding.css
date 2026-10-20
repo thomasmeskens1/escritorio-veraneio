@@ -1,0 +1,146 @@
+/* ---------- Onboarding da Recepcionista (tour guiado) ---------- */
+.onboarding {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
+/* Bloqueia cliques no escritório; o escurecimento vem da sombra do foco. */
+.onboarding-bloqueio {
+  position: absolute;
+  inset: 0;
+}
+
+.onboarding-foco {
+  position: absolute;
+  border: 2px solid #f4a261;
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(10, 12, 16, 0.6), 0 0 18px rgba(244, 162, 97, 0.55);
+  pointer-events: none;
+  transition: left 0.6s ease, top 0.6s ease, width 0.6s ease, height 0.6s ease, opacity 0.3s;
+}
+
+.onboarding-foco.sem-alvo {
+  left: 50% !important;
+  top: 50% !important;
+  width: 0 !important;
+  height: 0 !important;
+  border-color: transparent;
+}
+
+.onboarding-balao {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(340px, calc(100vw - 32px));
+  padding: 14px 16px 12px;
+  background: #1f232a;
+  border: 1px solid #f4a261;
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  color: #e9ecef;
+  transition: left 0.6s ease, top 0.6s ease; /* ela "anda" até o próximo ponto */
+}
+
+.onboarding-balao.andando .onboarding-guia svg {
+  animation: onboarding-passos 0.6s ease-in-out;
+}
+
+@keyframes onboarding-passos {
+  0%, 100% { transform: translateY(0); }
+  25%, 75% { transform: translateY(-4px); }
+  50% { transform: translateY(0); }
+}
+
+.onboarding-guia {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -34px 0 6px;
+}
+
+.onboarding-guia svg {
+  width: 48px;
+  height: 48px;
+  padding: 2px;
+  background: #264653;
+  border: 2px solid #f4a261;
+  border-radius: 50%;
+}
+
+.onboarding-guia span {
+  margin-top: 26px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #f4a261;
+}
+
+.onboarding-balao h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  color: #f8f9fa;
+}
+
+.onboarding-texto {
+  margin: 0 0 12px;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: #ced4da;
+}
+
+.onboarding-acoes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.onboarding-acoes .botao-primario {
+  padding: 7px 14px;
+  font-size: 0.82rem;
+}
+
+.onboarding-progresso {
+  flex: 1;
+  font-size: 0.72rem;
+  color: #868e96;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Chamada no popup da Recepcionista */
+.onboarding-chamada {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 14px 4px;
+  padding: 10px 12px;
+  background: rgba(244, 162, 97, 0.08);
+  border: 1px solid rgba(244, 162, 97, 0.4);
+  border-radius: 10px;
+  font-size: 0.82rem;
+  color: #ced4da;
+}
+
+.onboarding-chamada p {
+  flex: 1;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.onboarding-chamada .botao-primario {
+  flex: none;
+  padding: 8px 14px;
+  font-size: 0.82rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-foco,
+  .onboarding-balao {
+    transition: none;
+  }
+
+  .onboarding-balao.andando .onboarding-guia svg {
+    animation: none;
+  }
+}

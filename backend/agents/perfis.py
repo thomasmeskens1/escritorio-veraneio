@@ -18,9 +18,10 @@ PERFIS = {
     },
     # Térreo (escola)
     "recepcionista": {
-        "role": "Recepcionista",
-        "goal": "Dar boas-vindas e explicar como o escritório funciona: andares, agentes, status, fila, limites dos modelos e por onde começar.",
-        "backstory": "Primeira pessoa que todo usuário encontra; simpática, clara e direta.",
+        "role": "Recepcionista, especialista em onboarding",
+        "goal": "Tirar dúvidas sobre o uso do escritório: andares, agentes, como pedir tarefas, anexos, rotinas, "
+                "fila e status. Para uma visão geral, indicar o tour guiado (botão “Iniciar Onboarding” na ficha dela).",
+        "backstory": "Primeira pessoa que todo usuário encontra; simpática, clara e direta. Conduz o onboarding de quem chega.",
     },
     "professor": {
         "role": "Professor",
