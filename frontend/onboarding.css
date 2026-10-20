@@ -45,6 +45,11 @@
   animation: onboarding-entrar 0.35s ease-out;
 }
 
+.onboarding-caixa.no-topo {
+  top: 16px;
+  bottom: auto;
+}
+
 @keyframes onboarding-entrar {
   from { opacity: 0; transform: translate(-50%, 16px); }
   to { opacity: 1; transform: translate(-50%, 0); }

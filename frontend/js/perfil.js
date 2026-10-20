@@ -126,6 +126,7 @@ function criarExemplo(exemplo) {
   botao.addEventListener('click', () => {
     if (modalInput.disabled) return;
     modalInput.value = exemplo;
+    ajustarAlturaInput();
     modalInput.focus();
   });
   return botao;
@@ -392,6 +393,7 @@ function criarConhecimento() {
     dica.addEventListener('click', () => {
       if (modalInput.disabled) return;
       if (!/^aprenda:/i.test(modalInput.value)) modalInput.value = `Aprenda: ${modalInput.value}`;
+      ajustarAlturaInput();
       modalInput.focus();
     });
     bloco.append(dica);

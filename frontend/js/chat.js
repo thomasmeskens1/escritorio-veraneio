@@ -109,10 +109,42 @@ function atualizarChat() {
   else modalInput.placeholder = carregando ? 'Carregando histórico…' : 'Descreva a tarefa...';
 }
 
+// Altura da área visível: com a conversa no fim, nada do histórico aparece.
+const alturaEspacoLimpo = () => `${Math.max(120, modalHistorico.clientHeight + 16)}px`;
+
+// A ficha do agente abre/fecha e muda a altura da conversa: o espaço limpo acompanha (e o fim continua à vista).
+new ResizeObserver(() => {
+  const espaco = modalHistorico.querySelector('.historico-limpo');
+  if (!espaco) return;
+  const noFim = modalHistorico.scrollHeight - modalHistorico.scrollTop - modalHistorico.clientHeight < 40;
+  espaco.style.minHeight = alturaEspacoLimpo();
+  if (noFim) rolarParaFim();
+}).observe(modalHistorico);
+
+// Espaço do tamanho da janela entre o histórico e a conversa nova: o chat abre "limpo".
+function criarEspacoLimpo() {
+  const espaco = document.createElement('div');
+  espaco.className = 'historico-limpo';
+  espaco.style.minHeight = alturaEspacoLimpo();
+  const fim = document.createElement('span');
+  fim.className = 'historico-limpo-fim';
+  fim.textContent = 'Fim do histórico';
+  const dica = document.createElement('span');
+  dica.className = 'historico-limpo-dica';
+  dica.textContent = '↑ Role para cima para ver o histórico';
+  espaco.append(fim, dica);
+  return espaco;
+}
+
 // Redesenha a conversa do agente aberto (com o aviso de carregamento, se for o caso).
+// Mensagens de antes da abertura (`anterior`) ficam acima do espaço limpo; as novas, abaixo.
 function renderizarHistorico(andar, agente) {
   const k = chave(andar, agente);
-  modalHistorico.replaceChildren(...(historicos[k] || []).map(criarMensagem));
+  const mensagens = historicos[k] || [];
+  const nos = mensagens.map(criarMensagem);
+  const ultimaAnterior = mensagens.map((m) => !!m.anterior).lastIndexOf(true);
+  if (ultimaAnterior >= 0) nos.splice(ultimaAnterior + 1, 0, criarEspacoLimpo());
+  modalHistorico.replaceChildren(...nos);
   if (carregandoHistorico.has(k)) {
     const aviso = document.createElement('p');
     aviso.className = 'msg-carregando';
@@ -126,12 +158,16 @@ function abrirChat(andar, agente) {
   if (chatAberto) rascunhos[chave(chatAberto.andar, chatAberto.agente)] = modalInput.value;
   chatAberto = { andar, agente };
   modalInput.value = rascunhos[chave(andar, agente)] || '';
+  ajustarAlturaInput();
   avisarAnexo('');
   renderizarSelecao();
+  // Tudo o que já existe vira "anterior": a conversa abre limpa, com o histórico acima.
+  (historicos[chave(andar, agente)] || []).forEach((m) => { m.anterior = true; });
   carregarHistorico(andar, agente);
-  renderizarHistorico(andar, agente);
   document.getElementById('modal-onboarding').hidden = agente !== 'recepcionista';
   modal.classList.add('aberto');
+  ajustarAlturaInput();
+  renderizarHistorico(andar, agente); // com o modal visível, o espaço limpo mede a janela
   carregarPerfil(andar, agente);
   atualizarChat();
   if (!modalInput.disabled) modalInput.focus();
@@ -179,7 +215,7 @@ async function carregarHistorico(andar, agente) {
   if (dados) {
     historicoCarregado.add(k);
     // Mensagem ao vivo que também está no histórico fica na posição cronológica dele.
-    const salvas = (dados.mensagens || []).map((m) => converterDoServidor(andar, agente, m));
+    const salvas = (dados.mensagens || []).map((m) => ({ ...converterDoServidor(andar, agente, m), anterior: true }));
     const noHistorico = new Set(salvas.map(assinaturaMensagem).filter(Boolean));
     const aoVivo = (historicos[k] || []).filter((m) => !noHistorico.has(assinaturaMensagem(m)));
     salvas.forEach((m) => marcarVista(k, m));
@@ -391,7 +427,10 @@ async function enviarTarefa(evento) {
 
   selecionados[k] = [];
   rascunhos[k] = '';
-  if (chatEstaAberto(andar, agente)) modalInput.value = '';
+  if (chatEstaAberto(andar, agente)) {
+    modalInput.value = '';
+    ajustarAlturaInput();
+  }
   renderizarSelecao();
   pendentes.add(k);
   adicionarMensagem(andar, agente, { autor: 'Você', texto, tipo: 'voce', anexos });
@@ -448,7 +487,19 @@ function liberarPendentes() {
   atualizarChat();
 }
 
+function ajustarAlturaInput() {
+  if (!modalInput.offsetParent) return; // janela fechada: mede ao abrir
+  modalInput.style.height = 'auto';
+  modalInput.style.height = `${Math.min(modalInput.scrollHeight + 2, 150)}px`;
+}
+
 document.getElementById('modal-form').addEventListener('submit', enviarTarefa);
+modalInput.addEventListener('input', ajustarAlturaInput);
+modalInput.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return; // Shift+Enter: nova linha
+  e.preventDefault();
+  document.getElementById('modal-form').requestSubmit();
+});
 modalAnexar.addEventListener('click', () => modalArquivo.click());
 modalArquivo.addEventListener('change', escolherArquivos);
 document.getElementById('modal-fechar').addEventListener('click', fecharChat);

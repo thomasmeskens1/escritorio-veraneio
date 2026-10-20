@@ -17,6 +17,8 @@ const PASSOS_ONBOARDING = [
     texto: 'Aqui ficam Gestão, Criação, Conteúdo, Vídeo e Performance. O Gestor coordena projetos grandes: divide em etapas e distribui para a equipe.' },
   { andar: 'marketing', agente: 'copywriter', titulo: 'Como pedir uma tarefa',
     texto: 'Clique em qualquer agente para abrir a ficha e a conversa. Descreva o que precisa e envie: a resposta chega no chat, mesmo se você sair.' },
+  { andar: 'marketing', agente: 'copywriter', chat: true, titulo: 'Conversa sempre limpa',
+    texto: 'Toda conversa abre limpa, mas nada se perde: o histórico fica guardado logo acima. Olha só, é só rolar para cima! Enter envia e Shift+Enter pula linha.' },
   { andar: 'marketing', agente: 'criador_imagens', titulo: 'Imagens e vídeos',
     texto: 'O Criador de Imagens e o Editor de Vídeo entregam artes em PNG e vídeos em MP4, salvos no Drive. Mesas com “Vaga” esperam novos agentes.' },
   { andar: 'porao', agente: 'construtor', titulo: 'Porão: o Construtor',
@@ -34,6 +36,7 @@ const PASSOS_ONBOARDING = [
 const ZOOM_TOUR = 1.7;         // aproximação da câmera sobre ela (x enquadramento do andar)
 const MS_POR_LETRA = 22;
 const SEGUIR_ACIMA = 40;       // a câmera mira o corpo, não os pés (px)
+const DEMO_SUBIR_MS = 1800, DEMO_PAUSA_MS = 1600, DEMO_DESCER_MS = 1200; // demonstração do histórico
 
 let onboarding = null; // { passos, indice, geracao, raiz, foco, caixa, guia, timerTexto, completo }
 
@@ -97,6 +100,7 @@ function iniciarOnboarding() {
 function encerrarOnboarding() {
   if (!onboarding) return;
   clearInterval(onboarding.timerTexto);
+  if (chatAberto && typeof fecharChat === 'function') fecharChat();
   removerGuia();
   cena?.events.off('update', seguirGuia);
   cena?.cameras.main.stopFollow();
@@ -138,13 +142,21 @@ function irParaPasso(indice) {
   caixa.querySelector('[data-acao="proximo"]').textContent = indice === onboarding.passos.length - 1 ? 'Concluir' : 'Próximo';
   caixa.querySelector('#onboarding-titulo').textContent = `· ${passo.titulo}`;
   caixa.classList.add('caminhando');
+  caixa.classList.toggle('no-topo', !!passo.chat); // não cobre a conversa demonstrada
+  if (!passo.chat && chatAberto && typeof fecharChat === 'function') fecharChat();
   mostrarFoco(null);
   escreverTexto('');
 
   const falar = () => {
     if (!onboarding || geracao !== onboarding.geracao) return; // o usuário já pulou para outro passo
     caixa.classList.remove('caminhando');
-    mostrarFoco(passo.ui || null);
+    if (passo.chat) {
+      abrirChat(passo.andar, passo.agente);
+      modalInput.blur(); // Enter continua avançando o tutorial (não envia rascunho ao agente)
+      mostrarFoco('.janela-agente .historico');
+      setTimeout(reposicionarFoco, 450); // a janela termina de abrir
+      setTimeout(() => demonstrarHistorico(geracao), 900);
+    } else mostrarFoco(passo.ui || null);
     escreverTexto(passo.texto);
   };
   if (!passo.agente) return falar();
@@ -234,6 +246,35 @@ function levarGuia(andar, agente, aoChegar) {
   const destino = destinoAoLadoDe(agente);
   focarCamera();
   caminhar(guia, [destino], () => chegar(destino));
+}
+
+// ---------- Demonstração da conversa limpa ----------
+
+// Rola a conversa até o histórico (devagar), espera e volta para a conversa limpa.
+function demonstrarHistorico(geracao) {
+  const lista = document.querySelector('.janela-agente .historico');
+  const dica = lista?.querySelector('.historico-limpo-dica');
+  const vivo = () => onboarding && geracao === onboarding.geracao && chatAberto;
+  if (!lista || !dica || !vivo()) return;
+  const fundo = lista.scrollHeight - lista.clientHeight;
+  const rolar = (de, para, ms, aoFim) => {
+    const inicio = performance.now();
+    const passo = (agora) => {
+      if (!vivo()) return;
+      const t = Math.min(1, (agora - inicio) / ms);
+      const suave = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2; // ease-in-out
+      lista.scrollTop = de + (para - de) * suave;
+      if (t < 1) requestAnimationFrame(passo);
+      else aoFim?.();
+    };
+    requestAnimationFrame(passo);
+  };
+  dica.classList.add('destacada');
+  const alvoHistorico = Math.max(0, dica.parentElement.offsetTop - lista.clientHeight * 0.8);
+  rolar(fundo, alvoHistorico, DEMO_SUBIR_MS, () => setTimeout(() => {
+    if (!vivo()) return;
+    rolar(lista.scrollTop, lista.scrollHeight - lista.clientHeight, DEMO_DESCER_MS, () => dica.classList.remove('destacada'));
+  }, DEMO_PAUSA_MS));
 }
 
 // ---------- Fala (caixa de diálogo) ----------
