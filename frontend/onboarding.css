@@ -1,93 +1,131 @@
-/* ---------- Onboarding da Recepcionista (tour guiado) ---------- */
+/* ---------- Onboarding da Recepcionista (tutorial no estilo de jogo) ---------- */
 .onboarding {
   position: fixed;
   inset: 0;
   z-index: 50;
 }
 
-/* Bloqueia cliques no escritório; o escurecimento vem da sombra do foco. */
+/* Bloqueia cliques no escritório durante o tutorial. */
 .onboarding-bloqueio {
   position: absolute;
   inset: 0;
 }
 
+/* Destaque de partes da interface (elevador, contadores, registro). */
 .onboarding-foco {
   position: absolute;
   border: 2px solid #f4a261;
   border-radius: 12px;
-  box-shadow: 0 0 0 9999px rgba(10, 12, 16, 0.6), 0 0 18px rgba(244, 162, 97, 0.55);
+  box-shadow: 0 0 0 9999px rgba(10, 12, 16, 0.55), 0 0 18px rgba(244, 162, 97, 0.55);
   pointer-events: none;
-  transition: left 0.6s ease, top 0.6s ease, width 0.6s ease, height 0.6s ease, opacity 0.3s;
+  transition: left 0.5s ease, top 0.5s ease, width 0.5s ease, height 0.5s ease;
 }
 
 .onboarding-foco.sem-alvo {
-  left: 50% !important;
-  top: 50% !important;
-  width: 0 !important;
-  height: 0 !important;
-  border-color: transparent;
+  display: none;
 }
 
-.onboarding-balao {
+/* Caixa de diálogo fixa embaixo, com o retrato dela à esquerda. */
+.onboarding-caixa {
   position: absolute;
   left: 50%;
-  top: 50%;
-  width: min(340px, calc(100vw - 32px));
-  padding: 14px 16px 12px;
-  background: #1f232a;
-  border: 1px solid #f4a261;
-  border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  bottom: 20px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+  gap: 4px 16px;
+  width: min(760px, calc(100vw - 32px));
+  padding: 14px 18px 12px;
+  background: linear-gradient(180deg, #232830, #1b1f26);
+  border: 2px solid #f4a261;
+  border-radius: 16px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
   color: #e9ecef;
-  transition: left 0.6s ease, top 0.6s ease; /* ela "anda" até o próximo ponto */
+  transform: translateX(-50%);
+  animation: onboarding-entrar 0.35s ease-out;
 }
 
-.onboarding-balao.andando .onboarding-guia svg {
-  animation: onboarding-passos 0.6s ease-in-out;
+@keyframes onboarding-entrar {
+  from { opacity: 0; transform: translate(-50%, 16px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.onboarding-retrato {
+  grid-row: 1 / span 2;
+  align-self: start;
+}
+
+.onboarding-retrato svg {
+  display: block;
+  width: 84px;
+  height: 84px;
+  padding: 4px;
+  background: #264653;
+  border: 3px solid #f4a261;
+  border-radius: 14px;
+}
+
+/* Enquanto ela caminha, o retrato "balança" e a fala espera. */
+.onboarding-caixa.caminhando .onboarding-retrato svg {
+  animation: onboarding-passos 0.5s ease-in-out infinite;
 }
 
 @keyframes onboarding-passos {
   0%, 100% { transform: translateY(0); }
-  25%, 75% { transform: translateY(-4px); }
-  50% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
 }
 
-.onboarding-guia {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: -34px 0 6px;
+.onboarding-fala {
+  position: relative;
+  min-height: 74px;
+  cursor: pointer;
 }
 
-.onboarding-guia svg {
-  width: 48px;
-  height: 48px;
-  padding: 2px;
-  background: #264653;
-  border: 2px solid #f4a261;
-  border-radius: 50%;
-}
-
-.onboarding-guia span {
-  margin-top: 26px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
+.onboarding-nome {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #f4a261;
 }
 
-.onboarding-balao h3 {
-  margin: 0 0 6px;
-  font-size: 1rem;
-  color: #f8f9fa;
+.onboarding-nome span {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: #adb5bd;
 }
 
 .onboarding-texto {
-  margin: 0 0 12px;
-  font-size: 0.86rem;
-  line-height: 1.5;
-  color: #ced4da;
+  margin: 0;
+  padding-right: 20px;
+  font-size: 0.98rem;
+  line-height: 1.55;
+  color: #f8f9fa;
+}
+
+.onboarding-caixa.caminhando .onboarding-texto::before {
+  content: '…';
+  color: #868e96;
+}
+
+/* Setinha piscando quando a fala terminou (como nos jogos). */
+.onboarding-seta {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  font-size: 0.8rem;
+  color: #f4a261;
+  opacity: 0;
+}
+
+.onboarding-caixa.completo .onboarding-seta {
+  animation: onboarding-piscar 0.9s steps(2, start) infinite;
+}
+
+@keyframes onboarding-piscar {
+  to { opacity: 1; }
 }
 
 .onboarding-acoes {
@@ -97,7 +135,7 @@
 }
 
 .onboarding-acoes .botao-primario {
-  padding: 7px 14px;
+  padding: 7px 16px;
   font-size: 0.82rem;
 }
 
@@ -108,9 +146,27 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Chamada no popup da Recepcionista */
+@media (max-width: 640px) {
+  .onboarding-caixa {
+    bottom: 84px; /* acima da barra do elevador */
+    gap: 4px 10px;
+    padding: 10px 12px;
+  }
+
+  .onboarding-retrato svg {
+    width: 56px;
+    height: 56px;
+  }
+
+  .onboarding-texto {
+    font-size: 0.88rem;
+  }
+}
+
+/* Chamada no topo do popup da Recepcionista */
 .onboarding-chamada {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 12px;
   margin: 10px 14px 4px;
@@ -120,6 +176,10 @@
   border-radius: 10px;
   font-size: 0.82rem;
   color: #ced4da;
+}
+
+.onboarding-chamada[hidden] {
+  display: none;
 }
 
 .onboarding-chamada p {
@@ -135,12 +195,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .onboarding-foco,
-  .onboarding-balao {
-    transition: none;
+  .onboarding-caixa,
+  .onboarding-caixa.caminhando .onboarding-retrato svg,
+  .onboarding-caixa.completo .onboarding-seta {
+    animation: none;
   }
 
-  .onboarding-balao.andando .onboarding-guia svg {
-    animation: none;
+  .onboarding-caixa.completo .onboarding-seta {
+    opacity: 1;
   }
 }

@@ -1,42 +1,42 @@
-// Onboarding da Recepcionista: tour guiado pelo sistema, todo no navegador (sem modelo de IA, sem tokens).
-// Ela "anda" de um ponto a outro (balão com o rosto dela), troca de andar pelo elevador e aponta agentes e
-// partes da interface. Navegação: Próximo/Voltar, setas do teclado e Esc para sair.
+// Onboarding da Recepcionista, no estilo tutorial de jogo, todo no navegador (sem IA, sem tokens).
+// Ela levanta da mesa e anda pelo escritório (pega o elevador entre andares, para ao lado de cada agente);
+// a câmera a acompanha e as falas aparecem numa caixa de diálogo com o rosto dela, digitadas letra a letra.
+// Partes da interface (elevador, contadores, registro) ganham um destaque enquanto ela explica.
+// Controles: Próximo/Voltar, Enter/espaço/setas e Esc para sair.
 
 const PASSOS_ONBOARDING = [
-  { andar: 'terreo', alvo: { agente: 'recepcionista' }, titulo: 'Olá! Eu sou a Recepcionista',
-    texto: 'Vou te mostrar rapidinho como o Escritório Veraneio funciona. Use “Próximo” ou as setas do teclado; Esc encerra o tour.' },
-  { alvo: '#elevador', titulo: 'O elevador',
-    texto: 'Cada andar é um time. Clique aqui para trocar de andar. Andares com cadeado são restritos à diretoria.' },
-  { alvo: '.contadores', titulo: 'Quem está fazendo o quê',
-    texto: 'Aqui você acompanha quantos agentes estão disponíveis, trabalhando, em construção ou pausados.' },
-  { andar: 'terreo', alvo: { agente: 'professor' }, titulo: 'Térreo: a escola',
-    texto: 'Aqui ficamos eu e o Professor. Ele ensina a escrever bons pedidos (briefings), com exemplos práticos.' },
-  { andar: 'marketing', alvo: { agente: 'gestor' }, titulo: 'Marketing: o time criativo',
-    texto: 'Setores de Gestão, Criação, Conteúdo, Vídeo e Performance. O Gestor coordena projetos grandes: divide em etapas e distribui para a equipe.' },
-  { andar: 'marketing', alvo: { agente: 'copywriter' }, titulo: 'Como pedir uma tarefa',
-    texto: 'Clique em qualquer agente: abre a ficha dele e a conversa. Descreva o que precisa e envie. A resposta chega no chat, mesmo se você sair do sistema.' },
-  { andar: 'marketing', alvo: { agente: 'criador_imagens' }, titulo: 'Imagens e vídeos',
-    texto: 'O Criador de Imagens e o Editor de Vídeo entregam artes em PNG e vídeos em MP4, salvos na pasta do Drive. Mesas com “Vaga” são lugares para novos agentes.' },
-  { andar: 'porao', alvo: { agente: 'construtor' }, titulo: 'Porão: o Construtor',
+  { andar: 'terreo', agente: 'recepcionista', titulo: 'Boas-vindas',
+    texto: 'Olá! Eu sou a Recepcionista. Vou te mostrar rapidinho como o Escritório Veraneio funciona. Vem comigo!' },
+  { ui: '#elevador', titulo: 'O elevador',
+    texto: 'Cada andar é um time. Use o elevador para trocar de andar. Andares com cadeado são restritos à diretoria.' },
+  { ui: '.contadores', titulo: 'Quem está fazendo o quê',
+    texto: 'Aqui em cima você acompanha quantos agentes estão disponíveis, trabalhando, em construção ou pausados.' },
+  { andar: 'terreo', agente: 'professor', titulo: 'Térreo: a escola',
+    texto: 'Este é o Professor. Ele ensina a escrever bons pedidos (briefings), com exemplos práticos.' },
+  { andar: 'marketing', agente: 'gestor', titulo: 'Marketing: o time criativo',
+    texto: 'Aqui ficam Gestão, Criação, Conteúdo, Vídeo e Performance. O Gestor coordena projetos grandes: divide em etapas e distribui para a equipe.' },
+  { andar: 'marketing', agente: 'copywriter', titulo: 'Como pedir uma tarefa',
+    texto: 'Clique em qualquer agente para abrir a ficha e a conversa. Descreva o que precisa e envie: a resposta chega no chat, mesmo se você sair.' },
+  { andar: 'marketing', agente: 'criador_imagens', titulo: 'Imagens e vídeos',
+    texto: 'O Criador de Imagens e o Editor de Vídeo entregam artes em PNG e vídeos em MP4, salvos no Drive. Mesas com “Vaga” esperam novos agentes.' },
+  { andar: 'porao', agente: 'construtor', titulo: 'Porão: o Construtor',
     texto: 'Precisa de um especialista que ainda não existe? Descreva a função ao Construtor e ele cria um agente novo, com mesa própria.' },
-  { andar: 'porao', alvo: { agente: 'despachante' }, titulo: 'O Despachante',
-    texto: 'Clique nele para ver a fila de tarefas: o que está rodando, o que aguarda e o que já foi concluído.' },
-  { andar: 'cobertura', alvo: { agente: 'cerebro' }, titulo: 'Cobertura: o Cérebro',
-    texto: 'A memória da Casa Veraneio: lodges, preços, serviços e o que o time aprende. Todos os agentes consultam o Cérebro, e os estagiários levam as respostas até as mesas.' },
-  { alvo: '#abrir-registro', titulo: 'Registro de atividade',
+  { andar: 'porao', agente: 'despachante', titulo: 'O Despachante',
+    texto: 'Clique no Despachante para ver a fila de tarefas: o que está rodando, o que aguarda e o que já foi concluído.' },
+  { andar: 'cobertura', agente: 'cerebro', titulo: 'Cobertura: o Cérebro',
+    texto: 'Esta é a memória da Casa Veraneio: lodges, preços, serviços e o que o time aprende. Todos consultam o Cérebro, e os estagiários levam as respostas até as mesas.' },
+  { ui: '#abrir-registro', titulo: 'Registro de atividade',
     texto: 'Tudo o que acontece fica registrado aqui: pedidos, respostas, falhas e trocas de modelo.' },
-  { andar: 'terreo', titulo: 'Duas dicas rápidas',
-    texto: 'Anexos: use o clipe do chat para enviar imagens e PDFs (até 15 MB). Rotinas: escreva, por exemplo, “todos os dias às 8h, resuma as métricas” para agendar uma tarefa.' },
-  { andar: 'terreo', alvo: { agente: 'recepcionista' }, titulo: 'Pronto!',
-    texto: 'Esse foi o tour. Se ficar alguma dúvida, é só falar comigo no chat. Bom trabalho!' },
+  { andar: 'terreo', agente: 'recepcionista', titulo: 'Duas dicas e até logo!',
+    texto: 'Use o clipe do chat para enviar imagens e PDFs (até 15 MB) e escreva “todos os dias às 8h…” para agendar rotinas. Qualquer dúvida, é só falar comigo no chat!' },
 ];
 
-const MARGEM_ALVO = 8;
-const ALTURA_AGENTE = 104; // boneco + nome acima da cabeça (px, zoom 1)
+const ZOOM_TOUR = 1.7;         // aproximação da câmera sobre ela (x enquadramento do andar)
+const MS_POR_LETRA = 22;
+const SEGUIR_ACIMA = 40;       // a câmera mira o corpo, não os pés (px)
 
-let onboarding = null; // { passos, indice, raiz, foco, balao }
+let onboarding = null; // { passos, indice, geracao, raiz, foco, caixa, guia, timerTexto, completo }
 
-// Rosto da Recepcionista (cabelo longo castanho, blazer verde, crachá), em SVG.
 const ROSTO_RECEPCIONISTA = `
 <svg viewBox="0 0 48 48" aria-hidden="true">
   <path d="M11 22c0-9 6-15 13-15s13 6 13 15v14H11z" fill="#b5651d"/>
@@ -48,130 +48,236 @@ const ROSTO_RECEPCIONISTA = `
   <path d="M21 27.5c1.6 1.4 4.4 1.4 6 0" stroke="#c0392b" stroke-width="1.4" fill="none" stroke-linecap="round"/>
 </svg>`;
 
+// ---------- Início e fim ----------
+
 function iniciarOnboarding() {
-  if (onboarding) return;
+  if (onboarding || !cena) return;
   if (typeof fecharChat === 'function') fecharChat();
   if (typeof fecharPainel === 'function') fecharPainel();
   if (typeof fecharRegistro === 'function') fecharRegistro();
-  const passos = PASSOS_ONBOARDING.filter((p) => !p.andar || podeAcessar(p.andar));
 
   const raiz = novoEl('div', 'onboarding');
-  const bloqueio = novoEl('div', 'onboarding-bloqueio'); // impede cliques no escritório durante o tour
-  const foco = novoEl('div', 'onboarding-foco');
-  const balao = novoEl('section', 'onboarding-balao');
-  balao.setAttribute('role', 'dialog');
-  balao.setAttribute('aria-modal', 'true');
-  balao.setAttribute('aria-labelledby', 'onboarding-titulo');
-  balao.innerHTML = `
-    <div class="onboarding-guia">${ROSTO_RECEPCIONISTA}<span>Recepcionista</span></div>
-    <h3 id="onboarding-titulo"></h3>
-    <p class="onboarding-texto" aria-live="polite"></p>
+  const foco = novoEl('div', 'onboarding-foco sem-alvo');
+  const caixa = novoEl('section', 'onboarding-caixa');
+  caixa.setAttribute('role', 'dialog');
+  caixa.setAttribute('aria-modal', 'true');
+  caixa.setAttribute('aria-labelledby', 'onboarding-titulo');
+  caixa.innerHTML = `
+    <div class="onboarding-retrato">${ROSTO_RECEPCIONISTA}</div>
+    <div class="onboarding-fala">
+      <p class="onboarding-nome">Recepcionista <span id="onboarding-titulo"></span></p>
+      <p class="onboarding-texto" aria-live="polite"></p>
+      <span class="onboarding-seta" aria-hidden="true">▼</span>
+    </div>
     <div class="onboarding-acoes">
       <span class="onboarding-progresso"></span>
-      <button type="button" class="botao-secundario" data-acao="sair">Sair</button>
+      <button type="button" class="botao-secundario" data-acao="sair">Pular tutorial</button>
       <button type="button" class="botao-secundario" data-acao="voltar">Voltar</button>
       <button type="button" class="botao-primario" data-acao="proximo">Próximo</button>
     </div>`;
-  balao.addEventListener('click', (e) => {
+  caixa.addEventListener('click', (e) => {
     const acao = e.target.closest('button')?.dataset.acao;
     if (acao === 'sair') encerrarOnboarding();
     else if (acao === 'voltar') irParaPasso(onboarding.indice - 1);
-    else if (acao === 'proximo') irParaPasso(onboarding.indice + 1);
+    else if (acao === 'proximo' || e.target.closest('.onboarding-fala')) avancar();
   });
-  raiz.append(bloqueio, foco, balao);
+  raiz.append(novoEl('div', 'onboarding-bloqueio'), foco, caixa);
   document.body.append(raiz);
 
-  onboarding = { passos, indice: -1, raiz, foco, balao };
+  onboarding = {
+    passos: PASSOS_ONBOARDING.filter((p) => !p.andar || podeAcessar(p.andar)),
+    indice: -1, geracao: 0, raiz, foco, caixa, guia: null, timerTexto: null, completo: true,
+  };
   document.addEventListener('keydown', teclaOnboarding);
-  window.addEventListener('resize', reposicionarOnboarding);
+  window.addEventListener('resize', reposicionarFoco);
+  cena.events.on('update', seguirGuia);
   irParaPasso(0);
 }
 
 function encerrarOnboarding() {
   if (!onboarding) return;
+  clearInterval(onboarding.timerTexto);
+  removerGuia();
+  cena?.events.off('update', seguirGuia);
+  cena?.cameras.main.stopFollow();
+  cena?.cameras.main.zoomEffect.reset(); // interrompe uma aproximação em andamento
   onboarding.raiz.remove();
   onboarding = null;
   document.removeEventListener('keydown', teclaOnboarding);
-  window.removeEventListener('resize', reposicionarOnboarding);
-  if (podeAcessar('terreo')) renderizarAndar('terreo');
+  window.removeEventListener('resize', reposicionarFoco);
+  if (cena && podeAcessar('terreo')) renderizarAndar('terreo'); // reenquadra e devolve a Recepcionista à mesa
 }
 
 function teclaOnboarding(e) {
   if (!onboarding) return;
   if (e.key === 'Escape') encerrarOnboarding();
-  else if (e.key === 'ArrowRight') irParaPasso(onboarding.indice + 1);
+  else if (['Enter', ' ', 'ArrowRight'].includes(e.key)) avancar();
   else if (e.key === 'ArrowLeft') irParaPasso(onboarding.indice - 1);
   else return;
   e.preventDefault();
 }
+
+// Primeiro completa a fala que está sendo digitada; depois vai ao próximo passo.
+function avancar() {
+  if (!onboarding.completo) return completarTexto();
+  irParaPasso(onboarding.indice + 1);
+}
+
+// ---------- Passos ----------
 
 function irParaPasso(indice) {
   if (!onboarding) return;
   if (indice >= onboarding.passos.length) return encerrarOnboarding();
   if (indice < 0) return;
   onboarding.indice = indice;
+  const geracao = ++onboarding.geracao;
   const passo = onboarding.passos[indice];
-  const ultimo = indice === onboarding.passos.length - 1;
-  const { balao } = onboarding;
-  balao.querySelector('#onboarding-titulo').textContent = passo.titulo;
-  balao.querySelector('.onboarding-texto').textContent = passo.texto;
-  balao.querySelector('.onboarding-progresso').textContent = `${indice + 1} de ${onboarding.passos.length}`;
-  balao.querySelector('[data-acao="voltar"]').disabled = indice === 0;
-  balao.querySelector('[data-acao="proximo"]').textContent = ultimo ? 'Concluir' : 'Próximo';
+  const { caixa } = onboarding;
+  caixa.querySelector('.onboarding-progresso').textContent = `${indice + 1} de ${onboarding.passos.length}`;
+  caixa.querySelector('[data-acao="voltar"]').disabled = indice === 0;
+  caixa.querySelector('[data-acao="proximo"]').textContent = indice === onboarding.passos.length - 1 ? 'Concluir' : 'Próximo';
+  caixa.querySelector('#onboarding-titulo').textContent = `· ${passo.titulo}`;
+  caixa.classList.add('caminhando');
+  mostrarFoco(null);
+  escreverTexto('');
 
-  const trocaAndar = passo.andar && passo.andar !== andarAtual;
-  if (trocaAndar) renderizarAndar(passo.andar); // ela "pega o elevador"
-  // Espera a câmera do novo andar assentar antes de medir onde está o agente.
-  setTimeout(reposicionarOnboarding, trocaAndar ? 160 : 0);
-  balao.querySelector('[data-acao="proximo"]').focus({ preventScroll: true });
+  const falar = () => {
+    if (!onboarding || geracao !== onboarding.geracao) return; // o usuário já pulou para outro passo
+    caixa.classList.remove('caminhando');
+    mostrarFoco(passo.ui || null);
+    escreverTexto(passo.texto);
+  };
+  if (!passo.agente) return falar();
+  levarGuia(passo.andar, passo.agente, falar);
 }
 
-// Retângulo (na tela) do alvo do passo: seletor da interface ou agente no canvas. null = centro da tela.
-function retanguloAlvo(alvo) {
-  if (!alvo) return null;
-  if (typeof alvo === 'string') {
-    const el = document.querySelector(alvo);
-    const r = el?.getBoundingClientRect();
-    return r && r.width ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
-  }
-  const pos = posicoesAndar[alvo.agente];
-  if (!cena || !pos) return null;
+// ---------- A Recepcionista andando ----------
+
+// Lugar dela ao lado do agente do passo; no caso dela mesma, a própria mesa.
+function destinoAoLadoDe(agente) {
+  const pos = posicoesAndar[agente];
+  if (!pos) return { x: GRADE - 1.8, y: 1.45, sentido: -1 };
+  if (agente === 'recepcionista') return { x: pos.x + AGENTE_NO_TILE, y: pos.y + AGENTE_NO_TILE, sentido: 1 };
+  return lugarAoLado(agente, pos);
+}
+
+function criarGuia(inicio) {
+  const dados = dadosAgente('terreo', 'recepcionista');
+  const pes = isoParaTela(inicio.x, inicio.y);
+  const avatar = criarBoneco(cena, pes.x, pes.y, { ...dados, status: 'disponivel', escalaRotulo: 1,
+    rotuloAcima: ROTULO_VISITA }); // nome acima, sem cobrir o do agente ao lado
+  onboarding.guia = { avatar, g: { x: inicio.x, y: inicio.y }, tweens: [], alvo: { x: pes.x, y: pes.y - SEGUIR_ACIMA } };
+  ocultarRecepcionistaDaMesa();
+  focarCamera();
+  return onboarding.guia;
+}
+
+function removerGuia() {
+  const guia = onboarding?.guia;
+  if (!guia) return;
+  pararCaminhada(guia);
+  guia.avatar.objetos.forEach((o) => o.active && o.destroy());
+  onboarding.guia = null;
+}
+
+// No Térreo, a Recepcionista "de verdade" sai da mesa enquanto a guia anda.
+function ocultarRecepcionistaDaMesa() {
+  if (andarAtual === 'terreo') avatares.recepcionista?.objetos.forEach((o) => o.setVisible(false));
+}
+
+function focarCamera() {
   const cam = cena.cameras.main;
-  const canvas = cena.game.canvas.getBoundingClientRect();
-  const pes = isoParaTela(pos.x + AGENTE_NO_TILE, pos.y + AGENTE_NO_TILE);
-  const elevacao = dadosAgente(andarAtual, alvo.agente).visual === 'cerebro' ? ELEVACAO_PEDESTAL : 0;
-  const x = canvas.left + (pes.x - cam.worldView.x) * cam.zoom;
-  const y = canvas.top + (pes.y - elevacao - cam.worldView.y) * cam.zoom;
-  const largura = 96 * cam.zoom, altura = ALTURA_AGENTE * cam.zoom;
-  return { x: x - largura / 2, y: y - altura, w: largura, h: altura + 8 * cam.zoom };
+  cam.startFollow(onboarding.guia.alvo, false, 0.09, 0.09);
+  cam.zoomTo(Math.min(2.2, enquadrarCamera() * ZOOM_TOUR), 700);
 }
 
-function reposicionarOnboarding() {
+// A câmera segue um ponto acima dos pés dela, atualizado a cada quadro.
+function seguirGuia() {
+  const guia = onboarding?.guia;
+  if (!guia) return;
+  const pes = isoParaTela(guia.g.x, guia.g.y);
+  guia.alvo.x = pes.x;
+  guia.alvo.y = pes.y - SEGUIR_ACIMA;
+}
+
+// Leva a guia até o agente: no mesmo andar, caminha; em outro, sai pelo elevador e entra no andar novo.
+function levarGuia(andar, agente, aoChegar) {
+  const geracao = onboarding.geracao;
+  const vivo = () => onboarding && geracao === onboarding.geracao;
+  const chegar = (destino) => {
+    if (!vivo()) return;
+    onboarding.guia.avatar.virar(destino.sentido);
+    aoChegar();
+  };
+  const entrarNoAndar = () => {
+    if (!vivo()) return;
+    removerGuia();
+    if (andar !== andarAtual) renderizarAndar(andar);
+    const destino = destinoAoLadoDe(agente);
+    const veioDoElevador = agente !== 'recepcionista' || onboarding.indice > 0;
+    const guia = criarGuia(veioDoElevador ? portaElevador() : destino);
+    if (!veioDoElevador) return chegar(destino);
+    guia.avatar.definirAlfa(0);
+    cena.tweens.add({ targets: guia.avatar.objetos, alpha: 1, duration: 300 });
+    caminhar(guia, [saidaElevador(), destino], () => chegar(destino));
+  };
+
+  const guia = onboarding.guia;
+  if (!guia || andar !== andarAtual) {
+    if (!guia) return entrarNoAndar();
+    // Sai pelo elevador do andar atual antes de aparecer no próximo.
+    return caminhar(guia, [saidaElevador(), portaElevador()], () => {
+      if (!vivo()) return;
+      cena.tweens.add({ targets: guia.avatar.objetos, alpha: 0, duration: 250, onComplete: entrarNoAndar });
+    });
+  }
+  const destino = destinoAoLadoDe(agente);
+  focarCamera();
+  caminhar(guia, [destino], () => chegar(destino));
+}
+
+// ---------- Fala (caixa de diálogo) ----------
+
+function escreverTexto(texto) {
+  const { caixa } = onboarding;
+  const alvo = caixa.querySelector('.onboarding-texto');
+  clearInterval(onboarding.timerTexto);
+  alvo.textContent = '';
+  onboarding.texto = texto;
+  onboarding.completo = !texto;
+  caixa.classList.toggle('completo', onboarding.completo && !!texto);
+  if (!texto) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return completarTexto();
+  let n = 0;
+  onboarding.timerTexto = setInterval(() => {
+    n += 1;
+    alvo.textContent = texto.slice(0, n);
+    if (n >= texto.length) completarTexto();
+  }, MS_POR_LETRA);
+}
+
+function completarTexto() {
+  clearInterval(onboarding.timerTexto);
+  onboarding.caixa.querySelector('.onboarding-texto').textContent = onboarding.texto || '';
+  onboarding.completo = true;
+  onboarding.caixa.classList.add('completo');
+}
+
+// ---------- Destaque de partes da interface ----------
+
+function mostrarFoco(seletor) {
+  const { foco } = onboarding;
+  foco.dataset.seletor = seletor || '';
+  reposicionarFoco();
+}
+
+function reposicionarFoco() {
   if (!onboarding) return;
-  const { foco, balao, passos, indice } = onboarding;
-  const r = retanguloAlvo(passos[indice].alvo);
-  foco.classList.toggle('sem-alvo', !r);
-  if (r) {
-    Object.assign(foco.style, { left: `${r.x - MARGEM_ALVO}px`, top: `${r.y - MARGEM_ALVO}px`,
-      width: `${r.w + MARGEM_ALVO * 2}px`, height: `${r.h + MARGEM_ALVO * 2}px` });
-  }
-  // Balão ao lado do alvo (direita, esquerda, abaixo ou acima), sempre dentro da tela.
-  const b = balao.getBoundingClientRect();
-  const vw = window.innerWidth, vh = window.innerHeight, m = 16;
-  let x = (vw - b.width) / 2, y = (vh - b.height) / 2;
-  if (r) {
-    const opcoes = [
-      [r.x + r.w + MARGEM_ALVO + m, r.y + r.h / 2 - b.height / 2],
-      [r.x - MARGEM_ALVO - m - b.width, r.y + r.h / 2 - b.height / 2],
-      [r.x + r.w / 2 - b.width / 2, r.y + r.h + MARGEM_ALVO + m],
-      [r.x + r.w / 2 - b.width / 2, r.y - MARGEM_ALVO - m - b.height],
-    ];
-    const cabe = ([px, py]) => px >= m && py >= m && px + b.width <= vw - m && py + b.height <= vh - m;
-    [x, y] = opcoes.find(cabe) || opcoes[2];
-  }
-  balao.style.left = `${Math.min(Math.max(m, x), vw - b.width - m)}px`;
-  balao.style.top = `${Math.min(Math.max(m, y), vh - b.height - m)}px`;
-  balao.classList.remove('andando');
-  void balao.offsetWidth; // reinicia a animação de "passos"
-  balao.classList.add('andando');
+  const { foco } = onboarding;
+  const r = foco.dataset.seletor ? document.querySelector(foco.dataset.seletor)?.getBoundingClientRect() : null;
+  foco.classList.toggle('sem-alvo', !r?.width);
+  if (!r?.width) return;
+  const m = 8;
+  Object.assign(foco.style, { left: `${r.left - m}px`, top: `${r.top - m}px`,
+    width: `${r.width + m * 2}px`, height: `${r.height + m * 2}px` });
 }

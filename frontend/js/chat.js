@@ -130,6 +130,7 @@ function abrirChat(andar, agente) {
   renderizarSelecao();
   carregarHistorico(andar, agente);
   renderizarHistorico(andar, agente);
+  document.getElementById('modal-onboarding').hidden = agente !== 'recepcionista';
   modal.classList.add('aberto');
   carregarPerfil(andar, agente);
   atualizarChat();
