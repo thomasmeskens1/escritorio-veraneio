@@ -203,7 +203,9 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         return await erro("Nenhum modelo de IA configurado no servidor.", **alvo)
 
     if agente.id in AGENTES_PRODUCAO:  # só chega aqui o dono do plano Max (checado acima)
-        await producao.enfileirar(usuario["sub"], andar, agente, texto, anexos=anexos.caminhos(anexos_ids))
+        # "Ajuste na peça #20: ..." ou "troque o título...": nova versão da peça anterior, na mesma pasta.
+        await producao.enfileirar(usuario["sub"], andar, agente, texto, anexos=anexos.caminhos(anexos_ids),
+                                  base=producao.base_do_ajuste(usuario["sub"], agente.id, texto))
     else:
         await orquestrador.nova_tarefa(usuario["sub"], andar, agente, texto, anexos_ids)
 

@@ -35,6 +35,8 @@ EXTENSOES_ARTE = {".png", ".jpg", ".jpeg", ".mp4", ".mov", ".pdf"}
 EXTENSOES_ENTREGA = EXTENSOES_ARTE | {".docx"}  # + legenda; o editável fica em EDITÁVEL/
 PASTA_ANEXOS = "anexos"       # subpasta da requisição com os arquivos enviados no chat
 PASTA_ACERVO = "acervo"       # cópias das fotos/vídeos do acervo usadas na peça
+RASCUNHOS = comum.DADOS / "producoes"  # rascunho local de cada peça (fora do Drive; base dos ajustes)
+DIAS_RASCUNHO = 60
 PASTA_DIRETRIZES = comum.DADOS / "conhecimento"   # manuais da Casa Veraneio (fora do git)
 DIRETRIZES = {"criador_imagens": ("00", "01", "04", "03"), "editor_video": ("00", "01", "06", "05")}
 
@@ -63,10 +65,44 @@ def ffmpeg_dir() -> str | None:
 
 
 def nome_pasta(producao: dict) -> str:
-    """Ex.: 2026-10-19 - 42 - Reels piscina verão"""
-    resumo = re.sub(r'[<>:"/\\|?*\n\r\t]', " ", producao["texto"]).strip()
-    resumo = re.sub(r"\s+", " ", resumo)[:50].rstrip(" .")
-    return f"{producao['criada_em'][:10]} - {producao['tarefa_id']} - {resumo}"
+    """Título do projeto/pedido, ex.: "Post Réveillon Lodge 1"."""
+    titulo = re.sub(r'[<>:"/\\|?*\n\r\t]', " ", producao.get("titulo") or producao["texto"])
+    return re.sub(r"\s+", " ", titulo).strip(" .")[:60] or f"Produção {producao['tarefa_id']}"
+
+
+def pasta_de_entrega(producao: dict) -> Path:
+    """Pasta no Drive. Ajuste: a mesma da peça ajustada. Nome repetido: "Título (2)"."""
+    if producao.get("base"):
+        return DRIVE / producao["base"]["pasta"]
+    raiz, nome = DRIVE / producao["pasta_andar"], nome_pasta(producao)
+    pasta, n = raiz / nome, 2
+    while pasta.exists():
+        pasta, n = raiz / f"{nome} ({n})", n + 1
+    return pasta
+
+
+def pasta_de_rascunho(producao: dict) -> Path:
+    """Rascunho local da peça (HTML, cópias de fotos, cenas), fora do Drive; o ajuste reaproveita o da peça base."""
+    base = (producao.get("base") or {}).get("tarefa_id") or producao["tarefa_id"]
+    pasta = RASCUNHOS / str(base)
+    pasta.mkdir(parents=True, exist_ok=True)
+    return pasta
+
+
+def entregaveis(pasta: Path) -> dict[str, float]:
+    """Arquivos finais do rascunho (raiz + EDITÁVEL/), com a data de modificação."""
+    achados = [a for a in pasta.iterdir() if a.is_file() and a.suffix.lower() in EXTENSOES_ENTREGA]
+    if (pasta / "EDITÁVEL").is_dir():
+        achados += [a for a in (pasta / "EDITÁVEL").rglob("*") if a.is_file()]
+    return {a.relative_to(pasta).as_posix(): a.stat().st_mtime for a in achados}
+
+
+def limpar_rascunhos() -> None:
+    """Rascunhos parados há mais de DIAS_RASCUNHO dias saem do PC (a entrega continua no Drive)."""
+    limite = time.time() - DIAS_RASCUNHO * 86400
+    for pasta in RASCUNHOS.glob("*") if RASCUNHOS.is_dir() else []:
+        if pasta.is_dir() and pasta.stat().st_mtime < limite:
+            shutil.rmtree(pasta, ignore_errors=True)
 
 
 def copiar_anexos(producao: dict, pasta: Path) -> list[str]:
@@ -99,11 +135,22 @@ def regras_acervo() -> str:
     return (f"Fotos e vídeos reais dos Lodges ficam no acervo, SOMENTE LEITURA: {comum.ACERVO} "
             "(só as pastas numeradas \"Lodges N - M\" > pasta do Lodge; o índice, para ler com python, está em "
             f"{comum.CEREBRO / 'catalogo_lodges.md'}). Para usar um arquivo, COPIE-o com python (shutil.copy2) "
-            f"para a subpasta {PASTA_ACERVO}/ desta requisição e trabalhe na cópia. Nunca grave, mova, renomeie ou "
+            f"para a subpasta {PASTA_ACERVO}/ da pasta atual e trabalhe na cópia (se já houver cópia de uma versão "
+            "anterior, reaproveite). Nunca grave, mova, renomeie ou "
             "apague nada no acervo. Arquivos grandes: copie um por vez, só os que vai usar.")
 
 
-def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None) -> str:
+def instrucao_versao(producao: dict, versao: int) -> str:
+    if not producao.get("base"):
+        return ""
+    return (f"Este pedido é um AJUSTE (versão {versao}) da peça #{producao['base']['tarefa_id']}. Nesta pasta estão "
+            "os arquivos de trabalho da versão anterior (HTML, editável, fotos copiadas, cenas): reaproveite-os e "
+            "aplique SOMENTE o ajuste pedido, sem refazer o resto. Salve os novos arquivos finais com o sufixo "
+            f"_v{versao} (ex.: arte_v{versao}.png, Legenda - <peça>_v{versao}.docx, EDITÁVEL/<peça>_v{versao}_editavel.pptx) "
+            "e não apague as versões anteriores.")
+
+
+def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, versao: int = 1) -> str:
     historico = "\n".join(f"- Usuário: {h['texto'][:300]}\n  Resposta: {(h['resposta'] or '')[:400]}"
                           for h in producao.get("historico") or [])
     lista_anexos = "\n".join(f"  - {PASTA_ANEXOS}/{nome}" for nome in anexos or [])
@@ -112,28 +159,20 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None) 
         "Contexto: Escritório Veraneio, equipe de marketing da Casa Veraneio. Responda em português do Brasil.",
         f"Conversa recente:\n{historico}" if historico else "",
         f"Pedido: {producao['texto']}",
+        instrucao_versao(producao, versao),
         (f"O usuário enviou estes arquivos junto com o pedido (copiados na subpasta {PASTA_ANEXOS}/):\n"
          f"{lista_anexos}\nAbra-os com Read e USE-OS na peça (fotos como imagens do layout, PDFs como fonte "
          "de textos e dados), conforme o pedido. Não altere os originais.") if lista_anexos else "",
         diretrizes(producao["agente"]),
         regras_acervo(),
-        f"Grave SOMENTE dentro da pasta atual ({pasta}). A pasta de entrega é ESTA (não use \"MARKETING > "
-        "THOMAS\" citado nas diretrizes). Entregue: (1) a arte final na raiz (PNG, MP4 ou PDF); (2) o editável "
+        f"Grave SOMENTE dentro da pasta atual ({pasta}), que é o rascunho desta peça: arquivos de trabalho (HTML, "
+        "cópias, cenas) podem ficar aqui; o sistema copia só os finais para a pasta de entrega no Drive (não use "
+        "\"MARKETING > THOMAS\" citado nas diretrizes). Entregue: (1) a arte final na raiz (PNG, MP4 ou PDF); (2) o editável "
         "em EDITÁVEL/, gerado com python-pptx conforme as diretrizes (em vídeo, também EDITÁVEL/CENAS/ e "
         "manifest.json); (3) a legenda, quando a peça tiver (stories não têm), em \"Legenda - <peça>.docx\" na "
         "raiz, gerada com python-docx, no lugar do Google Doc. Não use Higgsfield nem outra IA de imagem.",
         "Ao terminar, responda com um resumo curto (até 5 linhas) do que foi entregue.",
     ]))
-
-
-def guardar_rascunhos(pasta: Path) -> None:
-    """Deixa só as entregas na pasta da requisição; HTML e outros arquivos de trabalho vão para _trabalho."""
-    rascunhos = [a for a in pasta.iterdir() if a.is_file() and a.suffix.lower() not in EXTENSOES_ENTREGA]
-    if rascunhos:
-        destino = pasta / "_trabalho"
-        destino.mkdir(exist_ok=True)
-        for arquivo in rascunhos:
-            arquivo.replace(destino / arquivo.name)
 
 
 def comando_producao() -> list[str]:
@@ -142,25 +181,31 @@ def comando_producao() -> list[str]:
 
 
 def produzir(producao: dict) -> None:
-    pasta = DRIVE / producao["pasta_andar"] / nome_pasta(producao)
-    pasta.mkdir(parents=True, exist_ok=True)
-    relativa = f"{producao['pasta_andar']}/{pasta.name}"
-    log(f"Produção #{producao['tarefa_id']} ({producao['agente']}) -> {relativa}")
+    entrega = pasta_de_entrega(producao)
+    relativa = entrega.relative_to(DRIVE).as_posix()
+    rascunho = pasta_de_rascunho(producao)
+    versao_arquivo = rascunho / ".versao"
+    versao = int(versao_arquivo.read_text()) + 1 if producao.get("base") and versao_arquivo.exists() else 1
+    log(f"Produção #{producao['tarefa_id']} ({producao['agente']}) v{versao} -> {relativa}")
 
     ambiente = dict(os.environ)
     if (dir_ffmpeg := ffmpeg_dir()):
         ambiente["PATH"] = dir_ffmpeg + os.pathsep + ambiente.get("PATH", "")
     try:
-        anexos = copiar_anexos(producao, pasta)
+        anexos = copiar_anexos(producao, rascunho)
+        antes = entregaveis(rascunho)
         # O pedido vai pela entrada padrão (texto longo, com quebras de linha).
-        resumo = comum.rodar_claude(comando_producao(), montar_prompt(producao, pasta, anexos), pasta,
+        resumo = comum.rodar_claude(comando_producao(), montar_prompt(producao, rascunho, anexos, versao), rascunho,
                                     TEMPO_LIMITE, ambiente)
-        arquivos = sorted(a.name for a in pasta.iterdir() if a.is_file() and a.suffix.lower() in EXTENSOES_ENTREGA)
-        if not any(Path(a).suffix.lower() in EXTENSOES_ARTE for a in arquivos):
+        # Só os finais novos ou alterados vão para o Drive (sem pasta de trabalho na entrega).
+        novos = sorted(nome for nome, mtime in entregaveis(rascunho).items() if antes.get(nome) != mtime)
+        if not any(Path(n).suffix.lower() in EXTENSOES_ARTE for n in novos):
             raise RuntimeError("Nenhum arquivo PNG/MP4/PDF foi gerado.")
-        if (pasta / "EDITÁVEL").is_dir():
-            arquivos += [f"EDITÁVEL/{a.name}" for a in sorted((pasta / "EDITÁVEL").glob("*.pptx"))]
-        guardar_rascunhos(pasta)
+        for nome in novos:
+            (entrega / nome).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(rascunho / nome, entrega / nome)
+        versao_arquivo.write_text(str(versao))
+        arquivos = [n for n in novos if "/" not in n or n.lower().endswith(".pptx")]  # sem listar cada cena
         comum.chamar("POST", f"/api/producao/{producao['tarefa_id']}/concluir",
                      {"resumo": resumo, "pasta": relativa, "arquivos": arquivos})
         log(f"   concluída: {', '.join(arquivos)}")
@@ -212,6 +257,7 @@ def main() -> None:
         log(f"Pasta do Drive não encontrada: {DRIVE}")
         sys.exit(1)
     log(f"Trabalhador Max ativo. Fila: {comum.BACKEND} | Drive: {DRIVE} | log: {comum.ARQUIVO_LOG}")
+    limpar_rascunhos()
     proximo_catalogo = 0.0
     while True:
         if time.monotonic() >= proximo_catalogo:

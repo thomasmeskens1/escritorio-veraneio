@@ -33,7 +33,7 @@ const chave = (andar, agente) => `${andar}/${agente}`;
 
 const tamanhoLegivel = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
-function criarMensagem({ autor, texto, tipo, meta, anexos }) {
+function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id }) {
   const div = document.createElement('div');
   div.className = `msg msg-${tipo}`;
   const nome = document.createElement('span');
@@ -41,6 +41,7 @@ function criarMensagem({ autor, texto, tipo, meta, anexos }) {
   nome.textContent = autor;
   div.append(nome, document.createTextNode(texto));
   if (anexos?.length) div.append(criarAnexosDaMensagem(anexos));
+  if (tipo === 'agente' && tarefa_id && /^✅ Pedido concluído/.test(texto)) div.append(criarBotaoAjuste(tarefa_id));
   if (meta) {
     const linha = document.createElement('span');
     linha.className = 'msg-meta';
@@ -48,6 +49,22 @@ function criarMensagem({ autor, texto, tipo, meta, anexos }) {
     div.append(linha);
   }
   return div;
+}
+
+// Entrega de produção: "Pedir ajuste" prepara o pedido; a nova versão sai na mesma pasta (_v2, _v3...).
+function criarBotaoAjuste(tarefaId) {
+  const botao = document.createElement('button');
+  botao.type = 'button';
+  botao.className = 'botao-secundario msg-ajuste';
+  botao.textContent = 'Pedir ajuste';
+  botao.title = 'Gera uma nova versão desta peça, na mesma pasta';
+  botao.addEventListener('click', () => {
+    if (modalInput.disabled) return;
+    modalInput.value = `Ajuste na peça #${tarefaId}: `;
+    ajustarAlturaInput();
+    modalInput.focus();
+  });
+  return botao;
 }
 
 const chatEstaAberto = (andar, agente) =>

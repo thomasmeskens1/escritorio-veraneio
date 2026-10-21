@@ -12,6 +12,7 @@ Além das produções (tabela tarefas), a fila tem "trabalhos do Max" (tabela tr
 import asyncio
 import hmac
 import json
+import re
 import secrets
 import time
 from datetime import datetime, timezone
@@ -46,6 +47,12 @@ CREATE TABLE IF NOT EXISTS trabalhos_max (
     concluido_em TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_trabalhos_status ON trabalhos_max(status);
+CREATE TABLE IF NOT EXISTS producao_info (
+    tarefa_id INTEGER PRIMARY KEY,
+    titulo TEXT NOT NULL,            -- nome da pasta de entrega (ex.: "Post Réveillon Lodge 1")
+    base_tarefa_id INTEGER,          -- ajuste: a produção que está sendo ajustada (mesma pasta, nova versão)
+    pasta TEXT                       -- pasta de entrega, gravada ao concluir
+);
 CREATE TABLE IF NOT EXISTS producao_anexos (
     tarefa_id INTEGER PRIMARY KEY,
     caminhos TEXT NOT NULL           -- JSON: caminhos relativos a backend/ (ex.: dados/anexos/ab12cd34.png)
@@ -98,18 +105,60 @@ def iniciar() -> None:
         db.execute("UPDATE trabalhos_max SET status = 'pendente' WHERE status = 'executando'")
 
 
-async def enfileirar(login: str, andar: str, agente: Agente, texto: str, anexos: list[str] | None = None) -> None:
-    """`anexos`: caminhos de anexos.caminhos(); o trabalhador copia os arquivos para a pasta da requisição."""
+_VERBOS_INICIAIS = re.compile(
+    r"^(?:(?:por favor|pfv|quero|preciso de|gostaria de|crie|criar|cria|fa[cç]a|fazer|produza|produzir|gere|gerar|"
+    r"monte|montar|desenvolva|elabore|me|uma?|o|a|os|as)\s+)+", re.IGNORECASE)
+_LIGACOES = {"de", "do", "da", "dos", "das", "para", "com", "e", "em", "no", "na", "o", "a", "ao", "à"}
+PEDIDO_AJUSTE = re.compile(r"^\s*(ajuste|ajustes|ajustar|altere|alterar|troque|trocar|mude|mudar|corrija|corrigir|"
+                           r"refa[cç]a|aumente|diminua|tire|remova|coloque|substitua|deixe)\b", re.IGNORECASE)
+
+
+def titulo_curto(texto: str) -> str:
+    """Título da pasta a partir do pedido: "Crie a arte do post de Réveillon do Lodge 1" -> "Arte Post Réveillon Lodge 1"."""
+    limpo = re.sub(r"[^\wÀ-ÿ\s#-]", " ", texto.splitlines()[0] if texto.strip() else "Produção")
+    palavras = [p for p in _VERBOS_INICIAIS.sub("", limpo.strip()).split() if p.lower() not in _LIGACOES][:6]
+    return " ".join(p[:1].upper() + p[1:] for p in palavras)[:60] or "Produção"
+
+
+def ultima_concluida(login: str, agente_id: str, tarefa_id: int | None = None) -> int | None:
+    """Produção concluída a ajustar: a citada (#id) ou a mais recente deste usuário com este agente."""
+    filtro, valores = ("AND t.id = ?", (tarefa_id,)) if tarefa_id else ("", ())
+    linha = _db().execute(
+        "SELECT t.id FROM tarefas t JOIN producao_info p ON p.tarefa_id = t.id WHERE t.usuario = ? AND t.agente = ? "
+        f"AND t.status = 'concluida' AND p.pasta IS NOT NULL {filtro} ORDER BY t.id DESC LIMIT 1",
+        (login, agente_id, *valores)).fetchone()
+    return linha["id"] if linha else None
+
+
+def base_do_ajuste(login: str, agente_id: str, texto: str) -> int | None:
+    """Pedido de ajuste ("Ajuste na peça #20: ...", "troque o título...") -> produção a ajustar; None = peça nova."""
+    citada = re.search(r"#(\d+)", texto)
+    if not (citada or PEDIDO_AJUSTE.search(texto)):
+        return None
+    return ultima_concluida(login, agente_id, int(citada.group(1)) if citada else None)
+
+
+async def enfileirar(login: str, andar: str, agente: Agente, texto: str, anexos: list[str] | None = None,
+                     titulo: str = "", base: int | None = None) -> None:
+    """`anexos`: caminhos de anexos.caminhos(). `titulo`: nome da pasta de entrega (padrão: tirado do pedido).
+    `base`: produção que está sendo ajustada (mesma pasta, nova versão)."""
     tarefa_id = tarefas.criar(login, andar, agente.id, texto, "complexa")
-    if anexos:
-        with _db() as db:
+    with _db() as db:
+        if base:
+            titulo = _db().execute("SELECT titulo FROM producao_info WHERE tarefa_id = ?", (base,)).fetchone()["titulo"]
+        db.execute("INSERT OR REPLACE INTO producao_info (tarefa_id, titulo, base_tarefa_id) VALUES (?, ?, ?)",
+                   (tarefa_id, (titulo or titulo_curto(texto)).strip()[:60], base))
+        if anexos:
             db.execute("INSERT OR REPLACE INTO producao_anexos (tarefa_id, caminhos) VALUES (?, ?)",
                        (tarefa_id, json.dumps(list(anexos))))
     tarefas.atualizar(tarefa_id, status="producao")
-    tarefas.registrar_evento(tarefa_id, "recebida", agente.id, detalhe="Produção de arquivo pelo Claude Code (Max)")
+    detalhe = f"Ajuste da produção #{base}" if base else "Produção de arquivo pelo Claude Code (Max)"
+    tarefas.registrar_evento(tarefa_id, "recebida", agente.id, detalhe=detalhe)
     await gerenciador.enviar_para_usuario(login, {
         "tipo": "tarefa_adiada", "andar": andar, "agente": agente.id, "tarefa_id": tarefa_id,
-        "texto": "Pedido enviado ao Claude Code (Max) para produção. Você recebe aqui o aviso quando terminar.",
+        "texto": (f"Ajuste da peça #{base} enviado ao Claude Code (Max): ele parte da versão anterior e salva a "
+                  "nova versão na mesma pasta." if base else
+                  "Pedido enviado ao Claude Code (Max) para produção. Você recebe aqui o aviso quando terminar."),
     })
 
 
@@ -232,9 +281,15 @@ async def proxima(authorization: str = Header("")):
     tarefas.atualizar(linha["id"], status="produzindo")
     tarefas.registrar_evento(linha["id"], "tentativa", linha["agente"], MODELO_MAX, "Claude Code (Max) iniciou a produção")
     await atividade.ocupar(linha["agente"])
+    info = _db().execute("SELECT * FROM producao_info WHERE tarefa_id = ?", (linha["id"],)).fetchone()
+    base = info and info["base_tarefa_id"]
+    pasta_base = base and _db().execute("SELECT pasta FROM producao_info WHERE tarefa_id = ?", (base,)).fetchone()
     return {"producao": {
         "tarefa_id": linha["id"], "agente": linha["agente"], "andar": linha["andar"],
         "pasta_andar": PASTAS_ANDAR.get(linha["andar"], linha["andar"].upper()),
+        "titulo": info["titulo"] if info else titulo_curto(linha["texto"]),
+        # Ajuste: mesma pasta e mesmo rascunho local da produção ajustada.
+        "base": {"tarefa_id": base, "pasta": pasta_base["pasta"]} if pasta_base else None,
         "texto": linha["texto"], "criada_em": linha["criada_em"],
         "historico": [dict(h) for h in tarefas.historico(linha["usuario"], linha["andar"], linha["agente"], linha["id"])],
         "anexos": _anexos_da_producao(linha["id"]),
@@ -265,6 +320,8 @@ async def _finalizar(tarefa_id: int, status: str, resposta: str, evento: str, de
 @rotas.post("/{tarefa_id}/concluir")
 async def concluir(tarefa_id: int, conclusao: Conclusao, authorization: str = Header("")):
     _exigir_operador(authorization)
+    with _db() as db:  # a pasta fica registrada para os ajustes desta peça
+        db.execute("UPDATE producao_info SET pasta = ? WHERE tarefa_id = ?", (conclusao.pasta, tarefa_id))
     arquivos = "\n".join(f"- {nome}" for nome in conclusao.arquivos) or "- (nenhum arquivo listado)"
     resposta = (f"✅ Pedido concluído pelo Claude Code (Max).\n\n{conclusao.resumo.strip()}\n\n"
                 f"Arquivos em ESCRITÓRIO VERANEIO/{conclusao.pasta}:\n{arquivos}")

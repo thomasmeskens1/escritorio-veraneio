@@ -122,8 +122,10 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
 async def _produzir_pecas(linha, consolidado: str) -> None:
     """Projeto do Gestor com Criador de Imagens/Editor de Vídeo: a peça final vai à produção no Max (só o dono)."""
     import producao  # import tardio: a produção depende do orquestrador
-    from agents.projeto import agentes_de_producao
+    from agents.projeto import agentes_de_producao, titulo_do_projeto
 
+    # Pasta de entrega com o nome do projeto (ex.: "Post Réveillon Lodge 1"), não com o briefing.
+    titulo = titulo_do_projeto(linha["id"]) or producao.titulo_curto(linha["texto"])
     for agente_id in agentes_de_producao(linha["id"]):
         agente = buscar_agente(linha["andar"], agente_id)
         if not agente:
@@ -131,7 +133,7 @@ async def _produzir_pecas(linha, consolidado: str) -> None:
         briefing = (f"Produza a peça final do projeto #{linha['id']}, coordenado pelo Gestor. Siga o plano, os "
                     f"textos e as especificações abaixo, sem inventar dados.\n\nPedido original: {linha['texto']}"
                     f"\n\nResultado consolidado do Gestor:\n{consolidado[:8000]}")
-        await producao.enfileirar(linha["usuario"], linha["andar"], agente, briefing)
+        await producao.enfileirar(linha["usuario"], linha["andar"], agente, briefing, titulo=titulo)
         await gerenciador.enviar_para_usuario(linha["usuario"], {
             "tipo": "aviso", "andar": linha["andar"], "agente": "gestor", "titulo": "Produção",
             "texto": f"A peça final foi para o {agente.nome} produzir no Claude Code (Max). "

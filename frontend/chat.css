@@ -485,3 +485,12 @@
   color: #868e96;
   text-align: center;
 }
+
+/* Entrega de produção: botão para pedir uma nova versão */
+.msg-ajuste {
+  display: block;
+  margin-top: 8px;
+  padding: 5px 12px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 0.75rem;
+}
