@@ -12,6 +12,7 @@ import time
 import aprendizado
 import atividade
 import cerebro
+import config
 import saude
 import tarefas
 from conexoes import gerenciador
@@ -112,7 +113,29 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
     tarefas.registrar_evento(tarefa_id, "concluida", modelo=modelo)
     cerebro.registrar_resultado(tarefa_id, True)  # trechos usados ganham pontos
     cerebro.aprender_tarefa(tarefa_id)            # o trabalho concluído vira conhecimento
-    await _entregar(tarefas.obter(tarefa_id))
+    linha = tarefas.obter(tarefa_id)
+    await _entregar(linha)
+    if linha["agente"] == "gestor" and linha["usuario"] == config.DONO_MAX:
+        await _produzir_pecas(linha, resultado.texto)
+
+
+async def _produzir_pecas(linha, consolidado: str) -> None:
+    """Projeto do Gestor com Criador de Imagens/Editor de Vídeo: a peça final vai à produção no Max (só o dono)."""
+    import producao  # import tardio: a produção depende do orquestrador
+    from agents.projeto import agentes_de_producao
+
+    for agente_id in agentes_de_producao(linha["id"]):
+        agente = buscar_agente(linha["andar"], agente_id)
+        if not agente:
+            continue
+        briefing = (f"Produza a peça final do projeto #{linha['id']}, coordenado pelo Gestor. Siga o plano, os "
+                    f"textos e as especificações abaixo, sem inventar dados.\n\nPedido original: {linha['texto']}"
+                    f"\n\nResultado consolidado do Gestor:\n{consolidado[:8000]}")
+        await producao.enfileirar(linha["usuario"], linha["andar"], agente, briefing)
+        await gerenciador.enviar_para_usuario(linha["usuario"], {
+            "tipo": "aviso", "andar": linha["andar"], "agente": "gestor", "titulo": "Produção",
+            "texto": f"A peça final foi para o {agente.nome} produzir no Claude Code (Max). "
+                     f"O aviso de pronto chega na conversa do {agente.nome}."})
 
 
 def _falhar(tarefa_id: int, motivo: str) -> None:

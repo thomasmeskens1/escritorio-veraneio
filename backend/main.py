@@ -16,6 +16,7 @@ import agentes_dinamicos
 import aprendizado
 import atividade
 import config
+import encaminhamento
 import cerebro
 import historico
 import orquestrador
@@ -159,6 +160,15 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     # "...todos os dias às 8h" vira rotina agendada (vale mesmo com o agente ocupado agora).
     if agendamentos.e_agendamento(texto) and await agendamentos.criar(usuario["sub"], andar, agente.id, texto):
         return
+    # Peça completa pedida a um especialista do Marketing: o Gestor coordena a equipe.
+    if encaminhamento.para_o_gestor(andar, agente.id, texto):
+        gestor = buscar_agente(andar, encaminhamento.GESTOR)
+        await gerenciador.enviar(ws, {
+            "tipo": "aviso", **alvo, "titulo": "Encaminhado ao Gestor", "liberar": True,
+            "texto": f"Isso é uma peça completa, então encaminhei ao Gestor: ele monta o plano e aciona "
+                     f"{agente.nome}, Designer, Criador de Imagens e quem mais precisar. "
+                     "A resposta chega na conversa do Gestor."})
+        agente, texto, alvo = gestor, f"[Pedido feito ao {agente.nome}] {texto}", {"andar": andar, "agente": gestor.id}
     if agente.status == Status.trabalhando:
         return await erro(f"{agente.nome} já está trabalhando em outra tarefa.", **alvo)
     if not orquestrador.ha_modelo_disponivel():

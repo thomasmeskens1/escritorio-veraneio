@@ -291,7 +291,7 @@ async def criar(login: str, andar: str, agente_id: str, texto: str) -> dict | No
     quando = f" Próxima execução: {proxima:%d/%m} às {proxima:%H:%M}." if proxima else ""
     desc = pedido["descricao"]
     await gerenciador.enviar_para_usuario(login, {
-        "tipo": "aviso", "andar": andar, "agente": agente_id, "titulo": "Rotina agendada",
+        "tipo": "aviso", "andar": andar, "agente": agente_id, "titulo": "Rotina agendada", "liberar": True,
         "texto": f"Vou executar \"{pedido['tarefa']}\" {desc[:1].lower() + desc[1:]}.{quando}",
     })
     return {**_publica(linha), "proxima_execucao": proxima.isoformat() if proxima else None}

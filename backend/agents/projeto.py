@@ -78,8 +78,10 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar) -> list[
             f"{contexto}\n\nPedido do usuário: {pedido}\n\n"
             f"Divida o trabalho em até {MAX_ETAPAS} etapas para a sua equipe: {equipe_txt}. "
             "Prefira micro-tarefas: cada etapa é uma entrega focada de um único especialista "
-            "(ex.: post de rede social = Designer define o conceito, Copywriter escreve a legenda, "
-            "Criador de Imagens especifica a arte). Acione só quem for necessário. "
+            "(ex.: post de Lodge = Copywriter escreve o texto da arte e a legenda com os dados do Cérebro, "
+            "Criador de Imagens escolhe as fotos reais do acervo, Designer define o layout e o editável; "
+            "reels = Moviemaker faz o roteiro, Copywriter os textos de tela, Editor de Vídeo a montagem). "
+            "Acione só quem for necessário. "
             "Ordene as etapas de forma que cada uma possa usar o resultado das anteriores. "
             'Responda SOMENTE com um JSON: [{"agente": "<id>", "instrucao": "<o que entregar>"}].'
         )
@@ -88,6 +90,17 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar) -> list[
         linhas = [f"{n}. **{_nome(p['agente'])}**: {p['instrucao']}" for n, p in enumerate(plano, 1)]
         _gravar(pasta / "plano.md", f"# Plano\n\nPedido: {pedido}\n\n" + "\n".join(linhas) + "\n")
     return json.loads(arquivo.read_text(encoding="utf-8"))
+
+
+def agentes_de_producao(tarefa_id: int) -> list[str]:
+    """Agentes do plano que entregam arquivo (PNG/MP4) e, por isso, seguem para a produção no Max."""
+    from estado import AGENTES_PRODUCAO
+
+    arquivo = PASTA_PROJETOS / str(tarefa_id) / "plano.json"
+    if not arquivo.exists():
+        return []
+    ids = [p["agente"] for p in json.loads(arquivo.read_text(encoding="utf-8"))]
+    return [i for i in dict.fromkeys(ids) if i in AGENTES_PRODUCAO]
 
 
 def _arquivo_etapa(pasta: Path, numero: int, agente: str) -> Path:

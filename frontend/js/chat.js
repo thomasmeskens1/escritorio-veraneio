@@ -459,11 +459,13 @@ function receberAdiada({ andar, agente, texto, tarefa_id }) {
 
 // Aviso do servidor ligado a um agente (ex.: agente criado, agendamento criado): mensagem de sistema
 // no chat dele e toast se o chat não estiver aberto.
-function receberAviso({ andar, agente, texto, titulo }) {
+// `liberar`: o pedido não vai gerar resposta neste chat (ex.: encaminhado ao Gestor, rotina agendada).
+function receberAviso({ andar, agente, texto, titulo, liberar }) {
   if (!andar || !agente) {
     console.info('Aviso do servidor:', texto);
     return;
   }
+  if (liberar) pendentes.delete(chave(andar, agente));
   adicionarMensagem(andar, agente, { autor: 'sistema', texto, tipo: 'sistema' });
   if (!chatEstaAberto(andar, agente)) mostrarToast(andar, agente, texto, titulo || 'Aviso');
   if (titulo === 'Rotina agendada') atualizarRotinas(andar, agente); // lista do popup do agente
