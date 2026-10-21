@@ -494,3 +494,116 @@
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 0.75rem;
 }
+
+/* ---------- Andamento da tarefa ativa (ao lado da conversa) ---------- */
+.janela-agente.com-andamento {
+  max-width: 980px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 290px;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "barra barra"
+    "onb and"
+    "perfil and"
+    "restrito and"
+    "hist and"
+    "pensando and"
+    "form and";
+}
+
+.com-andamento > .janela-barra { grid-area: barra; }
+.com-andamento > #modal-onboarding { grid-area: onb; }
+.com-andamento > #modal-perfil { grid-area: perfil; }
+.com-andamento > #modal-restrito { grid-area: restrito; }
+.com-andamento > #modal-historico { grid-area: hist; }
+.com-andamento > #modal-pensando { grid-area: pensando; }
+.com-andamento > #modal-form { grid-area: form; }
+.com-andamento > #modal-andamento { grid-area: and; }
+
+.andamento {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  overflow-y: auto;
+  background: #1b1e24;
+  border-left: 1px solid #343a40;
+  font-size: 0.78rem;
+}
+
+.andamento[hidden] {
+  display: none;
+}
+
+.andamento h3 {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #f4a261;
+}
+
+.andamento-pedido {
+  margin: 0;
+  color: #adb5bd;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.andamento-progresso {
+  margin: 0;
+  color: #868e96;
+  font-size: 0.72rem;
+}
+
+.andamento-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.andamento-etapa {
+  display: flex;
+  gap: 8px;
+  line-height: 1.35;
+  color: #ced4da;
+}
+
+.andamento-icone {
+  flex: none;
+  width: 14px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.etapa-concluida .andamento-icone { color: #69db7c; }
+.etapa-andamento .andamento-icone { color: #f4a261; animation: andamento-pulso 1.2s ease-in-out infinite; }
+.etapa-pendente { color: #6c757d; }
+.etapa-falhou .andamento-icone,
+.etapa-falhou { color: #ff8787; }
+
+@keyframes andamento-pulso {
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .etapa-andamento .andamento-icone { animation: none; }
+}
+
+/* Tela estreita: o andamento fica acima da conversa, com altura limitada */
+@media (max-width: 900px) {
+  .janela-agente.com-andamento {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "barra" "onb" "perfil" "restrito" "and" "hist" "pensando" "form";
+  }
+
+  .andamento {
+    max-height: 30vh;
+    border-left: 0;
+    border-bottom: 1px solid #343a40;
+  }
+}

@@ -1,0 +1,55 @@
+// Painel de andamento do popup: etapas da tarefa ativa do agente e o status de cada uma.
+// Aparece ao lado da conversa (janela mais larga) só enquanto há tarefa ativa; atualiza a cada 3 s.
+
+const INTERVALO_ANDAMENTO = 3000;
+const ICONES_ETAPA = { concluida: '✓', andamento: '●', pendente: '○', falhou: '✕' };
+const ROTULOS_ETAPA = { concluida: 'concluída', andamento: 'em andamento', pendente: 'pendente', falhou: 'falhou' };
+const modalAndamento = document.getElementById('modal-andamento');
+let timerAndamento = null;
+
+function acompanharAndamento(andar, agente) {
+  pararAndamento();
+  const atualizar = async () => {
+    if (!sessao || !chatEstaAberto(andar, agente)) return pararAndamento();
+    try {
+      const resposta = await fetch(`/api/agentes/${encodeURIComponent(andar)}/${encodeURIComponent(agente)}/andamento`,
+        { headers: { Authorization: `Bearer ${sessao.token}` } });
+      if (!resposta.ok) return;
+      const { ativa } = await resposta.json();
+      if (chatEstaAberto(andar, agente)) mostrarAndamento(ativa);
+    } catch {
+      // sem conexão: tenta de novo no próximo ciclo
+    }
+  };
+  atualizar();
+  timerAndamento = setInterval(atualizar, INTERVALO_ANDAMENTO);
+}
+
+function pararAndamento() {
+  clearInterval(timerAndamento);
+  timerAndamento = null;
+  mostrarAndamento(null);
+}
+
+function mostrarAndamento(ativa) {
+  modalAndamento.closest('.janela-agente')?.classList.toggle('com-andamento', !!ativa);
+  modalAndamento.hidden = !ativa;
+  if (!ativa) {
+    modalAndamento.replaceChildren();
+    return;
+  }
+  const lista = novoEl('ol', 'andamento-lista');
+  ativa.etapas.forEach(({ texto, status }) => {
+    const item = novoEl('li', `andamento-etapa etapa-${status}`);
+    item.title = ROTULOS_ETAPA[status] || status;
+    item.append(novoEl('span', 'andamento-icone', ICONES_ETAPA[status] || '○'), novoEl('span', 'andamento-texto', texto));
+    lista.append(item);
+  });
+  const feitas = ativa.etapas.filter((e) => e.status === 'concluida').length;
+  modalAndamento.replaceChildren(
+    novoEl('h3', null, 'Andamento'),
+    novoEl('p', 'andamento-pedido', ativa.pedido),
+    novoEl('p', 'andamento-progresso', `${feitas} de ${ativa.etapas.length} etapas`),
+    lista,
+  );
+}
