@@ -33,13 +33,28 @@ const chave = (andar, agente) => `${andar}/${agente}`;
 
 const tamanhoLegivel = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
+// Rede de segurança: se o modelo responder em Markdown, no chat vira texto corrido de conversa.
+function textoNatural(texto) {
+  return String(texto || '')
+    .replace(/\*\*(.+?)\*\*/g, '$1').replace(/__(.+?)__/g, '$1')       // negrito
+    .replace(/^[ \t]*#{1,6}[ \t]+/gm, '')                              // títulos
+    .replace(/^[ \t]*\|?([ \t]*:?-{3,}:?[ \t]*\|)+[ \t]*:?-*:?[ \t]*$/gm, '') // separador de tabela
+    .replace(/^[ \t]*\|(.+)\|[ \t]*$/gm, (_, linha) => linha.split('|').map((c) => c.trim()).filter(Boolean).join(' · '))
+    .replace(/^[ \t]*([-*_])\1{2,}[ \t]*$/gm, '')                      // linhas ---
+    .replace(/^([ \t]*)[*•][ \t]+/gm, '$1- ')                          // marcadores
+    .replace(/`([^`\n]+)`/g, '$1')
+    .replace(/<<LEGENDA>>/g, 'Legenda:').replace(/<<FIM DA LEGENDA>>/g, '')   // marcas para o Monday
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id }) {
   const div = document.createElement('div');
   div.className = `msg msg-${tipo}`;
   const nome = document.createElement('span');
   nome.className = 'msg-autor';
   nome.textContent = autor;
-  div.append(nome, document.createTextNode(texto));
+  div.append(nome, document.createTextNode(tipo === 'agente' ? textoNatural(texto) : texto));
   if (anexos?.length) div.append(criarAnexosDaMensagem(anexos));
   if (tipo === 'agente' && tarefa_id && /^✅ Pedido concluído/.test(texto)) div.append(criarBotaoAjuste(tarefa_id));
   if (meta) {
@@ -186,6 +201,7 @@ function abrirChat(andar, agente) {
   ajustarAlturaInput();
   renderizarHistorico(andar, agente); // com o modal visível, o espaço limpo mede a janela
   carregarPerfil(andar, agente);
+  acompanharAndamento(andar, agente);
   atualizarChat();
   if (!modalInput.disabled) modalInput.focus();
 }
@@ -251,6 +267,7 @@ function fecharChat() {
   if (chatAberto) rascunhos[chave(chatAberto.andar, chatAberto.agente)] = modalInput.value;
   chatAberto = null;
   modal.classList.remove('aberto');
+  pararAndamento();
 }
 
 function limparChat() {

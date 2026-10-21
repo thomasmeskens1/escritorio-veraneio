@@ -27,6 +27,8 @@ def registrar_falha(modelo: str, erro: str) -> None:
         ate, motivo = _proxima_meia_noite_utc(), "cota diária esgotada"
     elif "429" in texto or "rate" in texto:                 # limite por minuto ou provedor sobrecarregado
         ate, motivo = time.time() + 120, "limite temporário"
+    elif "404" in texto or "not found" in texto:            # modelo fora do ar no provedor
+        ate, motivo = time.time() + 6 * 3600, "indisponível no provedor"
     else:                                                   # erro desconhecido: pausa curta
         ate, motivo = time.time() + 60, "erro recente"
     _indisponivel[modelo] = (ate, motivo)

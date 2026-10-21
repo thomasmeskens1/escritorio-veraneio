@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Callable
 
 import config
+from agents.perfis import ESTILO_CHAT
 from estado import ANDARES
 
 PASTA_PROJETOS = config.ARQUIVO_BANCO.parent / "projetos"
@@ -194,6 +195,7 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
             for i, p in enumerate(plano, 1)
         )
         descricao = (f"{contexto}\n\nPedido do usuário: {pedido}\n\nEntregas da equipe:\n{entregas}\n\n"
-                     f"Revise e consolide tudo numa entrega final coerente para o usuário (até ~{PALAVRAS_FINAL} palavras).")
+                     f"Revise e consolide tudo numa entrega final coerente para o usuário (até ~{PALAVRAS_FINAL} palavras). "
+                     f"{ESTILO_CHAT}")
         _gravar(final, executar("gestor", descricao, "Entrega final consolidada e revisada.", "gestor"))
     return final.read_text(encoding="utf-8")

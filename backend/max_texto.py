@@ -13,6 +13,7 @@ import time
 from datetime import datetime, timezone
 
 import config
+from agents.perfis import ESTILO_CHAT
 
 MODELO = "claude-code/max"
 LIMITE_S = 15 * 60
@@ -95,5 +96,6 @@ def montar_prompt(perfil: dict, extras: str, contexto_cerebro: str, descricao: s
         f"Conhecimento do Cérebro (fonte oficial; use só o que estiver aqui ou no pedido, sem inventar):\n{contexto_cerebro}"
         if contexto_cerebro else "",
         f"TAREFA:\n{descricao}",
-        f"Entregue: {esperado} Responda só com a entrega final, em português do Brasil, sem usar ferramentas.",
+        f"Entregue: {esperado} Responda só com a entrega final, em português do Brasil, sem usar ferramentas. "
+        f"{ESTILO_CHAT}",
     ]))

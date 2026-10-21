@@ -88,7 +88,12 @@ PERFIS = {
     },
 }
 
-INSTRUCOES = "Responda em português do Brasil, de forma objetiva e acionável."
+# A resposta aparece num chat: conversa natural, sem cara de documento.
+ESTILO_CHAT = ("Escreva como numa conversa de chat com um colega de trabalho: tom natural e cordial, frases curtas e "
+               "parágrafos breves. NÃO use formatação Markdown: nada de títulos com #, negrito com **, tabelas ou "
+               "linhas ---. Se precisar listar, use poucos itens começando com '- '. Textos de entrega (legenda, "
+               "roteiro, plano) podem vir em blocos separados por uma linha em branco.")
+INSTRUCOES = f"Responda em português do Brasil, de forma objetiva e acionável. {ESTILO_CHAT}"
 AGENTES_ESCOLA = {"recepcionista", "professor"}
 
 
