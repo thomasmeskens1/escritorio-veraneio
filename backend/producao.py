@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 import atividade
 import config
+import max_texto
 import monday
 import tarefas
 from auth import validar_token
@@ -103,6 +104,9 @@ def iniciar() -> None:
     token_operador()
     with _db() as db:  # item interrompido por reinício volta para a fila
         db.execute("UPDATE tarefas SET status = 'producao' WHERE status = 'produzindo'")
+        # Texto pelo Max: quem esperava a resposta não existe mais após o reinício.
+        db.execute("UPDATE trabalhos_max SET status = 'falhou', resultado = 'reinício do servidor' "
+                   "WHERE tipo = 'texto' AND status IN ('reservado', 'pendente', 'executando')")
         db.execute("UPDATE trabalhos_max SET status = 'pendente' WHERE status = 'executando'")
 
 
@@ -272,9 +276,10 @@ async def falhar_trabalho(trabalho_id: int, falha: Falha, authorization: str = H
 
 @rotas.get("/proxima")
 async def proxima(authorization: str = Header("")):
-    """Reserva o próximo item: anexo (alguém esperando) > produção > demais trabalhos. Ambos nulos = fila vazia."""
+    """Reserva o próximo item: anexo/texto (alguém esperando) > produção > demais trabalhos. Ambos nulos = fila vazia."""
     _exigir_operador(authorization)
-    if (trabalho := _reservar_trabalho(("anexo",))):
+    max_texto.registrar_contato()  # o trabalhador está ligado
+    if (trabalho := _reservar_trabalho(("anexo", "texto"))):
         return {"producao": None, "trabalho": trabalho}
     linha = _db().execute(
         "SELECT * FROM tarefas WHERE status = 'producao' ORDER BY id LIMIT 1").fetchone()

@@ -13,6 +13,7 @@ import aprendizado
 import atividade
 import cerebro
 import config
+import max_texto
 import monday
 import saude
 import tarefas
@@ -62,7 +63,7 @@ def _em_segundo_plano(corrotina) -> None:
 
 async def _tentar(tarefa, agente: Agente, etapa: Etapa):
     """Uma tentativa num modelo, com o histórico da conversa. Devolve (resultado ou None, erro)."""
-    from agents.executor import LocalOcupado, executar  # import tardio: CrewAI é pesado
+    from agents.executor import LocalOcupado, MaxOcupado, executar  # import tardio: CrewAI é pesado
 
     historico = tarefas.historico(tarefa["usuario"], tarefa["andar"], tarefa["agente"], tarefa["id"])
     inicio = time.monotonic()
@@ -72,6 +73,9 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
         return await executar(agente.id, texto, etapa, historico, tarefa["id"]), ""
     except LocalOcupado:
         return None, "modelo local ocupado"
+    except MaxOcupado:  # o Max está com outra tarefa: segue para a API, em paralelo
+        tarefas.registrar_evento(tarefa["id"], "falha_modelo", agente.id, etapa.modelo, "Max ocupado; seguindo para a API")
+        return None, "Max ocupado"
     except asyncio.TimeoutError:
         erro = f"excedeu {etapa.limite_s // 60} min"
     except Exception as e:
@@ -103,7 +107,8 @@ async def _executar_imediata(tarefa_id: int, agente: Agente, dificuldade: Dificu
             juntos = "\n\n".join(filter(None, [tarefa["contexto_anexos"], contexto]))  # mantém o contexto extra
             tarefas.atualizar(tarefa_id, contexto_anexos=juntos or None)
             tarefa = tarefas.obter(tarefa_id)
-        if await _executar_etapas(tarefa, agente, etapas_imediatas(dificuldade, agente.id)):
+        if await _executar_etapas(tarefa, agente, _com_max(etapas_imediatas(dificuldade, agente.id),
+                                                            tarefa["usuario"], agente.id)):
             return
         destino = "fila do Claude" if etapa_fila(dificuldade) else "fila de contingência (gratuitos e local)"
         tarefas.atualizar(tarefa_id, status="adiada", motivo="Os modelos imediatos não concluíram a tarefa a tempo.")
@@ -202,10 +207,22 @@ async def processar_fila() -> None:
         await asyncio.sleep(espera)
 
 
-def _etapas_fila(dificuldade: Dificuldade) -> list[Etapa]:
-    """Claude primeiro (se houver crédito e ritmo diário); depois a contingência."""
+def _com_max(etapas: list[Etapa], usuario: str, agente_id: str) -> list[Etapa]:
+    """Caminho imediato do dono: o Max entra antes da API do Claude (gratuitos continuam primeiro)."""
+    if not max_texto.pode_usar(usuario, agente_id):
+        return etapas
+    posicao = next((i for i, e in enumerate(etapas) if e.modelo.startswith("anthropic/")), None)
+    if posicao is None:
+        return etapas
+    return etapas[:posicao] + [Etapa(max_texto.MODELO, max_texto.LIMITE_S)] + etapas[posicao:]
+
+
+def _etapas_fila(dificuldade: Dificuldade, usuario: str = "", agente_id: str = "") -> list[Etapa]:
+    """Max primeiro, para o dono (custo zero; se ocupado, passa adiante); depois a API do Claude (se houver
+    crédito e ritmo diário); depois a contingência."""
     claude = etapa_fila(dificuldade) if not tarefas.orcamento_pausado() else None
-    return ([claude] if claude else []) + etapas_contingencia()
+    max_ = [Etapa(max_texto.MODELO, max_texto.LIMITE_S)] if max_texto.pode_usar(usuario, agente_id) else []
+    return max_ + ([claude] if claude else []) + etapas_contingencia()
 
 
 async def _processar_proxima() -> int:
@@ -216,7 +233,7 @@ async def _processar_proxima() -> int:
             _falhar(linha["id"], "Agente não existe mais.")
             await _entregar(tarefas.obter(linha["id"]))
             continue
-        etapas = _etapas_fila(Dificuldade(linha["dificuldade"]))
+        etapas = _etapas_fila(Dificuldade(linha["dificuldade"]), linha["usuario"], agente.id)
         if agente.status == Status.trabalhando or not etapas:
             continue  # agente ocupado ou nenhum modelo no ar agora: fica para a próxima rodada
 

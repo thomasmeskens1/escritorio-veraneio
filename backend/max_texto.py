@@ -1,0 +1,99 @@
+"""Tarefas de texto pelo plano Max (Claude Code no PC do dono), no lugar dos créditos da API.
+
+O Trabalhador Max faz uma coisa por vez; a API roda na nuvem e atende em paralelo. Então:
+  Max livre e ligado → a tarefa vai para o Max (custo zero);
+  Max ocupado (outra tarefa, produção, anexo) ou desligado → segue para a API (Haiku/Sonnet), em paralelo.
+Só para a conta do dono do plano Max. Agentes com ferramentas do sistema (Construtor, Social Media/Monday)
+continuam na API: o Claude Code do PC não tem essas ferramentas.
+"""
+
+import json
+import threading
+import time
+from datetime import datetime, timezone
+
+import config
+
+MODELO = "claude-code/max"
+LIMITE_S = 15 * 60
+ONLINE_S = 90            # o trabalhador pede a fila a cada ~10 s quando está livre
+AGENTES_COM_FERRAMENTAS = {"construtor", "social_media"}
+
+ARQUIVO_CONTATO = config.ARQUIVO_BANCO.parent / "max.contato"  # a data de modificação = último contato
+_trava = threading.Lock()
+
+
+def registrar_contato() -> None:
+    """Chamado a cada pedido de fila do trabalhador (ele está ligado)."""
+    ARQUIVO_CONTATO.touch()
+
+
+def online() -> bool:
+    try:
+        return time.time() - ARQUIVO_CONTATO.stat().st_mtime < ONLINE_S
+    except OSError:
+        return False
+
+
+def _db():
+    import producao  # import tardio: produção depende do orquestrador
+    return producao._db()
+
+
+def _ocupado() -> bool:
+    db = _db()
+    trabalhos = db.execute("SELECT 1 FROM trabalhos_max WHERE status IN ('reservado', 'pendente', 'executando') "
+                           "LIMIT 1").fetchone()
+    producoes = db.execute("SELECT 1 FROM tarefas WHERE status IN ('producao', 'produzindo') LIMIT 1").fetchone()
+    return bool(trabalhos or producoes)
+
+
+def pode_usar(usuario: str, agente_id: str) -> bool:
+    """O Max entra na rota desta tarefa? (dono, agente sem ferramentas próprias e trabalhador ligado)."""
+    return usuario == config.DONO_MAX and agente_id not in AGENTES_COM_FERRAMENTAS and online()
+
+
+def reservar() -> int | None:
+    """Cria o trabalho de texto se o Max estiver livre agora (atômico); None = ocupado, use a API."""
+    with _trava:
+        if not online() or _ocupado():
+            return None
+        with _db() as db:
+            cursor = db.execute(
+                # "reservado": o trabalhador só pega quando o pedido já estiver gravado (status pendente)
+                "INSERT INTO trabalhos_max (tipo, payload, status, criado_em) VALUES ('texto', '{}', 'reservado', ?)",
+                (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),))
+            return cursor.lastrowid
+
+
+def executar(trabalho_id: int, prompt: str, limite_s: int = LIMITE_S) -> str:
+    """Entrega o pedido ao trabalho reservado e espera a resposta (em thread). Levanta TimeoutError/RuntimeError."""
+    with _db() as db:
+        db.execute("UPDATE trabalhos_max SET payload = ?, status = 'pendente' WHERE id = ?",
+                   (json.dumps({"prompt": prompt, "limite_s": limite_s}, ensure_ascii=False), trabalho_id))
+    fim = time.monotonic() + limite_s
+    while time.monotonic() < fim:
+        linha = _db().execute("SELECT status, resultado FROM trabalhos_max WHERE id = ?", (trabalho_id,)).fetchone()
+        if not linha:
+            raise RuntimeError("Trabalho do Max não encontrado.")
+        if linha["status"] == "concluido":
+            return linha["resultado"] or ""
+        if linha["status"] == "falhou":
+            raise RuntimeError(f"Claude Code (Max): {linha['resultado'] or 'falhou'}")
+        time.sleep(2)
+    with _db() as db:  # ainda na fila: cancela para o trabalhador não rodar à toa
+        db.execute("UPDATE trabalhos_max SET status = 'falhou', resultado = 'tempo esgotado' "
+                   "WHERE id = ? AND status = 'pendente'", (trabalho_id,))
+    raise TimeoutError("O Claude Code (Max) não respondeu a tempo.")
+
+
+def montar_prompt(perfil: dict, extras: str, contexto_cerebro: str, descricao: str, esperado: str) -> str:
+    """Pedido completo para o Claude Code: persona, diretrizes, trechos do Cérebro e a tarefa."""
+    return "\n\n".join(filter(None, [
+        f"Você é o agente {perfil['role']} do Escritório Veraneio (Casa Veraneio). Objetivo: {perfil['goal']}",
+        perfil["backstory"], extras,
+        f"Conhecimento do Cérebro (fonte oficial; use só o que estiver aqui ou no pedido, sem inventar):\n{contexto_cerebro}"
+        if contexto_cerebro else "",
+        f"TAREFA:\n{descricao}",
+        f"Entregue: {esperado} Responda só com a entrega final, em português do Brasil, sem usar ferramentas.",
+    ]))

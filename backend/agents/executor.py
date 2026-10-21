@@ -1,7 +1,9 @@
 """Executa uma tarefa num modelo específico, com tempo limite e medição de tokens e custo."""
 
 import asyncio
+import re
 import threading
+import time
 from dataclasses import dataclass
 
 import crewai.llms.retry
@@ -13,10 +15,12 @@ import agentes_dinamicos
 import atividade
 import config
 import cerebro
+import max_texto
+import saude
 import tarefas
 from agents import diretrizes, ferramentas_monday, projeto
 from agents.perfis import PERFIS, contexto, descricao_tarefa
-from roteamento import Etapa
+from roteamento import Etapa, etapas_contingencia
 
 # O CrewAI repete chamadas com erro 429 (3x, sem opção de configurar). Desligado para não
 # gastar cota repetindo o mesmo modelo: o roteamento já passa ao próximo. Revisar ao atualizar o crewai.
@@ -97,9 +101,53 @@ def _llm(modelo: str, limite_s: int) -> LLM:
     return LLM(model=modelo, timeout=90, max_retries=0)
 
 
+class MaxOcupado(Exception):
+    """O Claude Code (Max) está fazendo outra coisa: a tarefa segue para a API (em paralelo)."""
+
+
+def _rodar_no_max(agente_id: str, descricao: str, esperado: str, limite_s: int, tarefa_id: int) -> str:
+    """Tarefa de texto pelo plano Max (custo zero). Levanta MaxOcupado se ele não estiver livre agora."""
+    trabalho = max_texto.reservar()
+    if trabalho is None:
+        raise MaxOcupado
+    etapa = re.search(r"Sua etapa \(\d+\): (.+)", descricao)  # projeto do Gestor: a pergunta é a etapa
+    consulta = (etapa.group(1) if etapa else descricao)[:500]
+    contexto_cerebro = cerebro.consultar(consulta, agente_id, tarefa_id) if agente_id != cerebro.ID else ""
+    prompt = max_texto.montar_prompt(PERFIS[agente_id], diretrizes.para(agente_id), contexto_cerebro, descricao, esperado)
+    return max_texto.executar(trabalho, prompt, limite_s)
+
+
+def _modelo_reserva() -> str | None:
+    """Max ocupado numa etapa de projeto: a API (se o orçamento do dia permitir) ou um gratuito."""
+    api = config.MODELO_FILA_PADRAO
+    if config.modelo_disponivel(api) and saude.disponivel(api) and not tarefas.orcamento_pausado():
+        return api
+    gratuitos = etapas_contingencia()
+    return gratuitos[0].modelo if gratuitos else None
+
+
+def _rodar_max_ou_api(agente_id: str, descricao: str, esperado: str, limite_s: int, total: "Resultado",
+                      tarefa_id: int) -> str:
+    """Etapa de projeto com o Max na rota: Max se livre; senão a API em paralelo; sem API, espera o Max."""
+    fim = time.monotonic() + limite_s
+    while True:
+        if agente_id not in max_texto.AGENTES_COM_FERRAMENTAS:
+            try:
+                return _rodar_no_max(agente_id, descricao, esperado, max(60, int(fim - time.monotonic())), tarefa_id)
+            except MaxOcupado:
+                pass
+        if (reserva := _modelo_reserva()) or time.monotonic() >= fim:
+            if not reserva:
+                raise TimeoutError("Nem o Max nem a API ficaram disponíveis a tempo.")
+            return _rodar(agente_id, descricao, esperado, reserva, limite_s, total, tarefa_id)
+        time.sleep(5)
+
+
 def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s: int, total: Resultado,
           tarefa_id: int) -> str:
     """Roda um agente (Crew de uma tarefa) e acumula tokens e custo no `total`."""
+    if modelo == max_texto.MODELO:  # plano Max: sem tokens nem custo de API
+        return _rodar_no_max(agente_id, descricao, esperado, limite_s, tarefa_id)
     # Todos os agentes de IA consultam o Cérebro (ele mesmo recebe os trechos já na descrição).
     ferramentas = [] if agente_id == cerebro.ID else [ConsultarCerebro(agente=agente_id, tarefa_id=tarefa_id)]
     if agente_id == "construtor":
@@ -129,6 +177,8 @@ def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa,
         equipe = config.MODELO_FILA_PADRAO if etapa.modelo == config.MODELO_FILA_COMPLEXO else etapa.modelo
 
         def executar(agente: str, descricao: str, esperado: str, papel: str) -> str:
+            if etapa.modelo == max_texto.MODELO:  # cada etapa: Max se livre, senão a API em paralelo
+                return _rodar_max_ou_api(agente, descricao, esperado, etapa.limite_s, total, tarefa_id)
             return _rodar(agente, descricao, esperado, etapa.modelo if papel == "gestor" else equipe,
                           etapa.limite_s, total, tarefa_id)
 

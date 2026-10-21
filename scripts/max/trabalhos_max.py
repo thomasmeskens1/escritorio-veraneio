@@ -1,4 +1,4 @@
-"""Trabalhos do Max além da produção: ler anexos do chat (Claude Code) e reler o site para o Cérebro."""
+"""Trabalhos do Max além da produção: ler anexos do chat, reler o site e responder tarefas de texto (no lugar da API)."""
 
 from pathlib import Path
 
@@ -49,7 +49,24 @@ def executar_site(payload: dict) -> str:
     return site_casaveraneio.resumo_texto(site_casaveraneio.sincronizar())
 
 
-EXECUTORES = {"anexo": executar_anexo, "site": executar_site}
+# --- texto (tarefa de agente pelo plano Max, no lugar da API) -------------------------------
+
+PASTA_TEXTO = comum.DADOS / "max_texto"
+SEM_FERRAMENTAS = "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,NotebookEdit,Task"
+
+
+def executar_texto(payload: dict) -> str:
+    """O pedido já vem completo (persona, diretrizes, Cérebro e tarefa); o Claude Code só escreve a resposta."""
+    PASTA_TEXTO.mkdir(parents=True, exist_ok=True)
+    comando = [comum.claude_exe(), "-p", "--output-format", "json", "--max-turns", "3",
+               "--disallowedTools", SEM_FERRAMENTAS]
+    texto = comum.rodar_claude(comando, payload["prompt"], PASTA_TEXTO, min(int(payload.get("limite_s", 900)), 900))
+    if not texto.strip():
+        raise RuntimeError("O Claude Code não devolveu texto.")
+    return texto.strip()
+
+
+EXECUTORES = {"anexo": executar_anexo, "site": executar_site, "texto": executar_texto}
 
 
 def executar(trabalho: dict) -> None:
