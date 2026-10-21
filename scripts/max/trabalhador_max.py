@@ -35,6 +35,7 @@ EXTENSOES_ARTE = {".png", ".jpg", ".jpeg", ".mp4", ".mov", ".pdf"}
 EXTENSOES_ENTREGA = EXTENSOES_ARTE | {".docx"}  # + legenda; o editável fica em EDITÁVEL/
 PASTA_ANEXOS = "anexos"       # subpasta da requisição com os arquivos enviados no chat
 PASTA_ACERVO = "acervo"       # cópias das fotos/vídeos do acervo usadas na peça
+PASTA_REFERENCIAS = "referencias"  # referências do item do Monday (baixadas a cada produção)
 RASCUNHOS = comum.DADOS / "producoes"  # rascunho local de cada peça (fora do Drive; base dos ajustes)
 DIAS_RASCUNHO = 60
 PASTA_DIRETRIZES = comum.DADOS / "conhecimento"   # manuais da Casa Veraneio (fora do git)
@@ -121,6 +122,33 @@ def copiar_anexos(producao: dict, pasta: Path) -> list[str]:
     return copiados
 
 
+def baixar_referencias(producao: dict, pasta: Path) -> list[str]:
+    """Referências do item do Monday (arquivos enviados) para <pasta>/referencias; links externos só são citados."""
+    baixadas = []
+    for ref in producao.get("referencias") or []:
+        if "monday" not in ref["url"] and "amazonaws" not in ref["url"]:
+            baixadas.append(f"{ref['nome']} (link: {ref['url']})")
+            continue
+        destino = pasta / PASTA_REFERENCIAS
+        destino.mkdir(exist_ok=True)
+        nome = re.sub(r'[<>:"/\\|?*]', "_", ref["nome"])
+        try:
+            comum.baixar(ref["url"], destino / nome)
+            baixadas.append(f"{PASTA_REFERENCIAS}/{nome}")
+        except Exception as erro:
+            log(f"   referência não baixada ({nome}): {erro}")
+    return baixadas
+
+
+def enviar_criativos(producao: dict, entrega: Path, arquivos: list[str]) -> None:
+    """Item do Monday: cada arquivo final vai para a coluna Criativos (pelo backend, que tem o token)."""
+    for nome in arquivos:
+        try:
+            comum.enviar_arquivo(f"/api/integracoes/monday/criativos/{producao['tarefa_id']}", entrega / nome)
+        except Exception as erro:
+            log(f"   criativo não enviado ao Monday ({nome}): {erro}")
+
+
 def diretrizes(agente: str) -> str:
     """Manuais da Casa Veraneio para o agente de produção (regras, marca e função)."""
     partes = []
@@ -150,16 +178,21 @@ def instrucao_versao(producao: dict, versao: int) -> str:
             "e não apague as versões anteriores.")
 
 
-def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, versao: int = 1) -> str:
+def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, versao: int = 1,
+                  referencias: list[str] | None = None) -> str:
     historico = "\n".join(f"- Usuário: {h['texto'][:300]}\n  Resposta: {(h['resposta'] or '')[:400]}"
                           for h in producao.get("historico") or [])
     lista_anexos = "\n".join(f"  - {PASTA_ANEXOS}/{nome}" for nome in anexos or [])
+    lista_referencias = "\n".join(f"  - {r}" for r in referencias or [])
     return "\n\n".join(filter(None, [
         INSTRUCOES.get(producao["agente"], "Entregue o resultado como arquivo."),
         "Contexto: Escritório Veraneio, equipe de marketing da Casa Veraneio. Responda em português do Brasil.",
         f"Conversa recente:\n{historico}" if historico else "",
         f"Pedido: {producao['texto']}",
         instrucao_versao(producao, versao),
+        (f"Referências do item no Monday (ponto de partida, não regra absoluta):\n{lista_referencias}\n"
+         "Abra com Read as que estão nesta pasta e use-as como inspiração de estilo, enquadramento ou texto.")
+        if lista_referencias else "",
         (f"O usuário enviou estes arquivos junto com o pedido (copiados na subpasta {PASTA_ANEXOS}/):\n"
          f"{lista_anexos}\nAbra-os com Read e USE-OS na peça (fotos como imagens do layout, PDFs como fonte "
          "de textos e dados), conforme o pedido. Não altere os originais.") if lista_anexos else "",
@@ -193,10 +226,11 @@ def produzir(producao: dict) -> None:
         ambiente["PATH"] = dir_ffmpeg + os.pathsep + ambiente.get("PATH", "")
     try:
         anexos = copiar_anexos(producao, rascunho)
+        referencias = baixar_referencias(producao, rascunho)
         antes = entregaveis(rascunho)
         # O pedido vai pela entrada padrão (texto longo, com quebras de linha).
-        resumo = comum.rodar_claude(comando_producao(), montar_prompt(producao, rascunho, anexos, versao), rascunho,
-                                    TEMPO_LIMITE, ambiente)
+        resumo = comum.rodar_claude(comando_producao(), montar_prompt(producao, rascunho, anexos, versao, referencias),
+                                    rascunho, TEMPO_LIMITE, ambiente)
         # Só os finais novos ou alterados vão para o Drive (sem pasta de trabalho na entrega).
         novos = sorted(nome for nome, mtime in entregaveis(rascunho).items() if antes.get(nome) != mtime)
         if not any(Path(n).suffix.lower() in EXTENSOES_ARTE for n in novos):
@@ -206,6 +240,8 @@ def produzir(producao: dict) -> None:
             shutil.copy2(rascunho / nome, entrega / nome)
         versao_arquivo.write_text(str(versao))
         arquivos = [n for n in novos if "/" not in n or n.lower().endswith(".pptx")]  # sem listar cada cena
+        if producao.get("monday"):  # antes de concluir: o item já recebe os criativos quando vira "Revisão"
+            enviar_criativos(producao, entrega, arquivos)
         comum.chamar("POST", f"/api/producao/{producao['tarefa_id']}/concluir",
                      {"resumo": resumo, "pasta": relativa, "arquivos": arquivos})
         log(f"   concluída: {', '.join(arquivos)}")

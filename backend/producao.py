@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 import atividade
 import config
+import monday
 import tarefas
 from auth import validar_token
 from conexoes import gerenciador
@@ -139,7 +140,7 @@ def base_do_ajuste(login: str, agente_id: str, texto: str) -> int | None:
 
 
 async def enfileirar(login: str, andar: str, agente: Agente, texto: str, anexos: list[str] | None = None,
-                     titulo: str = "", base: int | None = None) -> None:
+                     titulo: str = "", base: int | None = None) -> int:
     """`anexos`: caminhos de anexos.caminhos(). `titulo`: nome da pasta de entrega (padrão: tirado do pedido).
     `base`: produção que está sendo ajustada (mesma pasta, nova versão)."""
     tarefa_id = tarefas.criar(login, andar, agente.id, texto, "complexa")
@@ -160,6 +161,7 @@ async def enfileirar(login: str, andar: str, agente: Agente, texto: str, anexos:
                   "nova versão na mesma pasta." if base else
                   "Pedido enviado ao Claude Code (Max) para produção. Você recebe aqui o aviso quando terminar."),
     })
+    return tarefa_id
 
 
 class Conclusao(BaseModel):
@@ -281,6 +283,7 @@ async def proxima(authorization: str = Header("")):
     tarefas.atualizar(linha["id"], status="produzindo")
     tarefas.registrar_evento(linha["id"], "tentativa", linha["agente"], MODELO_MAX, "Claude Code (Max) iniciou a produção")
     await atividade.ocupar(linha["agente"])
+    monday.andamento(linha["id"], "produzindo")
     info = _db().execute("SELECT * FROM producao_info WHERE tarefa_id = ?", (linha["id"],)).fetchone()
     base = info and info["base_tarefa_id"]
     pasta_base = base and _db().execute("SELECT pasta FROM producao_info WHERE tarefa_id = ?", (base,)).fetchone()
@@ -293,6 +296,9 @@ async def proxima(authorization: str = Header("")):
         "texto": linha["texto"], "criada_em": linha["criada_em"],
         "historico": [dict(h) for h in tarefas.historico(linha["usuario"], linha["andar"], linha["agente"], linha["id"])],
         "anexos": _anexos_da_producao(linha["id"]),
+        # Item do Monday: referências (links novos) para baixar e envio dos criativos no fim.
+        "monday": bool(monday.item_da_tarefa(linha["id"])),
+        "referencias": await asyncio.to_thread(monday.referencias_da_tarefa, linha["id"]),
     }, "trabalho": None}
 
 
@@ -327,6 +333,8 @@ async def concluir(tarefa_id: int, conclusao: Conclusao, authorization: str = He
                 f"Arquivos em ESCRITÓRIO VERANEIO/{conclusao.pasta}:\n{arquivos}")
     await _finalizar(tarefa_id, "concluida", resposta, "concluida",
                      f"{len(conclusao.arquivos)} arquivo(s) em {conclusao.pasta}")
+    monday.andamento(tarefa_id, "produzida", f"🎨 Criativos prontos (Claude Code).\n\n{conclusao.resumo.strip()[:3000]}"
+                                             f"\n\nPasta no Drive: ESCRITÓRIO VERANEIO/{conclusao.pasta}\n{arquivos}")
     return {"ok": True}
 
 
@@ -335,4 +343,5 @@ async def falhar(tarefa_id: int, falha: Falha, authorization: str = Header("")):
     _exigir_operador(authorization)
     motivo = f"A produção pelo Claude Code (Max) falhou: {falha.erro[:300]}"
     await _finalizar(tarefa_id, "falhou", motivo, "falhou", falha.erro[:300])
+    monday.andamento(tarefa_id, "falhou", motivo)
     return {"ok": True}

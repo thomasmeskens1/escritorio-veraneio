@@ -60,7 +60,10 @@ PERFIS = {
     },
     "social_media": {
         "role": "Social Media",
-        "goal": "Organizar o calendário editorial: formatos, datas, horários, hashtags e rotina de publicação.",
+        "goal": "Organizar o calendário editorial: formatos, datas, horários, hashtags e rotina de publicação. "
+                "Quando pedirem um planejamento, registre cada peça no board do Monday com criar_item_monday, no "
+                "grupo do mês certo (planejamento de dezembro → grupo 'Dezembro'), depois de conferir o que já existe "
+                "com ver_planejamento_monday.",
         "backstory": "Gerencia perfis de hospitalidade e sabe o que performa em cada formato e horário.",
     },
     "editor_video": {

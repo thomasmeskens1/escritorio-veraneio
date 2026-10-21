@@ -14,7 +14,7 @@ import atividade
 import config
 import cerebro
 import tarefas
-from agents import diretrizes, projeto
+from agents import diretrizes, ferramentas_monday, projeto
 from agents.perfis import PERFIS, contexto, descricao_tarefa
 from roteamento import Etapa
 
@@ -104,6 +104,7 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
     ferramentas = [] if agente_id == cerebro.ID else [ConsultarCerebro(agente=agente_id, tarefa_id=tarefa_id)]
     if agente_id == "construtor":
         ferramentas.append(CriarAgente(tarefa_id=tarefa_id))
+    ferramentas += ferramentas_monday.para(agente_id)  # Social Media: ver/criar itens no board do Monday
     perfil = dict(PERFIS[agente_id])
     # Diretrizes da Casa Veraneio (regras, marca e manual da função); versão curta no modelo local.
     if (extras := diretrizes.para(agente_id, compacto=modelo.startswith("ollama/"))):

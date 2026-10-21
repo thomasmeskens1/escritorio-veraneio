@@ -13,6 +13,7 @@ import aprendizado
 import atividade
 import cerebro
 import config
+import monday
 import saude
 import tarefas
 from conexoes import gerenciador
@@ -35,14 +36,22 @@ def ha_modelo_disponivel() -> bool:
     return bool(etapas_contingencia() or etapa_fila(Dificuldade.simples))
 
 
-async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str, anexos_ids: list[str] = ()) -> None:
+async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str, anexos_ids: list[str] = (),
+                      contexto: str = "", ao_criar=None) -> int:
+    """`contexto`: dados extras para o agente (ex.: item do Monday citado), fora do texto exibido no chat.
+    `ao_criar(tarefa_id)`: roda antes da execução (ex.: vincular a tarefa ao item do Monday)."""
     dificuldade = classificar(agente.id, texto)
     tarefa_id = tarefas.criar(login, andar, agente.id, texto, dificuldade.value)
     if anexos_ids:
         tarefas.atualizar(tarefa_id, anexos=json.dumps(list(anexos_ids)))
+    if contexto:
+        tarefas.atualizar(tarefa_id, contexto_anexos=contexto)
+    if ao_criar:
+        ao_criar(tarefa_id)
     tarefas.registrar_evento(tarefa_id, "recebida", agente.id, detalhe=f"Dificuldade: {dificuldade.value}")
     await atividade.ocupar(agente.id)
     _em_segundo_plano(_executar_imediata(tarefa_id, agente, dificuldade))
+    return tarefa_id
 
 
 def _em_segundo_plano(corrotina) -> None:
@@ -91,13 +100,15 @@ async def _executar_imediata(tarefa_id: int, agente: Agente, dificuldade: Dificu
         if tarefa["anexos"]:  # descreve os anexos uma vez (Max para o dono, API para os demais)
             import anexos
             contexto = await anexos.descrever(json.loads(tarefa["anexos"]), tarefa["usuario"])
-            tarefas.atualizar(tarefa_id, contexto_anexos=contexto or None)
+            juntos = "\n\n".join(filter(None, [tarefa["contexto_anexos"], contexto]))  # mantém o contexto extra
+            tarefas.atualizar(tarefa_id, contexto_anexos=juntos or None)
             tarefa = tarefas.obter(tarefa_id)
         if await _executar_etapas(tarefa, agente, etapas_imediatas(dificuldade, agente.id)):
             return
         destino = "fila do Claude" if etapa_fila(dificuldade) else "fila de contingência (gratuitos e local)"
         tarefas.atualizar(tarefa_id, status="adiada", motivo="Os modelos imediatos não concluíram a tarefa a tempo.")
         tarefas.registrar_evento(tarefa_id, "adiada", agente.id, detalhe=destino)
+        monday.andamento(tarefa_id, "adiada")
         await gerenciador.enviar_para_usuario(tarefa["usuario"], {
             "tipo": "tarefa_adiada", "andar": tarefa["andar"], "agente": agente.id, "tarefa_id": tarefa_id,
             "texto": f"Os modelos imediatos não concluíram a tarefa a tempo. Ela foi para a {destino}; "
@@ -115,17 +126,20 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
     cerebro.aprender_tarefa(tarefa_id)            # o trabalho concluído vira conhecimento
     linha = tarefas.obter(tarefa_id)
     await _entregar(linha)
+    producao_a_seguir = False
     if linha["agente"] == "gestor" and linha["usuario"] == config.DONO_MAX:
-        await _produzir_pecas(linha, resultado.texto)
+        producao_a_seguir = await _produzir_pecas(linha, resultado.texto)
+    monday.andamento(tarefa_id, "concluida", resultado.texto, producao_a_seguir)
 
 
-async def _produzir_pecas(linha, consolidado: str) -> None:
+async def _produzir_pecas(linha, consolidado: str) -> bool:
     """Projeto do Gestor com Criador de Imagens/Editor de Vídeo: a peça final vai à produção no Max (só o dono)."""
     import producao  # import tardio: a produção depende do orquestrador
     from agents.projeto import agentes_de_producao, titulo_do_projeto
 
     # Pasta de entrega com o nome do projeto (ex.: "Post Réveillon Lodge 1"), não com o briefing.
     titulo = titulo_do_projeto(linha["id"]) or producao.titulo_curto(linha["texto"])
+    produziu = False
     for agente_id in agentes_de_producao(linha["id"]):
         agente = buscar_agente(linha["andar"], agente_id)
         if not agente:
@@ -133,17 +147,22 @@ async def _produzir_pecas(linha, consolidado: str) -> None:
         briefing = (f"Produza a peça final do projeto #{linha['id']}, coordenado pelo Gestor. Siga o plano, os "
                     f"textos e as especificações abaixo, sem inventar dados.\n\nPedido original: {linha['texto']}"
                     f"\n\nResultado consolidado do Gestor:\n{consolidado[:8000]}")
-        await producao.enfileirar(linha["usuario"], linha["andar"], agente, briefing, titulo=titulo)
+        producao_id = await producao.enfileirar(linha["usuario"], linha["andar"], agente, briefing, titulo=titulo)
+        if (item_id := monday.item_da_tarefa(linha["id"])):
+            monday.vincular(producao_id, item_id)  # os criativos voltam para o mesmo item do Monday
         await gerenciador.enviar_para_usuario(linha["usuario"], {
             "tipo": "aviso", "andar": linha["andar"], "agente": "gestor", "titulo": "Produção",
             "texto": f"A peça final foi para o {agente.nome} produzir no Claude Code (Max). "
                      f"O aviso de pronto chega na conversa do {agente.nome}."})
+        produziu = True
+    return produziu
 
 
 def _falhar(tarefa_id: int, motivo: str) -> None:
     tarefas.atualizar(tarefa_id, status="falhou", motivo=motivo)
     tarefas.registrar_evento(tarefa_id, "falhou", detalhe=motivo)
     cerebro.registrar_resultado(tarefa_id, False)
+    monday.andamento(tarefa_id, "falhou", motivo)
 
 
 def _mensagem(linha) -> dict:

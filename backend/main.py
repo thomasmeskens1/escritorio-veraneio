@@ -17,6 +17,7 @@ import aprendizado
 import atividade
 import config
 import encaminhamento
+import monday
 import cerebro
 import historico
 import orquestrador
@@ -89,6 +90,7 @@ app.include_router(agentes_dinamicos.rotas)
 app.include_router(agendamentos.rotas)
 app.include_router(cerebro.rotas)
 app.include_router(anexos.rotas)
+app.include_router(monday.rotas)
 
 
 class Credenciais(BaseModel):
@@ -202,12 +204,15 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     if not orquestrador.ha_modelo_disponivel():
         return await erro("Nenhum modelo de IA configurado no servidor.", **alvo)
 
+    # 'Faça uma legenda para o item "FEED | ..."': os dados do item do Monday entram no pedido.
+    contexto = await asyncio.to_thread(monday.contexto_citado, texto) if monday.CITACAO.search(texto) else ""
     if agente.id in AGENTES_PRODUCAO:  # só chega aqui o dono do plano Max (checado acima)
         # "Ajuste na peça #20: ..." ou "troque o título...": nova versão da peça anterior, na mesma pasta.
-        await producao.enfileirar(usuario["sub"], andar, agente, texto, anexos=anexos.caminhos(anexos_ids),
+        await producao.enfileirar(usuario["sub"], andar, agente, f"{texto}\n\n{contexto}".strip(),
+                                  anexos=anexos.caminhos(anexos_ids),
                                   base=producao.base_do_ajuste(usuario["sub"], agente.id, texto))
     else:
-        await orquestrador.nova_tarefa(usuario["sub"], andar, agente, texto, anexos_ids)
+        await orquestrador.nova_tarefa(usuario["sub"], andar, agente, texto, anexos_ids, contexto=contexto)
 
 
 class FrontendSemCacheVelho(StaticFiles):

@@ -66,6 +66,25 @@ def chamar(metodo: str, caminho: str, corpo: dict | None = None, timeout: int = 
         return json.load(resposta)
 
 
+def enviar_arquivo(caminho_api: str, arquivo: Path, timeout: int = 300) -> dict:
+    """POST multipart (campo "arquivo") para o backend, com o token de operador."""
+    token = ARQUIVO_TOKEN.read_text(encoding="utf-8").strip()
+    fronteira = os.urandom(16).hex()
+    cabecalho = (f'--{fronteira}\r\nContent-Disposition: form-data; name="arquivo"; '
+                 f'filename="{arquivo.name}"\r\nContent-Type: application/octet-stream\r\n\r\n').encode()
+    corpo = cabecalho + arquivo.read_bytes() + f"\r\n--{fronteira}--\r\n".encode()
+    req = urllib.request.Request(f"{BACKEND}{caminho_api}", data=corpo, method="POST", headers={
+        "Authorization": f"Bearer {token}", "Content-Type": f"multipart/form-data; boundary={fronteira}"})
+    with urllib.request.urlopen(req, timeout=timeout) as resposta:
+        return json.load(resposta)
+
+
+def baixar(url: str, destino: Path, timeout: int = 300) -> None:
+    requisicao = urllib.request.Request(url, headers={"User-Agent": "EscritorioVeraneio/1.0"})
+    with urllib.request.urlopen(requisicao, timeout=timeout) as resposta, destino.open("wb") as arquivo:
+        shutil.copyfileobj(resposta, arquivo)
+
+
 def rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: dict | None = None) -> str:
     """Roda o Claude Code com o prompt pela entrada padrão; devolve o texto final ou levanta RuntimeError."""
     processo = subprocess.run(comando, input=prompt, cwd=cwd, env=env, capture_output=True, text=True,
