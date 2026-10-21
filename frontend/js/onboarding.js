@@ -322,3 +322,5 @@ function reposicionarFoco() {
   Object.assign(foco.style, { left: `${r.left - m}px`, top: `${r.top - m}px`,
     width: `${r.width + m * 2}px`, height: `${r.height + m * 2}px` });
 }
+
+document.getElementById('iniciar-onboarding').addEventListener('click', iniciarOnboarding);

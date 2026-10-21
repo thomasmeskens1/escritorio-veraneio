@@ -1,12 +1,15 @@
+# Produção: `docker compose up -d` (volta sozinho com o Docker Desktop; só o próprio PC acessa a porta,
+# o público chega pelo túnel). Desenvolvimento com recarga automática:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 services:
   api:
     build: ./backend
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000" # só o PC (túnel e Trabalhador Max); ninguém da rede acessa direto
     env_file: .env
     environment:
       FRONTEND_DIR: /frontend
-      WATCHFILES_FORCE_POLLING: "true" # hot-reload confiável em volumes do Windows
       CREWAI_TELEMETRY_OPT_OUT: "true"
       OTEL_SDK_DISABLED: "true"
     extra_hosts:
@@ -14,4 +17,6 @@ services:
     volumes:
       - ./backend:/app
       - ./frontend:/frontend:ro
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    # Um processo só (estado dos agentes e WebSockets em memória). Atrás do túnel, o IP real do visitante
+    # vem nos cabeçalhos X-Forwarded-* (bloqueio de login por IP).
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips "*"

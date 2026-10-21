@@ -1,0 +1,7 @@
+# Desenvolvimento: recarrega o backend a cada alteração de código.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+services:
+  api:
+    environment:
+      WATCHFILES_FORCE_POLLING: "true" # hot-reload confiável em volumes do Windows
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload --proxy-headers --forwarded-allow-ips "*"

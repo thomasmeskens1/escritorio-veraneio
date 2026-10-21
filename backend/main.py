@@ -54,6 +54,34 @@ async def ciclo_de_vida(_: FastAPI):
 
 # Sem /docs, /redoc e /openapi.json: não expõe o mapa da API.
 app = FastAPI(title="Escritório Veraneio", lifespan=ciclo_de_vida, docs_url=None, redoc_url=None, openapi_url=None)
+
+# Cabeçalhos de segurança: a página só roda scripts do próprio sistema e do CDN do Phaser.
+CABECALHOS_SEGURANCA = {
+    "Content-Security-Policy": (
+        "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' ws: wss:; font-src 'self' data:; "
+        "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"),
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "same-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+}
+
+
+@app.middleware("http")
+async def cabecalhos_seguranca(request: Request, chamar_proximo):
+    resposta = await chamar_proximo(request)
+    for nome, valor in CABECALHOS_SEGURANCA.items():
+        resposta.headers.setdefault(nome, valor)
+    return resposta
+
+
+@app.get("/api/saude")
+def saude_do_sistema():
+    """Para o monitoramento externo (UptimeRobot): só diz se o sistema está no ar."""
+    return {"ok": True}
+
+
 app.include_router(rotas_painel)
 app.include_router(producao.rotas)
 app.include_router(historico.rotas)
