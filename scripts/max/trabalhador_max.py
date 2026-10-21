@@ -39,14 +39,15 @@ PASTA_REFERENCIAS = "referencias"  # referências do item do Monday (baixadas a 
 RASCUNHOS = comum.DADOS / "producoes"  # rascunho local de cada peça (fora do Drive; base dos ajustes)
 DIAS_RASCUNHO = 60
 PASTA_DIRETRIZES = comum.DADOS / "conhecimento"   # manuais da Casa Veraneio (fora do git)
-DIRETRIZES = {"criador_imagens": ("00", "01", "04", "03"), "editor_video": ("00", "01", "06", "05")}
+DIRETRIZES = {"criador_imagens": ("00", "01", "08", "04", "03"), "editor_video": ("00", "01", "08", "06", "05")}
 
 INSTRUCOES = {
     "criador_imagens": (
         "Você é o Criador de Imagens. Entregue as artes em PNG. Monte cada arte como um arquivo .html "
         "(layout, tipografia, cores, imagens locais) e renderize com:\n"
         f'  python "{RENDERIZADOR}" arte.html arte.png 1080x1350\n'
-        "Use 1080x1350 para feed e 1080x1920 para stories/reels, salvo pedido diferente."
+        "Use 1080x1440 (3:4) para feed e 1080x1920 para stories/reels, salvo pedido diferente; respeite as zonas "
+        "mortas do manual 08."
     ),
     "editor_video": (
         "Você é o Editor de Vídeo. Entregue o vídeo final em MP4 (H.264 + AAC), vertical 1080x1920 "

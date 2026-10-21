@@ -1,8 +1,8 @@
 """Diretrizes da Casa Veraneio para os agentes (backend/dados/conhecimento, fora do git).
 
 Cada agente recebe, junto da persona: as regras globais (00), a base de marca e negócio (01, sem o catálogo
-de Lodges, que o agente consulta atualizado no Cérebro) e o documento da sua função. Com o modelo local
-(contexto curto), só as 10 regras globais e o documento da função.
+de Lodges, que o agente consulta atualizado no Cérebro), os formatos e zonas mortas (08) e o documento da sua
+função. Com o modelo local (contexto curto), só as 10 regras globais e o documento da função.
 """
 
 import re
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import config
 
-GERAIS = ("00", "01")
+GERAIS = ("00", "01", "08")  # 08: formatos e zonas mortas
 # Agente -> documentos da função (prefixo do arquivo).
 DA_FUNCAO = {
     "social_media": ("02",), "gestor_trafego": ("02",), "analista_metricas": ("02",), "gestor": ("02",),
