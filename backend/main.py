@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import agendamentos
+import andamento
 import anexos
 import agentes_dinamicos
 import aprendizado
@@ -91,6 +92,7 @@ app.include_router(agendamentos.rotas)
 app.include_router(cerebro.rotas)
 app.include_router(anexos.rotas)
 app.include_router(monday.rotas)
+app.include_router(andamento.rotas)
 
 
 class Credenciais(BaseModel):
@@ -191,13 +193,15 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     if agendamentos.e_agendamento(texto) and await agendamentos.criar(usuario["sub"], andar, agente.id, texto):
         return
     # Peça completa pedida a um especialista do Marketing: o Gestor coordena a equipe.
+    origem_id = None  # pedido encaminhado: a resposta do Gestor também volta para este chat
     if encaminhamento.para_o_gestor(andar, agente.id, texto):
+        origem_id = agente.id
         gestor = buscar_agente(andar, encaminhamento.GESTOR)
         await gerenciador.enviar(ws, {
             "tipo": "aviso", **alvo, "titulo": "Encaminhado ao Gestor", "liberar": True,
             "texto": f"Isso é uma peça completa, então encaminhei ao Gestor: ele monta o plano e aciona "
                      f"{agente.nome}, Designer, Criador de Imagens e quem mais precisar. "
-                     "A resposta chega na conversa do Gestor."})
+                     "A resposta final também chega aqui quando ele terminar."})
         agente, texto, alvo = gestor, f"[Pedido feito ao {agente.nome}] {texto}", {"andar": andar, "agente": gestor.id}
     if agente.status == Status.trabalhando:
         return await erro(f"{agente.nome} já está trabalhando em outra tarefa.", **alvo)
@@ -205,14 +209,25 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         return await erro("Nenhum modelo de IA configurado no servidor.", **alvo)
 
     # 'Faça uma legenda para o item "FEED | ..."': os dados do item do Monday entram no pedido.
-    contexto = await asyncio.to_thread(monday.contexto_citado, texto) if monday.CITACAO.search(texto) else ""
+    # O resultado também vai para o item (comentário e legenda), sem mudar o status dele.
+    contexto, item_citado = (await asyncio.to_thread(monday.contexto_citado, texto)
+                             if monday.CITACAO.search(texto) else ("", None))
+
+    def ao_criar(tarefa_id: int) -> None:
+        if origem_id:
+            encaminhamento.registrar(tarefa_id, andar, origem_id)
+        if item_citado:
+            monday.vincular(tarefa_id, item_citado, origem="chat")
+
     if agente.id in AGENTES_PRODUCAO:  # só chega aqui o dono do plano Max (checado acima)
         # "Ajuste na peça #20: ..." ou "troque o título...": nova versão da peça anterior, na mesma pasta.
-        await producao.enfileirar(usuario["sub"], andar, agente, f"{texto}\n\n{contexto}".strip(),
-                                  anexos=anexos.caminhos(anexos_ids),
-                                  base=producao.base_do_ajuste(usuario["sub"], agente.id, texto))
+        tarefa_id = await producao.enfileirar(usuario["sub"], andar, agente, f"{texto}\n\n{contexto}".strip(),
+                                              anexos=anexos.caminhos(anexos_ids),
+                                              base=producao.base_do_ajuste(usuario["sub"], agente.id, texto))
+        ao_criar(tarefa_id)
     else:
-        await orquestrador.nova_tarefa(usuario["sub"], andar, agente, texto, anexos_ids, contexto=contexto)
+        await orquestrador.nova_tarefa(usuario["sub"], andar, agente, texto, anexos_ids, contexto=contexto,
+                                       ao_criar=ao_criar)
 
 
 class FrontendSemCacheVelho(StaticFiles):

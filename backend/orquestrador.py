@@ -13,6 +13,7 @@ import aprendizado
 import atividade
 import cerebro
 import config
+import encaminhamento
 import max_texto
 import monday
 import saude
@@ -131,6 +132,7 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
     cerebro.aprender_tarefa(tarefa_id)            # o trabalho concluído vira conhecimento
     linha = tarefas.obter(tarefa_id)
     await _entregar(linha)
+    await _avisar_origem(linha, f"O Gestor concluiu o pedido que chegou aqui:\n\n{resultado.texto}")
     producao_a_seguir = False
     if linha["agente"] == "gestor" and linha["usuario"] == config.DONO_MAX:
         producao_a_seguir = await _produzir_pecas(linha, resultado.texto)
@@ -153,8 +155,8 @@ async def _produzir_pecas(linha, consolidado: str) -> bool:
                     f"textos e as especificações abaixo, sem inventar dados.\n\nPedido original: {linha['texto']}"
                     f"\n\nResultado consolidado do Gestor:\n{consolidado[:8000]}")
         producao_id = await producao.enfileirar(linha["usuario"], linha["andar"], agente, briefing, titulo=titulo)
-        if (item_id := monday.item_da_tarefa(linha["id"])):
-            monday.vincular(producao_id, item_id)  # os criativos voltam para o mesmo item do Monday
+        if (vinculo := monday._vinculo(linha["id"])):  # os criativos voltam para o mesmo item do Monday
+            monday.vincular(producao_id, vinculo["item_id"], vinculo["usuario_monday"], vinculo["origem"] or "botao")
         await gerenciador.enviar_para_usuario(linha["usuario"], {
             "tipo": "aviso", "andar": linha["andar"], "agente": "gestor", "titulo": "Produção",
             "texto": f"A peça final foi para o {agente.nome} produzir no Claude Code (Max). "
@@ -163,11 +165,21 @@ async def _produzir_pecas(linha, consolidado: str) -> bool:
     return produziu
 
 
+async def _avisar_origem(linha, texto: str) -> None:
+    """Pedido encaminhado ao Gestor: a resposta também aparece no chat de quem recebeu o pedido."""
+    if (de := encaminhamento.origem(linha["id"])):
+        andar, agente = de
+        await gerenciador.enviar_para_usuario(linha["usuario"], {
+            "tipo": "aviso", "andar": andar, "agente": agente, "titulo": "Resposta do Gestor", "texto": texto})
+
+
 def _falhar(tarefa_id: int, motivo: str) -> None:
     tarefas.atualizar(tarefa_id, status="falhou", motivo=motivo)
     tarefas.registrar_evento(tarefa_id, "falhou", detalhe=motivo)
     cerebro.registrar_resultado(tarefa_id, False)
     monday.andamento(tarefa_id, "falhou", motivo)
+    if encaminhamento.origem(tarefa_id):
+        _em_segundo_plano(_avisar_origem(tarefas.obter(tarefa_id), f"O Gestor não conseguiu concluir: {motivo}"))
 
 
 def _mensagem(linha) -> dict:
