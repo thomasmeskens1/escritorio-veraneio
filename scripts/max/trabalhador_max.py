@@ -8,15 +8,17 @@ Roda no PC do dono. A cada poucos segundos pede ao backend o próximo item:
 Na subida e a cada 6 h, cataloga o acervo de fotos/vídeos dos lodges (catalogo_lodges.py) e lê a planilha
 Info Lodges (planilha_lodges.py) para o Cérebro.
 
-Uso: python scripts/max/trabalhador_max.py
+Uso: pythonw scripts/max/trabalhador_max.py  (sem janela; log em backend/dados/trabalhador_max.log)
 """
 
 import os
 import re
 import shutil
+import socket
 import sys
 import threading
 import time
+import traceback
 from pathlib import Path
 
 import catalogo_lodges
@@ -188,10 +190,28 @@ def catalogo_em_segundo_plano() -> None:
     threading.Thread(target=rodar, name="catalogo-lodges", daemon=True).start()
 
 
+PORTA_TRAVA = 47831  # só um trabalhador por PC: o segundo a abrir esta porta local encerra
+
+
+def instancia_unica() -> socket.socket | None:
+    trava = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        trava.bind(("127.0.0.1", PORTA_TRAVA))
+        return trava
+    except OSError:
+        trava.close()
+        return None
+
+
 def main() -> None:
+    trava = instancia_unica()  # mantida aberta enquanto o trabalhador roda
+    if not trava:
+        log("Já existe um Trabalhador Max rodando neste PC; esta cópia foi encerrada.")
+        return
     if not DRIVE.exists():
-        sys.exit(f"Pasta do Drive não encontrada: {DRIVE}")
-    log(f"Trabalhador Max ativo. Fila: {comum.BACKEND} | Drive: {DRIVE}")
+        log(f"Pasta do Drive não encontrada: {DRIVE}")
+        sys.exit(1)
+    log(f"Trabalhador Max ativo. Fila: {comum.BACKEND} | Drive: {DRIVE} | log: {comum.ARQUIVO_LOG}")
     proximo_catalogo = 0.0
     while True:
         if time.monotonic() >= proximo_catalogo:
@@ -212,4 +232,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:  # sem janela (pythonw), o erro só fica no log
+        log("Trabalhador Max parou por um erro inesperado:\n" + traceback.format_exc())
+        raise

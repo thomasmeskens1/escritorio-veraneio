@@ -50,7 +50,8 @@ def renderizar(caminho: str, tentativas: int = 2) -> str:
                 return subprocess.run(
                     [str(CHROME), "--headless=new", "--disable-gpu", "--no-first-run", f"--user-data-dir={perfil}",
                      "--virtual-time-budget=20000", "--dump-dom", SITE + caminho],
-                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=TEMPO_PAGINA).stdout
+                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=TEMPO_PAGINA,
+                    creationflags=comum.SEM_JANELA).stdout
             except subprocess.TimeoutExpired:
                 log(f"   site: {caminho} não carregou em {TEMPO_PAGINA} s")
     return html_do_servidor(caminho)

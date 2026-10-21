@@ -4,6 +4,8 @@ import json
 import os
 import shutil
 import subprocess
+import sys
+import threading
 import urllib.error
 import urllib.request
 from datetime import datetime
@@ -21,10 +23,26 @@ ACERVO = Path(os.getenv("ESCRITORIO_ACERVO",
                         r"G:\Drives compartilhados\(NOVO) CASA VERANEIO\LODGES\FOTOS E VIDEOS LODGES"))
 LOTE_CEREBRO = 10           # documentos por chamada de ingestão
 TEMPO_INGESTAO = 300        # o Cérebro calcula os embeddings na hora
+ARQUIVO_LOG = DADOS / "trabalhador_max.log"
+LOG_MAX_BYTES = 5 * 1024 * 1024  # acima disso, o log atual vira .1 e começa outro
+# Programas chamados pelo trabalhador (Claude Code, Chrome) abrem sem janela: ele roda invisível (pythonw).
+SEM_JANELA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+_trava_log = threading.Lock()
 
 
 def log(texto: str) -> None:
-    print(f"[{datetime.now():%H:%M:%S}] {texto}", flush=True)
+    """No arquivo de log (o trabalhador roda sem janela) e, se houver terminal, na tela também."""
+    linha = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {texto}"
+    if sys.stdout:
+        print(linha, flush=True)
+    with _trava_log:
+        try:
+            if ARQUIVO_LOG.exists() and ARQUIVO_LOG.stat().st_size > LOG_MAX_BYTES:
+                ARQUIVO_LOG.replace(ARQUIVO_LOG.with_suffix(".log.1"))
+            with ARQUIVO_LOG.open("a", encoding="utf-8") as arquivo:
+                arquivo.write(linha + "\n")
+        except OSError:
+            pass  # log nunca derruba o trabalhador
 
 
 def claude_exe() -> str:
@@ -51,6 +69,7 @@ def chamar(metodo: str, caminho: str, corpo: dict | None = None, timeout: int = 
 def rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: dict | None = None) -> str:
     """Roda o Claude Code com o prompt pela entrada padrão; devolve o texto final ou levanta RuntimeError."""
     processo = subprocess.run(comando, input=prompt, cwd=cwd, env=env, capture_output=True, text=True,
+                              creationflags=SEM_JANELA,
                               encoding="utf-8", errors="replace", timeout=timeout)
     try:
         saida = json.loads(processo.stdout or "{}")
