@@ -496,12 +496,6 @@
 }
 
 /* ---------- Andamento da tarefa ativa (ao lado da conversa) ---------- */
-/* Barras de rolagem escuras, no tom da janela (sem a barra branca nativa). */
-.janela-agente {
-  color-scheme: dark;
-  scrollbar-color: #495057 transparent;
-}
-
 .janela-agente.com-andamento {
   max-width: 980px;
   display: grid;
