@@ -117,10 +117,10 @@ def _rodar_no_max(agente_id: str, descricao: str, esperado: str, limite_s: int, 
     return max_texto.executar(trabalho, prompt, limite_s)
 
 
-def _modelo_reserva() -> str | None:
+def _modelo_reserva(agente_id: str) -> str | None:
     """Max ocupado numa etapa de projeto: a API (se o orçamento do dia permitir) ou um gratuito."""
     api = config.MODELO_FILA_PADRAO
-    if config.modelo_disponivel(api) and saude.disponivel(api) and not tarefas.orcamento_pausado():
+    if config.modelo_disponivel(api) and saude.disponivel(api) and not tarefas.orcamento_pausado(agente_id):
         return api
     gratuitos = etapas_contingencia()
     return gratuitos[0].modelo if gratuitos else None
@@ -136,7 +136,7 @@ def _rodar_max_ou_api(agente_id: str, descricao: str, esperado: str, limite_s: i
                 return _rodar_no_max(agente_id, descricao, esperado, max(60, int(fim - time.monotonic())), tarefa_id)
             except MaxOcupado:
                 pass
-        if (reserva := _modelo_reserva()) or time.monotonic() >= fim:
+        if (reserva := _modelo_reserva(agente_id)) or time.monotonic() >= fim:
             if not reserva:
                 raise TimeoutError("Nem o Max nem a API ficaram disponíveis a tempo.")
             return _rodar(agente_id, descricao, esperado, reserva, limite_s, total, tarefa_id)

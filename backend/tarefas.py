@@ -204,10 +204,36 @@ def gasto_mes_usd(dificuldade: str | None = None) -> float:
     return float(linha[0])
 
 
-def chat_rapido_liberado() -> bool:
-    """Haiku para tarefas simples, sem passar do teto reservado a elas (protege o orçamento do Gestor)."""
+def chat_rapido_liberado(agente_id: str = "") -> bool:
+    """Haiku para tarefas simples, sem passar do teto reservado a elas (protege o orçamento do Gestor).
+    Os agentes prioritários não têm esse teto: só o crédito do mês."""
+    if agente_id in config.AGENTES_API_PRIORITARIOS:
+        return api_liberada(agente_id)
     teto = config.CREDITO_MENSAL_ANTHROPIC_USD * config.FRACAO_CHAT_RAPIDO
-    return gasto_mes_usd("simples") < teto and not orcamento_pausado()
+    return gasto_mes_usd("simples") < teto and api_liberada(agente_id)
+
+
+def dias_para_renovar() -> int:
+    """Dias até o crédito renovar (virada do mês), contando hoje."""
+    hoje = datetime.now(timezone.utc)
+    return calendar.monthrange(hoje.year, hoje.month)[1] - hoje.day + 1
+
+
+def reserva_prioritarios() -> float:
+    """Fração do crédito guardada para os agentes prioritários (maior quanto mais longe da renovação)."""
+    dias = dias_para_renovar()
+    return next(fracao for minimo, fracao in config.RESERVA_PRIORITARIOS if dias >= minimo)
+
+
+def api_liberada(agente_id: str = "") -> bool:
+    """Pode usar a API do Claude agora?
+    - Prioritários (Social Media, Construtor): até o fim do crédito utilizável do mês, podendo adiantar o ritmo diário.
+    - Demais: no ritmo diário e sem tocar na reserva dos prioritários (eles ainda têm o Max, os gratuitos e o local)."""
+    utilizavel = config.CREDITO_MENSAL_ANTHROPIC_USD * config.FRACAO_UTILIZAVEL
+    gasto = gasto_mes_usd()
+    if agente_id in config.AGENTES_API_PRIORITARIOS:
+        return gasto < utilizavel
+    return gasto < min(liberado_ate_hoje_usd(), utilizavel * (1 - reserva_prioritarios()))
 
 
 def liberado_ate_hoje_usd() -> float:
@@ -217,5 +243,6 @@ def liberado_ate_hoje_usd() -> float:
     return config.CREDITO_MENSAL_ANTHROPIC_USD * config.FRACAO_UTILIZAVEL * hoje.day / dias_no_mes
 
 
-def orcamento_pausado() -> bool:
-    return gasto_mes_usd() >= liberado_ate_hoje_usd()
+def orcamento_pausado(agente_id: str = "") -> bool:
+    """API do Claude bloqueada para este agente (sem agente: para os não prioritários)."""
+    return not api_liberada(agente_id)

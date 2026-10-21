@@ -44,6 +44,10 @@ MODELO_FILA_COMPLEXO = os.getenv("MODELO_FILA_COMPLEXO", "anthropic/claude-sonne
 CREDITO_MENSAL_ANTHROPIC_USD = float(os.getenv("CREDITO_MENSAL_ANTHROPIC_USD", "100"))
 FRACAO_UTILIZAVEL = 0.95  # reserva de 5% contra erro de estimativa
 FRACAO_CHAT_RAPIDO = 0.10  # teto do crédito para tarefas simples atendidas pelo Haiku antes do local
+# Agentes que dependem da API (usam ferramentas do sistema, então não vão para o Max): têm uma reserva do
+# crédito que os demais não podem usar. Quanto mais longe a renovação, maior a reserva.
+AGENTES_API_PRIORITARIOS = {"social_media", "construtor"}
+RESERVA_PRIORITARIOS = ((21, 0.40), (11, 0.25), (6, 0.15), (0, 0.05))  # (dias até renovar ≥, fração reservada)
 # US$ por milhão de tokens (entrada, saída). Conferir em platform.claude.com/docs/en/about-claude/pricing
 PRECOS_ANTHROPIC = {
     "anthropic/claude-haiku-5-5": (0.10, 0.50),

@@ -220,7 +220,7 @@ def _com_max(etapas: list[Etapa], usuario: str, agente_id: str) -> list[Etapa]:
 def _etapas_fila(dificuldade: Dificuldade, usuario: str = "", agente_id: str = "") -> list[Etapa]:
     """Max primeiro, para o dono (custo zero; se ocupado, passa adiante); depois a API do Claude (se houver
     crédito e ritmo diário); depois a contingência."""
-    claude = etapa_fila(dificuldade) if not tarefas.orcamento_pausado() else None
+    claude = etapa_fila(dificuldade) if not tarefas.orcamento_pausado(agente_id) else None
     max_ = [Etapa(max_texto.MODELO, max_texto.LIMITE_S)] if max_texto.pode_usar(usuario, agente_id) else []
     return max_ + ([claude] if claude else []) + etapas_contingencia()
 
