@@ -1,0 +1,17 @@
+// Worker público do Escritório Veraneio: escritorio-veraneio.<conta>.workers.dev
+// Deploy: cd deploy/worker && npx wrangler deploy
+{
+  "name": "escritorio-veraneio",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "vpc_services": [
+    {
+      "binding": "ESCRITORIO",
+      // VPC Service (Workers VPC) que aponta para o túnel do PC → http://127.0.0.1:8000
+      "service_id": "01a15eb7-c74f-7583-9c9e-a41c1d11da90",
+      "remote": true
+    }
+  ]
+}

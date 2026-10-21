@@ -49,3 +49,7 @@ Thumbs.db
 
 # Worktrees temporários dos agentes do Claude Code
 .claude/worktrees/
+
+# Cloudflare Worker (cache local do wrangler)
+deploy/worker/.wrangler/
+deploy/worker/node_modules/
