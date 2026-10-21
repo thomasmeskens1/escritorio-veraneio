@@ -186,7 +186,7 @@ def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa,
         def avisar(tipo: str, agente: str, detalhe: str) -> None:
             atividade.etapa_em_thread(tarefa_id, tipo, agente, detalhe)
 
-        total.texto = projeto.executar_projeto(tarefa_id, texto, contexto("gestor", historico), executar,
+        total.texto = projeto.executar_projeto(tarefa_id, texto, contexto("gestor", historico, texto), executar,
                                                cancelar, avisar)
     else:
         esperado = ("Confirmação amigável, em texto (sem JSON), do agente criado: nome, andar, setor e função."

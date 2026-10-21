@@ -118,7 +118,7 @@ def descricao_tarefa(texto: str, historico: list = (), tarefa_id: int = 0) -> st
         trechos = []
     conhecimento = (_formatar(trechos, MAX_CARACTERES_CONTEXTO) if trechos
                     else "(nenhum trecho relevante encontrado na base)")
-    return (f"Pergunta do usuário: {texto}\n\n{contexto(ID, historico)}\n\n"
+    return (f"Pergunta do usuário: {texto}\n\n{contexto(ID, historico, texto)}\n\n"
             f"Conhecimento recuperado da base da Casa Veraneio:\n{conhecimento}\n\n"
             "Responda usando SOMENTE o conhecimento acima. Cite a fonte de cada informação no formato [n] "
             "(título e fonte). Se houver versões conflitantes, use a mais recente e diga isso. Se a resposta não "

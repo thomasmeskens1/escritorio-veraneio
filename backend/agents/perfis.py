@@ -1,6 +1,7 @@
 """Personas dos agentes de IA (CrewAI) e instruções específicas por agente."""
 
 import json
+import re
 from pathlib import Path
 
 from estado import ANDARES
@@ -96,7 +97,10 @@ ESTILO_CHAT = ("Escreva como numa conversa de chat com um colega de trabalho: to
 # Fluxo do escritório (manual 10): a resposta final sempre volta ao chat onde o usuário pediu.
 FLUXO = ("Quando um pedido passa por outros agentes (Gestor, especialistas, produção), a resposta final volta "
          "sempre ao chat onde o usuário pediu: nunca mande o usuário procurar a resposta na conversa de outro agente.")
-INSTRUCOES = f"Responda em português do Brasil, de forma objetiva e acionável. {ESTILO_CHAT} {FLUXO}"
+# Pedido claro = entrega direta. Teste real: "ideia de post para o Lodge 20" voltou com 3 opções de Lodge.
+DIRETO = ("Se o pedido for claro (ex.: cita o Lodge pelo número), entregue direto usando os dados do Cérebro "
+          "desse Lodge; só peça confirmação quando faltar algo essencial que não está no pedido nem no Cérebro.")
+INSTRUCOES = f"Responda em português do Brasil, de forma objetiva e acionável. {ESTILO_CHAT} {FLUXO} {DIRETO}"
 AGENTES_ESCOLA = {"recepcionista", "professor"}
 
 
@@ -124,14 +128,33 @@ def _contexto_construtor() -> str:
     )
 
 
+LODGE = re.compile(r"\blodges?\s*(?:n[ºo°.]*\s*)?#?0*(\d{1,3})\b", re.IGNORECASE)
+
+
+def _lodges(texto: str) -> set[str]:
+    return set(LODGE.findall(texto or ""))
+
+
+def _historico_relevante(historico: list, pedido: str) -> list:
+    """Pedido cita um Lodge: conversas anteriores sobre OUTROS Lodges ficam de fora (não misturar produtos).
+    Teste real: "ideia de post para o Lodge 20" virou "Lodge 20 em Jundiaí" por causa da conversa do Lodge 1."""
+    citados = _lodges(pedido)
+    if not citados:
+        return list(historico)
+    return [h for h in historico
+            if not (outros := _lodges(f"{h['texto']} {h['resposta'] or ''}")) or outros & citados]
+
+
 def _resumo_historico(historico: list) -> str:
     """Trocas anteriores, encurtadas para não pesar em tokens."""
     trocas = [f"- Usuário: {h['texto'][:300]}\n  Você: {(h['resposta'] or '')[:600]}" for h in historico]
-    return "Conversa recente com este usuário (use como contexto):\n" + "\n".join(trocas)
+    return ("Conversa recente com este usuário (só contexto: o PEDIDO ATUAL prevalece; se ele falar de outro "
+            "Lodge, produto ou assunto, não misture com os dados desta conversa):\n" + "\n".join(trocas))
 
 
-def contexto(agente_id: str, historico: list = ()) -> str:
+def contexto(agente_id: str, historico: list = (), pedido: str = "") -> str:
     """Contexto fixo do agente: conversa recente, instruções e conhecimento específico."""
+    historico = _historico_relevante(historico, pedido)
     partes = [_resumo_historico(historico)] if historico else []
     partes.append(INSTRUCOES)
     if agente_id in AGENTES_ESCOLA:
@@ -147,4 +170,4 @@ def descricao_tarefa(agente_id: str, texto: str, historico: list = (), tarefa_id
         import cerebro
 
         return cerebro.descricao_tarefa(texto, historico, tarefa_id)
-    return f"Pedido do usuário: {texto}\n\n{contexto(agente_id, historico)}"
+    return f"Pedido do usuário: {texto}\n\n{contexto(agente_id, historico, texto)}"
