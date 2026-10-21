@@ -102,7 +102,9 @@ def _exigir_operador_ou_dono(authorization: str) -> None:
 
 def iniciar() -> None:
     token_operador()
-    with _db() as db:  # item interrompido por reinício volta para a fila
+    # Item interrompido por reinício volta para a fila. O trabalhador pode continuar produzindo mesmo assim
+    # (ele roda fora do servidor): por isso a conclusão também é aceita em "producao" (ver _finalizar).
+    with _db() as db:
         db.execute("UPDATE tarefas SET status = 'producao' WHERE status = 'produzindo'")
         # Texto pelo Max: quem esperava a resposta não existe mais após o reinício.
         db.execute("UPDATE trabalhos_max SET status = 'falhou', resultado = 'reinício do servidor' "
@@ -133,6 +135,15 @@ def ultima_concluida(login: str, agente_id: str, tarefa_id: int | None = None) -
         f"AND t.status = 'concluida' AND p.pasta IS NOT NULL {filtro} ORDER BY t.id DESC LIMIT 1",
         (login, agente_id, *valores)).fetchone()
     return linha["id"] if linha else None
+
+
+def agente_da_peca(login: str, texto: str) -> str | None:
+    """"Ajuste na peça #33: ..." pedido em qualquer chat -> agente que produziu a peça #33 (None se não for)."""
+    citada = re.match(r"\s*ajuste na pe[cç]a #(\d+)", texto, re.IGNORECASE)
+    linha = citada and _db().execute(
+        "SELECT t.agente FROM tarefas t JOIN producao_info p ON p.tarefa_id = t.id WHERE t.id = ? AND t.usuario = ?",
+        (int(citada.group(1)), login)).fetchone()
+    return linha["agente"] if linha else None
 
 
 def base_do_ajuste(login: str, agente_id: str, texto: str) -> int | None:
@@ -314,7 +325,7 @@ def _anexos_da_producao(tarefa_id: int) -> list[str]:
 
 async def _finalizar(tarefa_id: int, status: str, resposta: str, evento: str, detalhe: str) -> None:
     linha = tarefas.obter(tarefa_id)
-    if not linha or linha["status"] != "produzindo":
+    if not linha or linha["status"] not in ("produzindo", "producao"):
         raise HTTPException(status_code=404, detail="Produção não encontrada")
     criada = datetime.strptime(linha["criada_em"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
     campos = {"status": status, "modelo": MODELO_MAX,
@@ -324,8 +335,10 @@ async def _finalizar(tarefa_id: int, status: str, resposta: str, evento: str, de
     tarefas.registrar_evento(tarefa_id, evento, linha["agente"], MODELO_MAX, detalhe)
     await atividade.liberar(linha["agente"])
 
-    from orquestrador import _entregar  # entrega no chat (ou na próxima conexão do usuário)
-    await _entregar(tarefas.obter(tarefa_id))
+    from orquestrador import _entregar, entregar_na_origem  # entrega no chat (ou na próxima conexão do usuário)
+    linha = tarefas.obter(tarefa_id)
+    await _entregar(linha)
+    await entregar_na_origem(linha)  # e no chat onde o usuário pediu, se foi em outro
 
 
 @rotas.post("/{tarefa_id}/concluir")
