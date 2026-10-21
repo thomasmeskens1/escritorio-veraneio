@@ -25,6 +25,16 @@ PALAVRAS_FINAL = 800
 MAX_PARALELAS = 4      # etapas da mesma fase rodando ao mesmo tempo (limite dos modelos gratuitos)
 
 
+# "Me dá 3 ideias de post", "sugestões de pauta": o usuário quer um plano em texto, não a peça pronta.
+IDEACAO = re.compile(r"\b(ideias?|sugest[aã]o|sugest[oõ]es|brainstorm|plano de a[cç][aã]o|conceitos?|propostas?|"
+                     r"op[cç][oõ]es|pautas?)\b", re.IGNORECASE)
+
+
+def e_ideacao(pedido: str, contexto: str = "") -> bool:
+    """Pedido de ideias/plano (sem produção de arquivos). Item do Monday com formato definido é sempre peça."""
+    return "FORMATO DA PEÇA" not in f"{pedido}{contexto}" and bool(IDEACAO.search(pedido[:400]))
+
+
 class Cancelado(Exception):
     """A tentativa estourou o tempo; o próximo modelo retoma do livro-razão."""
 
@@ -84,12 +94,20 @@ def titulo_do_projeto(tarefa_id: int) -> str:
 
 
 def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar) -> list[dict]:
+    from estado import AGENTES_PRODUCAO
+
     arquivo = pasta / "plano.json"
     if not arquivo.exists():
-        equipe_txt = ", ".join(f"{i} ({nome})" for i, nome in equipe().items())
+        ideacao = e_ideacao(pedido, contexto)
+        if ideacao:
+            _gravar(pasta / "ideacao.txt", "Pedido de ideias/plano: só texto, sem produção no Max.")
+        time = {i: n for i, n in equipe().items() if not (ideacao and i in AGENTES_PRODUCAO)}
+        equipe_txt = ", ".join(f"{i} ({nome})" for i, nome in time.items())
+        modo = ("ATENÇÃO: o usuário pediu IDEIAS/PLANO, não a peça pronta. Acione só quem pensa e escreve "
+                "(ex.: Social Media e Copywriter); ninguém produz arte, imagem ou vídeo. " if ideacao else "")
         descricao = (
             f"{contexto}\n\nPedido do usuário: {pedido}\n\n"
-            f"Divida o trabalho em até {MAX_ETAPAS} etapas para a sua equipe: {equipe_txt}. "
+            f"{modo}Divida o trabalho em até {MAX_ETAPAS} etapas para a sua equipe: {equipe_txt}. "
             "Prefira micro-tarefas: cada etapa é uma entrega focada de um único especialista "
             "(ex.: post de Lodge = Copywriter escreve o texto da arte e a legenda com os dados do Cérebro, "
             "Criador de Imagens escolhe as fotos reais do acervo, Designer define o layout e o editável; "
@@ -104,6 +122,9 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar) -> list[
             '[{"agente": "<id>", "instrucao": "<o que entregar>", "fase": <número>}]}.'
         )
         plano, titulo = _extrair_plano(executar("gestor", descricao, "JSON com o título e as etapas.", "gestor"))
+        if ideacao:  # rede de segurança: nada de produção num pedido de ideias
+            plano = [p for p in plano if p["agente"] not in AGENTES_PRODUCAO] or [
+                {"agente": "social_media", "instrucao": pedido, "fase": 1}]
         if titulo:
             _gravar(pasta / "titulo.txt", titulo)
         _gravar(arquivo, json.dumps(plano, ensure_ascii=False, indent=2))
@@ -116,8 +137,9 @@ def agentes_de_producao(tarefa_id: int) -> list[str]:
     """Agentes do plano que entregam arquivo (PNG/MP4) e, por isso, seguem para a produção no Max."""
     from estado import AGENTES_PRODUCAO
 
-    arquivo = PASTA_PROJETOS / str(tarefa_id) / "plano.json"
-    if not arquivo.exists():
+    pasta = PASTA_PROJETOS / str(tarefa_id)
+    arquivo = pasta / "plano.json"
+    if not arquivo.exists() or (pasta / "ideacao.txt").exists():
         return []
     ids = [p["agente"] for p in json.loads(arquivo.read_text(encoding="utf-8"))]
     return [i for i in dict.fromkeys(ids) if i in AGENTES_PRODUCAO]
@@ -196,6 +218,9 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
         )
         descricao = (f"{contexto}\n\nPedido do usuário: {pedido}\n\nEntregas da equipe:\n{entregas}\n\n"
                      f"Revise e consolide tudo numa entrega final coerente para o usuário (até ~{PALAVRAS_FINAL} palavras). "
+                     "Entregue só o que ele pediu. NÃO inclua bastidores: observações internas, conferência de "
+                     "dados, especificações técnicas (medidas, zonas mortas, fontes, cores), quem fez o quê nem "
+                     "próximos passos de Drive, Monday ou produção. "
                      f"{ESTILO_CHAT}")
         _gravar(final, executar("gestor", descricao, "Entrega final consolidada e revisada.", "gestor"))
     return final.read_text(encoding="utf-8")
