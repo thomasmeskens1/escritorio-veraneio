@@ -18,7 +18,6 @@ CONTAS = ["Casa Veraneio", "Casa Vero", "CV Corp", "Sem definição"]
 MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro",
          "Novembro", "Dezembro"]
 MAX_ITENS_POR_TAREFA = 40
-NOME_VALIDO = re.compile(r"^[A-ZÀ-Ü ]{3,20} \| .{3,120}$")
 DATA = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -31,8 +30,8 @@ class _Grupo(BaseModel):
 
 
 class _NovoItem(BaseModel):
-    nome: str = Field(description="'FORMATO | Tema', formato em maiúsculas: ex. 'FEED | As melhores casas para o "
-                                  "seu Réveillon' (formatos: FEED, CARROSSEL, REELS, STORIES, YOUTUBE SHORTS)")
+    nome: str = Field(description="'TIPO | Descrição'. TIPO é um de: STORIES, POST (single post estático), CARROSSEL, "
+                                  "REELS, SHORTS. Ex.: 'POST | As melhores casas para o seu Réveillon'")
     grupo: str = Field(description="Mês do item = grupo do board: ex. 'Dezembro'")
     data_postagem: str = Field("", description="AAAA-MM-DD")
     data_entrega: str = Field("", description="AAAA-MM-DD (alguns dias antes da postagem)")
@@ -77,8 +76,9 @@ class CriarItemMonday(BaseTool):
         if self.criados >= MAX_ITENS_POR_TAREFA:
             return f"Limite de {MAX_ITENS_POR_TAREFA} itens por tarefa atingido."
         nome = re.sub(r"\s+", " ", nome).strip()
-        if not NOME_VALIDO.match(nome):
-            return "Nome inválido: use 'FORMATO | Tema', com o formato em maiúsculas (ex.: 'REELS | Check-in no Lodge 208')."
+        if not monday.tipo_do_item(nome):
+            return (f"Nome inválido: use 'TIPO | Descrição' com TIPO um de {', '.join(monday.TIPOS)} "
+                    "(ex.: 'POST | Check-in no Lodge 208').")
         mes = _escolher(grupo, MESES)
         if not mes:
             return f"Grupo inválido '{grupo}': use o nome do mês (ex.: {', '.join(MESES[10:])})."

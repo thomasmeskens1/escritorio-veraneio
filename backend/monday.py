@@ -39,6 +39,15 @@ MARCA_LEGENDA = ("<<LEGENDA>>", "<<FIM DA LEGENDA>>")
 ESPERA_GESTOR_S, ESPERA_MAXIMA_S = 15, 4 * 3600
 ARQUIVO_SEGREDO = config.ARQUIVO_BANCO.parent / "monday.webhook.token"
 CITACAO = re.compile(r"\bitem\s+[\"“”']([^\"“”']{3,200})[\"“”']", re.IGNORECASE)
+# Padrão do nome dos itens: "TIPO | Descrição". O tipo define o formato da peça (manual 09).
+TIPOS = {
+    "STORIES": "Stories do Instagram: vertical 9:16, 1080×1920, sem legenda",
+    "POST": "Single post estático do feed: UMA imagem 3:4, 1080×1440, com legenda (não é vídeo nem carrossel)",
+    "CARROSSEL": "Carrossel do feed: várias imagens 3:4, 1080×1440 cada, com legenda",
+    "REELS": "Reels do Instagram: vídeo vertical 9:16, 1080×1920, com legenda",
+    "SHORTS": "YouTube Shorts: vídeo vertical 9:16, 1080×1920, com título e descrição",
+}
+NOME_PADRAO = re.compile(r"^\s*([A-ZÀ-Ü]+)\s*\|\s*(.+)$")
 
 rotas = APIRouter(prefix="/api/integracoes/monday")
 
@@ -51,6 +60,8 @@ CREATE TABLE IF NOT EXISTS monday_tarefas (
 CREATE INDEX IF NOT EXISTS idx_monday_item ON monday_tarefas(item_id);
 CREATE TABLE IF NOT EXISTS monday_eventos (gatilho TEXT PRIMARY KEY, em TEXT NOT NULL);
 """
+_MIGRACOES = ("ALTER TABLE monday_tarefas ADD COLUMN usuario_monday INTEGER",   # quem clicou (notificações)
+              "ALTER TABLE monday_tarefas ADD COLUMN origem TEXT DEFAULT 'botao'")  # botao | chat
 _esquema_criado = False
 _em_andamento: set[asyncio.Task] = set()
 
@@ -60,8 +71,19 @@ def _db():
     db = tarefas._db()
     if not _esquema_criado:
         db.executescript(_ESQUEMA)
+        for comando in _MIGRACOES:
+            try:
+                db.execute(comando)
+            except Exception:
+                pass  # coluna já existe
         _esquema_criado = True
     return db
+
+
+def tipo_do_item(nome: str) -> str | None:
+    """"POST | Check-in no Lodge 208" -> "POST"; None se o nome não segue o padrão TIPO | Descrição."""
+    casamento = NOME_PADRAO.match(nome or "")
+    return casamento.group(1) if casamento and casamento.group(1) in TIPOS else None
 
 
 def ativo() -> bool:
@@ -134,8 +156,14 @@ def escrever_legenda(item_id: int, texto: str) -> None:
          {"b": str(BOARD), "i": str(item_id), "c": COL_LEGENDA, "v": json.dumps({"text": texto})})
 
 
+ASSINATURA = "🤖 Escritório Veraneio"  # todo comentário do sistema começa assim (o briefing ignora esses)
+
+
 def comentar(item_id: int, texto: str) -> None:
-    corpo = "".join(f"<p>{html.escape(linha) or '&nbsp;'}</p>" for linha in texto.strip().splitlines())
+    texto = texto.strip()
+    if not texto.startswith(ASSINATURA):
+        texto = f"{ASSINATURA}\n\n{texto}"
+    corpo = "".join(f"<p>{html.escape(linha) or '&nbsp;'}</p>" for linha in texto.splitlines())
     _api("mutation ($i: ID!, $t: String!) { create_update(item_id: $i, body: $t) { id } }", {"i": str(item_id), "t": corpo})
 
 
@@ -201,6 +229,8 @@ def briefing(item: dict) -> str:
     """Pedido ao Gestor/agente com os dados do item (texto, colunas, referências, comentários recentes)."""
     campos = {c["id"]: (c.get("text") or "").strip() for c in item["column_values"]}
     linhas = [f"Item do Monday: {item['name']} (grupo {item['group']['title']})"]
+    if (tipo := tipo_do_item(item["name"])):
+        linhas.append(f"- FORMATO DA PEÇA (obrigatório): {tipo} = {TIPOS[tipo]}. Produza exatamente este formato.")
     for rotulo, coluna in (("Conta (marca)", COL_CONTA), ("Objetivo", "dropdown_mm8bagtr"),
                            ("Responsável", "dropdown_mm8b5ds4"), ("Data de entrega", "date_mm0p7s2f"),
                            ("Data de postagem", "data"), ("Horário", "hora_mkmpv7kt"), ("Status", COL_STATUS)):
@@ -208,36 +238,54 @@ def briefing(item: dict) -> str:
             linhas.append(f"- {rotulo}: {campos[coluna]}")
     if campos.get(COL_LEGENDA):
         linhas.append(f"- Legenda já existente:\n{campos[COL_LEGENDA][:1500]}")
-    for rotulo, coluna in (("Referências (ponto de partida, não regra absoluta)", COL_REFERENCIAS),
-                           ("Criativos já anexados", COL_CRIATIVOS)):
-        if (lista := arquivos(item, coluna)):
-            linhas.append(f"- {rotulo}: " + ", ".join(a["nome"] for a in lista))
+    # Criativos já anexados não entram: são resultado de outra versão e confundem o formato pedido.
+    if (lista := arquivos(item, COL_REFERENCIAS)):
+        linhas.append("- Referências (ponto de partida, não regra absoluta): " + ", ".join(a["nome"] for a in lista))
     comentarios = [f"  · {u['creator']['name'] if u.get('creator') else '?'}: {u['text_body'][:300]}"
-                   for u in item.get("updates") or [] if u.get("text_body")]
+                   for u in item.get("updates") or []
+                   if u.get("text_body") and "Escritório Veraneio" not in u["text_body"][:60]]  # do próprio sistema
     if comentarios:
         linhas.append("- Comentários recentes:\n" + "\n".join(comentarios))
     return "\n".join(linhas)
 
 
-def contexto_citado(texto: str) -> str:
-    """Pedido que cita um item ('o item "FEED | ..."'): dados do item para juntar ao pedido ("" se não houver)."""
+def contexto_citado(texto: str) -> tuple[str, int | None]:
+    """Pedido que cita um item ('o item "POST | ..."'): (dados do item para o pedido, id do item); ("", None) se não houver."""
     citacao = CITACAO.search(texto)
     if not (citacao and ativo()):
-        return ""
+        return "", None
     try:
         item = buscar_item(citacao.group(1))
     except Exception as erro:
         log.warning("Monday: falha ao buscar item citado (%s)", erro)
-        return ""
-    return f"[Dados do item no Monday]\n{briefing(item)}" if item else ""
+        return "", None
+    if not item:
+        return "", None
+    return (f"[Dados do item no Monday]\n{briefing(item)}\n\nSe a entrega tiver legenda, coloque a legenda pronta "
+            f"entre as linhas {MARCA_LEGENDA[0]} e {MARCA_LEGENDA[1]}: ela também vai para o item no Monday.",
+            int(item["id"]))
 
 
 # ---------- Vínculo tarefa ↔ item e andamento ----------
 
-def vincular(tarefa_id: int, item_id: int) -> None:
+def vincular(tarefa_id: int, item_id: int, usuario_monday: int | None = None, origem: str = "botao") -> None:
+    """origem "botao" (Enviar: status e entrega no item) ou "chat" (item citado: só a entrega, sem mudar o status)."""
     with _db() as db:
-        db.execute("INSERT OR REPLACE INTO monday_tarefas (tarefa_id, item_id, criado_em) VALUES (?, ?, ?)",
-                   (tarefa_id, item_id, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")))
+        db.execute("INSERT OR REPLACE INTO monday_tarefas (tarefa_id, item_id, criado_em, usuario_monday, origem) "
+                   "VALUES (?, ?, ?, ?, ?)", (tarefa_id, item_id, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                              usuario_monday, origem))
+
+
+def _vinculo(tarefa_id: int):
+    return _db().execute("SELECT * FROM monday_tarefas WHERE tarefa_id = ?", (tarefa_id,)).fetchone()
+
+
+def notificar(usuario_monday: int | None, item_id: int, texto: str) -> None:
+    """Notificação no sino do Monday (o comentário sozinho passa despercebido)."""
+    if not usuario_monday:
+        return
+    _api("mutation ($u: ID!, $i: ID!, $t: String!) { create_notification(user_id: $u, target_id: $i, text: $t, "
+         "target_type: Project) { text } }", {"u": str(usuario_monday), "i": str(item_id), "t": texto[:250]})
 
 
 def item_da_tarefa(tarefa_id: int) -> int | None:
@@ -266,28 +314,35 @@ async def _seguro(funcao, *args) -> None:
 
 def andamento(tarefa_id: int, evento: str, texto: str = "", producao_a_seguir: bool = False) -> None:
     """Chamado pelo orquestrador/produção: atualiza o item vinculado (se houver), sem bloquear."""
-    item_id = item_da_tarefa(tarefa_id)
-    if item_id and ativo():
-        _em_segundo_plano(_andamento(item_id, evento, texto, producao_a_seguir))
+    vinculo = _vinculo(tarefa_id)
+    if vinculo and ativo():
+        _em_segundo_plano(_andamento(vinculo["item_id"], evento, texto, producao_a_seguir,
+                                     vinculo["usuario_monday"], vinculo["origem"] or "botao"))
 
 
-async def _andamento(item_id: int, evento: str, texto: str, producao_a_seguir: bool) -> None:
-    if evento == "adiada":
+async def _andamento(item_id: int, evento: str, texto: str, producao_a_seguir: bool, usuario: int | None,
+                     origem: str) -> None:
+    pelo_botao = origem == "botao"  # item citado no chat: só a entrega, sem mexer no status
+    if evento == "adiada" and pelo_botao:
         await _seguro(mudar_status, item_id, NA_FILA)
-    elif evento == "produzindo":
+    elif evento == "produzindo" and pelo_botao:
         await _seguro(mudar_status, item_id, EM_PRODUCAO)
-    elif evento == "falhou":
-        await _seguro(comentar, item_id, f"⚠️ O Escritório Veraneio não concluiu esta tarefa: {texto[:500]}\n"
-                                         "Clique em Enviar para tentar de novo.")
+    elif evento == "falhou" and pelo_botao:
+        await _seguro(comentar, item_id, f"⚠️ Não concluí esta tarefa: {texto[:500]}\nClique em Enviar para tentar de novo.")
         await _seguro(mudar_status, item_id, FALHA)
+        await _seguro(notificar, usuario, item_id, "Falha no Escritório Veraneio: veja o comentário do item.")
     elif evento == "concluida":
-        await _entregar_texto(item_id, texto, producao_a_seguir)
+        await _entregar_texto(item_id, texto, producao_a_seguir, pelo_botao)
+        if pelo_botao and not producao_a_seguir:
+            await _seguro(notificar, usuario, item_id, "Escritório Veraneio: entrega pronta para revisão.")
     elif evento == "produzida":
         await _seguro(comentar, item_id, texto)
-        await _seguro(mudar_status, item_id, REVISAO)
+        if pelo_botao:
+            await _seguro(mudar_status, item_id, REVISAO)
+            await _seguro(notificar, usuario, item_id, "Escritório Veraneio: criativos prontos para revisão.")
 
 
-async def _entregar_texto(item_id: int, texto: str, producao_a_seguir: bool) -> None:
+async def _entregar_texto(item_id: int, texto: str, producao_a_seguir: bool, mudar: bool = True) -> None:
     """Resumo do Gestor em comentário; legenda na coluna (ou em comentário, se a coluna já tiver texto)."""
     legenda = None
     ini, fim = MARCA_LEGENDA
@@ -303,8 +358,10 @@ async def _entregar_texto(item_id: int, texto: str, producao_a_seguir: bool) -> 
         texto += "\n\n(A legenda foi escrita na coluna Legenda.)"
     sufixo = ("\n\nAs artes seguiram para produção no Claude Code; os arquivos chegam na coluna Criativos."
               if producao_a_seguir else "")
-    await _seguro(comentar, item_id, f"🤖 Escritório Veraneio · Gestor\n\n{texto.strip()[:9000]}{sufixo}")
-    await _seguro(mudar_status, item_id, NA_FILA if producao_a_seguir else REVISAO)
+    autor = " · Gestor" if mudar else ""  # pelo botão quem entrega é o Gestor; no chat, o agente citado
+    await _seguro(comentar, item_id, f"{ASSINATURA}{autor}\n\n{texto.strip()[:9000]}{sufixo}")
+    if mudar:
+        await _seguro(mudar_status, item_id, NA_FILA if producao_a_seguir else REVISAO)
 
 
 # ---------- Webhook do botão Enviar ----------
@@ -325,11 +382,18 @@ async def webhook(segredo: str, request: Request):
             return {"ok": True, "repetido": True}
         db.execute("INSERT INTO monday_eventos (gatilho, em) VALUES (?, ?)",
                    (gatilho, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")))
-    _em_segundo_plano(_enviar_ao_gestor(int(evento["pulseId"])))
+    usuario = int(evento["userId"]) if str(evento.get("userId") or "").isdigit() else None
+    _em_segundo_plano(_enviar_ao_gestor(int(evento["pulseId"]), usuario))
     return {"ok": True}
 
 
-async def _enviar_ao_gestor(item_id: int) -> None:
+async def _recusar(item_id: int, usuario: int | None, comentario: str, alerta: str) -> None:
+    """Botão recusado: comentário no item + notificação no sino de quem clicou."""
+    await _seguro(comentar, item_id, comentario)
+    await _seguro(notificar, usuario, item_id, alerta)
+
+
+async def _enviar_ao_gestor(item_id: int, usuario: int | None = None) -> None:
     import orquestrador  # import tardio: o orquestrador avisa este módulo
     from estado import Status, buscar_agente
 
@@ -342,15 +406,19 @@ async def _enviar_ao_gestor(item_id: int) -> None:
         return
     marca = (_valor(item, COL_CONTA).get("text") or "").strip()
     if marca in SEM_CONTA:
-        await _seguro(comentar, item_id, "Escolha a Conta (marca) deste item e clique em Enviar de novo.")
-        return
+        return await _recusar(item_id, usuario, "Escolha a Conta (marca) deste item e clique em Enviar de novo.",
+                              "Escritório Veraneio: escolha a Conta do item antes de enviar.")
     if marca not in MARCAS_PRONTAS:
-        await _seguro(comentar, item_id, f"O Escritório Veraneio ainda não foi preparado para a marca "
-                                         f"\"{marca or 'sem definição'}\". Por enquanto, só itens da Casa Veraneio.")
-        return
+        return await _recusar(item_id, usuario, f"Ainda não fui preparado para a marca \"{marca}\". Por enquanto, "
+                                                "só itens da Casa Veraneio.",
+                              f"Escritório Veraneio: a marca {marca} ainda não está disponível.")
+    if not tipo_do_item(item["name"]):
+        return await _recusar(item_id, usuario, "O nome do item precisa seguir o padrão TIPO | Descrição, com o "
+                                                f"tipo {', '.join(TIPOS)}. Ex.: POST | Check-in no Lodge 208.",
+                              "Escritório Veraneio: nome do item fora do padrão TIPO | Descrição.")
     if _em_aberto(item_id):
-        await _seguro(comentar, item_id, "Este item já está em andamento no Escritório Veraneio.")
-        return
+        return await _recusar(item_id, usuario, "Este item já está em andamento.",
+                              "Escritório Veraneio: este item já está em andamento.")
     gestor = buscar_agente("marketing", "gestor")
     if not gestor:
         return
@@ -365,7 +433,7 @@ async def _enviar_ao_gestor(item_id: int) -> None:
               f"Na entrega final, inclua a legenda pronta (se a peça tiver legenda) entre as linhas "
               f"{MARCA_LEGENDA[0]} e {MARCA_LEGENDA[1]}.")
     await orquestrador.nova_tarefa(config.DONO_MAX, "marketing", gestor, pedido,
-                                   ao_criar=lambda tarefa_id: vincular(tarefa_id, item_id))
+                                   ao_criar=lambda tarefa_id: vincular(tarefa_id, item_id, usuario))
 
 
 @rotas.post("/criativos/{tarefa_id}")
