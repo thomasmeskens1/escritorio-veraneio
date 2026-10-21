@@ -29,11 +29,12 @@ RENDERIZADOR = Path(__file__).with_name("renderizar_png.py").as_posix()
 INTERVALO = 10                # segundos entre consultas à fila
 TEMPO_LIMITE = 30 * 60        # por produção
 INTERVALO_CATALOGO = 6 * 3600
-EXTENSOES_ENTREGA = {".png", ".jpg", ".jpeg", ".mp4", ".mov", ".pdf"}
+EXTENSOES_ARTE = {".png", ".jpg", ".jpeg", ".mp4", ".mov", ".pdf"}
+EXTENSOES_ENTREGA = EXTENSOES_ARTE | {".docx"}  # + legenda; o editável fica em EDITÁVEL/
 PASTA_ANEXOS = "anexos"       # subpasta da requisição com os arquivos enviados no chat
 PASTA_ACERVO = "acervo"       # cópias das fotos/vídeos do acervo usadas na peça
 PASTA_DIRETRIZES = comum.DADOS / "conhecimento"   # manuais da Casa Veraneio (fora do git)
-DIRETRIZES = {"criador_imagens": ("00", "01", "04"), "editor_video": ("00", "01", "06", "05")}
+DIRETRIZES = {"criador_imagens": ("00", "01", "04", "03"), "editor_video": ("00", "01", "06", "05")}
 
 INSTRUCOES = {
     "criador_imagens": (
@@ -114,9 +115,11 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None) 
          "de textos e dados), conforme o pedido. Não altere os originais.") if lista_anexos else "",
         diretrizes(producao["agente"]),
         regras_acervo(),
-        f"Grave SOMENTE dentro da pasta atual ({pasta}) e salve nela os arquivos finais (PNG, MP4 ou PDF). "
-        "O PPTX editável e o Google Doc de legenda citados nas diretrizes ainda não são gerados por este "
-        "sistema: entregue a arte final e, no resumo, liste os textos da peça para a equipe.",
+        f"Grave SOMENTE dentro da pasta atual ({pasta}). A pasta de entrega é ESTA (não use \"MARKETING > "
+        "THOMAS\" citado nas diretrizes). Entregue: (1) a arte final na raiz (PNG, MP4 ou PDF); (2) o editável "
+        "em EDITÁVEL/, gerado com python-pptx conforme as diretrizes (em vídeo, também EDITÁVEL/CENAS/ e "
+        "manifest.json); (3) a legenda, quando a peça tiver (stories não têm), em \"Legenda - <peça>.docx\" na "
+        "raiz, gerada com python-docx, no lugar do Google Doc. Não use Higgsfield nem outra IA de imagem.",
         "Ao terminar, responda com um resumo curto (até 5 linhas) do que foi entregue.",
     ]))
 
@@ -151,8 +154,10 @@ def produzir(producao: dict) -> None:
         resumo = comum.rodar_claude(comando_producao(), montar_prompt(producao, pasta, anexos), pasta,
                                     TEMPO_LIMITE, ambiente)
         arquivos = sorted(a.name for a in pasta.iterdir() if a.is_file() and a.suffix.lower() in EXTENSOES_ENTREGA)
-        if not arquivos:
+        if not any(Path(a).suffix.lower() in EXTENSOES_ARTE for a in arquivos):
             raise RuntimeError("Nenhum arquivo PNG/MP4/PDF foi gerado.")
+        if (pasta / "EDITÁVEL").is_dir():
+            arquivos += [f"EDITÁVEL/{a.name}" for a in sorted((pasta / "EDITÁVEL").glob("*.pptx"))]
         guardar_rascunhos(pasta)
         comum.chamar("POST", f"/api/producao/{producao['tarefa_id']}/concluir",
                      {"resumo": resumo, "pasta": relativa, "arquivos": arquivos})

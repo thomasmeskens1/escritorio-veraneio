@@ -1,12 +1,13 @@
-"""Leitura do site oficial (www.casaveraneio.com) para o Cérebro, com o Chrome do PC.
+"""Site oficial (www.casaveraneio.com) para o Cérebro.
 
-O site é Next.js e monta o conteúdo por JavaScript; por isso cada página é renderizada no Chrome headless
-(--dump-dom) e só então vira texto. Segue apenas links do próprio domínio. A cópia bruta de cada página fica em
-CÉREBRO/SITE/paginas; ao Cérebro (fonte "site") vão só os dados do produto (site_lodges.py) e um resumo dos
-lodges (local, quartos, pessoas, diária) em CÉREBRO/SITE/resumo-lodges.md. Só envia o que mudou.
+Lodges: pela API do site (site_api.py), com os números exatos de cada época. Páginas gerais (início, serviços,
+eventos, contato, políticas): o site é Next.js e monta o conteúdo por JavaScript, então são renderizadas no
+Chrome headless (--dump-dom) e viram texto; só links do próprio domínio. A cópia bruta das páginas fica em
+CÉREBRO/SITE/paginas (também é o reserva dos Lodges se a API falhar); o resumo dos Lodges vai em
+CÉREBRO/SITE/resumo-lodges.md. Só envia ao Cérebro o que mudou e remove o que sumiu.
 
 Uso avulso: python scripts/max/site_casaveraneio.py [--falhas | --reprocessar]
-  --falhas: relê só as páginas que não carregaram; --reprocessar: refaz os documentos sem abrir o site.
+  --falhas: relê só as páginas que não carregaram; --reprocessar: refaz os documentos sem abrir o Chrome.
 """
 
 import hashlib
@@ -20,16 +21,16 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import comum
+import site_api
 import site_lodges
 from comum import log
 
 SITE = "https://www.casaveraneio.com"
-PAGINAS_FIXAS = ["/", "/servicos", "/eventos", "/contato", "/politicas-cancelamento", "/politicas-privacidade"]
-LISTAGENS = ["/lodges", "/lodges-orlando"]       # paginadas com ?page=N
+PAGINAS_FIXAS = ["/", "/servicos", "/eventos", "/contato", "/politicas-cancelamento", "/politicas-privacidade",
+                 "/lodges-orlando"]
 PADRAO_PAGINA = re.compile(r"^/[a-z0-9-]+(/[a-z0-9-]+)?$")
-IGNORAR = ("/_next", "/uploads", "/api")
-MAX_PAGINAS = 300
-MAX_PAGINACAO = 40
+IGNORAR = ("/_next", "/uploads", "/api", "/lodges")  # Lodges vêm da API
+MAX_PAGINAS = 60
 SIMULTANEAS = 4
 TEMPO_PAGINA = 90
 CHROME = Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
@@ -38,9 +39,11 @@ ARQUIVO_HASHES = comum.DADOS / "site.hashes.json"
 ARQUIVO_FALHAS = comum.DADOS / "site.falhas.json"  # páginas que não carregaram
 
 
+# ---------- Páginas gerais (Chrome) ----------
+
 def renderizar(caminho: str, tentativas: int = 2) -> str:
     """HTML depois do JavaScript; perfil temporário para várias instâncias em paralelo.
-    Se o Chrome travar, usa o HTML do servidor (menos completo: sem a tabela de valores por época)."""
+    Se o Chrome travar, usa o HTML do servidor."""
     for _ in range(tentativas):
         with tempfile.TemporaryDirectory(prefix="chrome-site-", ignore_cleanup_errors=True) as perfil:
             try:
@@ -89,48 +92,13 @@ def texto(pagina: str) -> tuple[str, str]:
     return titulo, "\n".join(linhas)
 
 
-def lodges_da_listagem(listagem: str) -> set[str]:
-    """Percorre ?page=1, 2, ... até uma página não trazer lodge novo."""
-    achados: set[str] = set()
-    for numero in range(1, MAX_PAGINACAO + 1):
-        novos = {c for c in links_internos(renderizar(f"{listagem}?page={numero}"))
-                 if site_lodges.e_lodge(c)} - achados
-        if not novos:
-            break
-        achados |= novos
-    return achados
-
-
 def descobrir() -> list[str]:
+    """Páginas gerais: as fixas e os links internos delas (sem as páginas de Lodge)."""
     caminhos = set(PAGINAS_FIXAS)
     with ThreadPoolExecutor(SIMULTANEAS) as pool:
-        for lodges in pool.map(lodges_da_listagem, LISTAGENS):
-            caminhos |= lodges
         for pagina in pool.map(renderizar, PAGINAS_FIXAS):
-            caminhos |= {c for c in links_internos(pagina) if not c.startswith(("/lodges/", "/lodges-orlando/"))}
+            caminhos |= links_internos(pagina)
     return sorted(caminhos)[:MAX_PAGINAS]
-
-
-def resumo_lodge(caminho: str, titulo: str, corpo: str) -> dict | None:
-    if not site_lodges.e_lodge(caminho):
-        return None
-    achar = lambda padrao: (m.group(1).strip() if (m := re.search(padrao, corpo)) else "—")
-    return {"lodge": titulo.split(" - ")[0] or caminho.rsplit("/", 1)[-1], "url": SITE + caminho,
-            "local": achar(r"Favoritar\n(.+)"), "quartos": achar(r"(\d+)\s*quartos?"),
-            "pessoas": achar(r"(\d+)\s*pessoas?"), "diaria": achar(r"(A partir de .+?|Diária a combinar)\n")}
-
-
-def tabela_lodges(resumos: list[dict]) -> str:
-    linhas = ["# Resumo dos lodges no site", "", f"Fonte: {SITE}/lodges (lido pelo Chrome).",
-              f"Lodges: {len(resumos)}", "", "| Lodge | Local | Quartos | Pessoas | Diária a partir de | Página |",
-              "|---|---|---:|---:|---|---|"]
-    linhas += [f"| {r['lodge']} | {r['local']} | {r['quartos']} | {r['pessoas']} | {r['diaria']} | {r['url']} |"
-               for r in sorted(resumos, key=lambda r: [int(n) if n.isdigit() else n for n in re.split(r"(\d+)", r["url"])])]
-    return "\n".join(linhas) + "\n"
-
-
-def _hash(conteudo: str) -> str:
-    return hashlib.sha256(conteudo.encode("utf-8")).hexdigest()
 
 
 def _ler(caminhos: list[str]) -> tuple[dict[str, str], list[str]]:
@@ -156,27 +124,69 @@ def _paginas_salvas() -> list[tuple[str, str, str]]:
     return paginas
 
 
-def _documentos() -> tuple[list[dict], int]:
-    """Documentos do Cérebro a partir das páginas salvas: só os dados do produto (site_lodges) + resumo."""
-    documentos, resumos = [], []
+# ---------- Resumo dos Lodges ----------
+
+def resumo_da_pagina(caminho: str, titulo: str, corpo: str) -> dict:
+    """Reserva quando a API não tem o Lodge: resumo tirado da página renderizada."""
+    achar = lambda padrao: (m.group(1).strip() if (m := re.search(padrao, corpo)) else "—")
+    return {"lodge": titulo.split(" - ")[0] or caminho.rsplit("/", 1)[-1], "url": SITE + caminho,
+            "local": achar(r"Favoritar\n(.+)"), "quartos": achar(r"(\d+)\s*quartos?"),
+            "pessoas": achar(r"(\d+)\s*pessoas?"), "diaria": achar(r"(A partir de .+?|Diária a combinar)\n"),
+            "reveillon": "—"}
+
+
+def tabela_lodges(resumos: list[dict]) -> str:
+    linhas = ["# Resumo dos lodges no site", "", f"Fonte: {SITE} (API do site; reconfira antes de publicar).",
+              f"Lodges: {len(resumos)}", "",
+              "| Lodge | Local | Quartos | Pessoas | Diária (baixa temporada) | Réveillon | Página |",
+              "|---|---|---:|---:|---|---|---|"]
+    linhas += [f"| {r['lodge']} | {r['local']} | {r['quartos']} | {r['pessoas']} | {r['diaria']} | {r['reveillon']} "
+               f"| {r['url']} |"
+               for r in sorted(resumos, key=lambda r: [int(n) if n.isdigit() else n for n in re.split(r"(\d+)", r["url"])])]
+    return "\n".join(linhas) + "\n"
+
+
+# ---------- Documentos para o Cérebro ----------
+
+def _documento(caminho: str, conteudo: str) -> dict:
+    return {"fonte_tipo": "site", "fonte_ref": f"site{caminho}",
+            "titulo": conteudo.splitlines()[0].lstrip("# ")[:200], "conteudo": conteudo}
+
+
+def _documentos() -> tuple[list[dict], list[dict]]:
+    """Lodges pela API (reserva: página salva) + páginas gerais salvas. Devolve (documentos, resumos)."""
+    try:
+        lodges, sem_api = site_api.todos()
+        log(f"   site: {len(lodges)} Lodges pela API" + (f" ({len(sem_api)} sem resposta)" if sem_api else ""))
+    except (OSError, ValueError) as erro:
+        log(f"   site: API indisponível ({erro}); Lodges pelas páginas salvas")
+        lodges = []
+    documentos = [_documento(f"/lodges/{l['slug']}", l["documento"]) for l in lodges]
+    resumos = [l["resumo"] for l in lodges]
+    pela_api = {f"/lodges/{l['slug']}" for l in lodges}
     for caminho, titulo, corpo in _paginas_salvas():
+        if caminho in pela_api:
+            continue
         if (conteudo := site_lodges.limpar_pagina(caminho, titulo, SITE + caminho, corpo)):
-            documentos.append({"fonte_tipo": "site", "fonte_ref": f"site{caminho}",
-                               "titulo": conteudo.splitlines()[0].lstrip("# ")[:200], "conteudo": conteudo})
-        if (resumo := resumo_lodge(caminho, titulo, corpo)):
-            resumos.append(resumo)
+            documentos.append(_documento(caminho, conteudo))
+            if site_lodges.e_lodge(caminho):
+                resumos.append(resumo_da_pagina(caminho, titulo, corpo))
     return documentos, resumos
 
 
+def _hash(conteudo: str) -> str:
+    return hashlib.sha256(conteudo.encode("utf-8")).hexdigest()
+
+
 def sincronizar(caminhos: list[str] | None = None, enviar=comum.enviar_ao_cerebro, ler: bool = True) -> dict:
-    """Lê o site (ou só `caminhos`), grava a cópia bruta em CÉREBRO/SITE/paginas e envia ao Cérebro o que mudou.
-    ler=False: só reprocessa as páginas já salvas (sem abrir o site)."""
+    """Lê as páginas gerais (ou só `caminhos`) no Chrome, busca os Lodges na API e envia ao Cérebro o que mudou.
+    ler=False: não abre o Chrome (usa as páginas gerais já salvas)."""
     falhas: list[str] = []
     if ler:
         if not CHROME.exists():
             raise RuntimeError(f"Chrome não encontrado: {CHROME}")
         caminhos = caminhos or descobrir()
-        log(f"   site: {len(caminhos)} páginas para ler")
+        log(f"   site: {len(caminhos)} páginas gerais para ler")
         lidas, falhas = _ler(caminhos)
         ARQUIVO_FALHAS.write_text(json.dumps(falhas, indent=1), encoding="utf-8")
         (PASTA / "paginas").mkdir(parents=True, exist_ok=True)
@@ -205,7 +215,7 @@ def sincronizar(caminhos: list[str] | None = None, enviar=comum.enviar_ao_cerebr
     enviados = len(mudados) if mudados and enviar(mudados) else 0
     if enviados:
         hashes.update({d["fonte_ref"]: _hash(d["conteudo"]) for d in mudados})
-    # Enviados antes e que não saem mais das páginas salvas (ex.: listagem só com filtros): saem do Cérebro.
+    # Enviados antes e que não saem mais (ex.: Lodge despublicado, listagem só com filtros): saem do Cérebro.
     atuais = {d["fonte_ref"] for d in documentos}
     sumidos = [ref for ref in hashes if ref not in atuais]
     if sumidos and comum.remover_do_cerebro("site", sumidos):
@@ -217,12 +227,12 @@ def sincronizar(caminhos: list[str] | None = None, enviar=comum.enviar_ao_cerebr
 
 
 def reprocessar() -> dict:
-    """Refaz os documentos a partir das páginas já salvas (ex.: depois de mudar a limpeza), sem abrir o site."""
+    """Refaz os documentos (Lodges pela API + páginas gerais salvas), sem abrir o Chrome."""
     return sincronizar(ler=False)
 
 
 def repescar() -> dict:
-    """Relê só as páginas que falharam na última leitura."""
+    """Relê só as páginas gerais que falharam na última leitura."""
     falhas = json.loads(ARQUIVO_FALHAS.read_text(encoding="utf-8")) if ARQUIVO_FALHAS.exists() else []
     if not falhas:
         raise RuntimeError("Nenhuma página pendente da última leitura.")
@@ -233,8 +243,8 @@ def resumo_texto(r: dict) -> str:
     situacao = (f"{r['enviados']} enviada(s) ao Cérebro" if r["enviados"] or not r["mudados"]
                 else "envio ao Cérebro pendente")
     pendentes = f" {r['falhas']} página(s) não carregaram e ficam para a próxima leitura." if r["falhas"] else ""
-    return (f"Site: {r['paginas']} páginas com conteúdo ({r['lodges']} lodges no resumo). "
-            f"{r['mudados']} documento(s) novo(s) ou alterado(s); {situacao}. Arquivos em CÉREBRO/SITE.{pendentes}")
+    return (f"Site: {r['paginas']} documentos ({r['lodges']} Lodges no resumo). "
+            f"{r['mudados']} novo(s) ou alterado(s); {situacao}. Arquivos em CÉREBRO/SITE.{pendentes}")
 
 
 if __name__ == "__main__":

@@ -21,7 +21,11 @@ DA_FUNCAO = {
 SECOES_FORA = ("6. Catálogo de Lodges",)  # dados de Lodge: o Cérebro tem o site atualizado
 SECAO_REGRAS = "2. As 10 regras"
 CABECALHO = ("DIRETRIZES DA CASA VERANEIO (siga à risca). Dados de Lodges (local, capacidade, preços, estadia "
-             "mínima, atributos): consulte o Cérebro, que tem o site atualizado; o que não estiver lá é PENDENTE.")
+             "mínima, atributos): consulte o Cérebro, que tem o site atualizado; o que não estiver lá é PENDENTE.\n"
+             "Ajustes deste sistema (valem sobre os manuais): as entregas ficam na pasta do Escritório Veraneio no "
+             "Drive, não em \"MARKETING > THOMAS\"; a legenda vai em .docx no lugar do Google Doc; Higgsfield não "
+             "é usado; os arquivos (PNG, MP4, PPTX editável) são produzidos pelo Criador de Imagens e pelo Editor "
+             "de Vídeo no Claude Code, a partir do plano do Gestor.")
 
 
 def _arquivo(prefixo: str) -> Path | None:
