@@ -8,6 +8,7 @@ import json
 import re
 import threading
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable
 
@@ -20,6 +21,7 @@ TRECHO_ETAPA = 1500   # caracteres de cada etapa anterior enviados à próxima
 TRECHO_FINAL = 2500   # caracteres de cada etapa enviados à consolidação
 PALAVRAS_ETAPA = 400  # limite pedido a cada etapa (tempo e tokens)
 PALAVRAS_FINAL = 800
+MAX_PARALELAS = 4      # etapas da mesma fase rodando ao mesmo tempo (limite dos modelos gratuitos)
 
 
 class Cancelado(Exception):
@@ -53,7 +55,8 @@ def _nome(agente_id: str) -> str:
     return equipe().get(agente_id, agente_id)
 
 
-def _extrair_plano(texto: str) -> list[dict]:
+def _extrair_plano(texto: str) -> tuple[list[dict], str]:
+    """(etapas, título curto do projeto). Etapas: agente, instrução e fase (mesma fase = rodam juntas)."""
     bloco = re.search(r"\[.*\]", texto, re.DOTALL)
     if not bloco:
         raise ValueError("O Gestor não devolveu um plano em JSON.")
@@ -64,10 +67,19 @@ def _extrair_plano(texto: str) -> list[dict]:
     for passo in json.loads(bloco.group(0)):
         agente = ids_por_chave.get(_chave(passo.get("agente", ""))) if isinstance(passo, dict) else None
         if agente:
-            plano.append({"agente": agente, "instrucao": str(passo.get("instrucao", ""))})
+            fase = passo.get("fase")
+            plano.append({"agente": agente, "instrucao": str(passo.get("instrucao", "")),
+                          "fase": int(fase) if str(fase).isdigit() and int(fase) > 0 else len(plano) + 1})
     if not plano:
         raise ValueError("Plano sem etapas válidas.")
-    return plano[:MAX_ETAPAS]
+    titulo = re.search(r'"titulo"\s*:\s*"([^"]{3,80})"', texto)
+    return plano[:MAX_ETAPAS], (titulo.group(1).strip() if titulo else "")
+
+
+def titulo_do_projeto(tarefa_id: int) -> str:
+    """Título curto que o Gestor deu ao projeto (nome da pasta de entrega); "" se não houver."""
+    arquivo = PASTA_PROJETOS / str(tarefa_id) / "titulo.txt"
+    return arquivo.read_text(encoding="utf-8").strip() if arquivo.exists() else ""
 
 
 def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar) -> list[dict]:
@@ -82,12 +94,19 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar) -> list[
             "Criador de Imagens escolhe as fotos reais do acervo, Designer define o layout e o editável; "
             "reels = Moviemaker faz o roteiro, Copywriter os textos de tela, Editor de Vídeo a montagem). "
             "Acione só quem for necessário. "
-            "Ordene as etapas de forma que cada uma possa usar o resultado das anteriores. "
-            'Responda SOMENTE com um JSON: [{"agente": "<id>", "instrucao": "<o que entregar>"}].'
+            "Organize as etapas em FASES para ganhar tempo: etapas que não dependem umas das outras ficam na "
+            "mesma fase e rodam ao mesmo tempo (ex.: Copywriter e Criador de Imagens juntos na fase 1); quem "
+            "precisa do resultado de outra etapa vai para uma fase seguinte (ex.: Designer na fase 2). Cada etapa "
+            "recebe só os resultados das fases anteriores. "
+            "Dê também um título curto ao projeto (até 6 palavras, sem data, ex.: \"Post Réveillon Lodge 1\"). "
+            'Responda SOMENTE com um JSON: {"titulo": "<título>", "etapas": '
+            '[{"agente": "<id>", "instrucao": "<o que entregar>", "fase": <número>}]}.'
         )
-        plano = _extrair_plano(executar("gestor", descricao, "JSON com a lista de etapas.", "gestor"))
+        plano, titulo = _extrair_plano(executar("gestor", descricao, "JSON com o título e as etapas.", "gestor"))
+        if titulo:
+            _gravar(pasta / "titulo.txt", titulo)
         _gravar(arquivo, json.dumps(plano, ensure_ascii=False, indent=2))
-        linhas = [f"{n}. **{_nome(p['agente'])}**: {p['instrucao']}" for n, p in enumerate(plano, 1)]
+        linhas = [f"{n}. **{_nome(p['agente'])}** (fase {p['fase']}): {p['instrucao']}" for n, p in enumerate(plano, 1)]
         _gravar(pasta / "plano.md", f"# Plano\n\nPedido: {pedido}\n\n" + "\n".join(linhas) + "\n")
     return json.loads(arquivo.read_text(encoding="utf-8"))
 
@@ -132,16 +151,14 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
     pasta = PASTA_PROJETOS / str(tarefa_id)
     (pasta / "etapas").mkdir(parents=True, exist_ok=True)
     plano = _plano(pasta, pedido, contexto, executar)
+    fase = lambda n, p: p.get("fase", n)  # plano antigo (sem fases): uma etapa por vez
 
-    for n, passo in enumerate(plano, 1):
-        arquivo = _arquivo_etapa(pasta, n, passo["agente"])
-        if arquivo.exists():
-            continue  # feita por uma tentativa anterior (talvez outro modelo)
+    def rodar_etapa(n: int, passo: dict) -> None:
         if cancelar.is_set():
             raise Cancelado
         anteriores = "\n\n".join(
             f"## Etapa {i} ({_nome(p['agente'])})\n{_arquivo_etapa(pasta, i, p['agente']).read_text(encoding='utf-8')[:TRECHO_ETAPA]}"
-            for i, p in enumerate(plano[:n - 1], 1)
+            for i, p in enumerate(plano, 1) if fase(i, p) < fase(n, passo)
         )
         descricao = (
             f"{contexto}\n\nProjeto: {pedido}\n\n{_passagem(pasta, plano)}\n"
@@ -152,11 +169,21 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
         detalhe = f"Etapa {n}: {passo['instrucao'][:160]}"
         avisar("etapa_iniciada", passo["agente"], detalhe)
         try:
-            _gravar(arquivo, executar(passo["agente"], descricao, "Entrega completa desta etapa.", "equipe"))
+            _gravar(_arquivo_etapa(pasta, n, passo["agente"]),
+                    executar(passo["agente"], descricao, "Entrega completa desta etapa.", "equipe"))
         finally:
             avisar("etapa_encerrada", passo["agente"], detalhe)
         avisar("etapa_salva", passo["agente"], detalhe)
-        _passagem(pasta, plano)
+
+    # Fase a fase; dentro da fase, as etapas rodam ao mesmo tempo (o que já foi feito numa tentativa anterior é pulado).
+    for numero_fase in sorted({fase(n, p) for n, p in enumerate(plano, 1)}):
+        pendentes = [(n, p) for n, p in enumerate(plano, 1)
+                     if fase(n, p) == numero_fase and not _arquivo_etapa(pasta, n, p["agente"]).exists()]
+        if pendentes:
+            with ThreadPoolExecutor(min(len(pendentes), MAX_PARALELAS)) as pool:
+                for futuro in [pool.submit(rodar_etapa, n, p) for n, p in pendentes]:
+                    futuro.result()  # repassa erro ou Cancelado (as demais da fase terminam antes)
+            _passagem(pasta, plano)
 
     final = pasta / "final.md"
     if not final.exists():

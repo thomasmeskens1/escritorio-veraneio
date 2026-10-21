@@ -24,6 +24,7 @@ crewai.llms.retry._LLM_RATE_LIMIT_MAX_ATTEMPTS = 1
 
 MAX_ITERACOES = 8  # limita voltas de raciocínio (e tokens) por agente
 MAX_TOKENS_SAIDA_CLAUDE = 2000
+_trava_total = threading.Lock()  # soma de tokens/custo de etapas paralelas
 
 
 class LocalOcupado(Exception):
@@ -112,9 +113,10 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
     saida = Crew(agents=[agente], tasks=[Task(description=descricao, expected_output=esperado, agent=agente)]).kickoff()
 
     uso = saida.token_usage
-    total.tokens_entrada += uso.prompt_tokens
-    total.tokens_saida += uso.completion_tokens
-    total.custo_usd += tarefas.custo_estimado(modelo, uso.prompt_tokens, uso.completion_tokens)
+    with _trava_total:  # etapas do Gestor podem rodar em paralelo
+        total.tokens_entrada += uso.prompt_tokens
+        total.tokens_saida += uso.completion_tokens
+        total.custo_usd += tarefas.custo_estimado(modelo, uso.prompt_tokens, uso.completion_tokens)
     return saida.raw
 
 
