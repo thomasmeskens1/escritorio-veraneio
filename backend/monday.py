@@ -33,7 +33,8 @@ BOARD = 18436414505
 COL_BOTAO, COL_STATUS, COL_CONTA = "button_mm8bdsnh", "status", "color_mks99tq4"
 COL_LEGENDA, COL_REFERENCIAS, COL_CRIATIVOS = "texto_longo_1_mkmf3wmy", "file_mm8bmmxv", "arquivos_mkmd1v3v"
 MARCAS_PRONTAS = {"Casa Veraneio"}
-EM_PRODUCAO, NA_FILA, REVISAO, AGUARDANDO = "Em produção", "Na fila", "Revisão", "Aguardando"
+EM_PRODUCAO, NA_FILA, REVISAO, AGUARDANDO, FALHA = "Em produção", "Na fila", "Revisão", "Aguardando", "Falha"
+SEM_CONTA = {"", "Sem definição"}
 MARCA_LEGENDA = ("<<LEGENDA>>", "<<FIM DA LEGENDA>>")
 ESPERA_GESTOR_S, ESPERA_MAXIMA_S = 15, 4 * 3600
 ARQUIVO_SEGREDO = config.ARQUIVO_BANCO.parent / "monday.webhook.token"
@@ -278,7 +279,7 @@ async def _andamento(item_id: int, evento: str, texto: str, producao_a_seguir: b
     elif evento == "falhou":
         await _seguro(comentar, item_id, f"⚠️ O Escritório Veraneio não concluiu esta tarefa: {texto[:500]}\n"
                                          "Clique em Enviar para tentar de novo.")
-        await _seguro(mudar_status, item_id, AGUARDANDO)
+        await _seguro(mudar_status, item_id, FALHA)
     elif evento == "concluida":
         await _entregar_texto(item_id, texto, producao_a_seguir)
     elif evento == "produzida":
@@ -340,6 +341,9 @@ async def _enviar_ao_gestor(item_id: int) -> None:
     if not item:
         return
     marca = (_valor(item, COL_CONTA).get("text") or "").strip()
+    if marca in SEM_CONTA:
+        await _seguro(comentar, item_id, "Escolha a Conta (marca) deste item e clique em Enviar de novo.")
+        return
     if marca not in MARCAS_PRONTAS:
         await _seguro(comentar, item_id, f"O Escritório Veraneio ainda não foi preparado para a marca "
                                          f"\"{marca or 'sem definição'}\". Por enquanto, só itens da Casa Veraneio.")
