@@ -45,6 +45,9 @@ def para_o_gestor(andar: str, agente_id: str, texto: str) -> bool:
 
 
 # --- Resposta de volta a quem recebeu o pedido ------------------------------------------------
+# A resposta final sempre volta ao chat onde o usuário pediu, mesmo passando pelo Gestor e pela produção.
+# `pedido`: 1 = o texto da tarefa é o pedido do usuário (aparece como "Você" no chat de origem);
+# 0 = tarefa interna (briefing de produção do Gestor), no chat de origem aparece só o resultado.
 
 _ESQUEMA = "CREATE TABLE IF NOT EXISTS encaminhamentos (tarefa_id INTEGER PRIMARY KEY, andar TEXT, agente TEXT)"
 
@@ -53,14 +56,29 @@ def _db():
     import tarefas
     db = tarefas._db()
     db.execute(_ESQUEMA)
+    colunas = {c["name"] for c in db.execute("PRAGMA table_info(encaminhamentos)")}
+    if "pedido" not in colunas:
+        db.execute("ALTER TABLE encaminhamentos ADD COLUMN pedido INTEGER DEFAULT 1")
     return db
 
 
-def registrar(tarefa_id: int, andar: str, agente_origem: str) -> None:
+def registrar(tarefa_id: int, andar: str, agente_origem: str, pedido: bool = True) -> None:
     with _db() as db:
-        db.execute("INSERT OR REPLACE INTO encaminhamentos VALUES (?, ?, ?)", (tarefa_id, andar, agente_origem))
+        db.execute("INSERT OR REPLACE INTO encaminhamentos (tarefa_id, andar, agente, pedido) VALUES (?, ?, ?, ?)",
+                   (tarefa_id, andar, agente_origem, int(pedido)))
 
 
 def origem(tarefa_id: int) -> tuple[str, str] | None:
     linha = _db().execute("SELECT andar, agente FROM encaminhamentos WHERE tarefa_id = ?", (tarefa_id,)).fetchone()
     return (linha["andar"], linha["agente"]) if linha else None
+
+
+def tarefas_do_chat(andar: str, agente: str) -> dict[int, bool]:
+    """Tarefas que nasceram neste chat e rodaram em outro agente -> o texto delas é pedido do usuário?"""
+    return {l["tarefa_id"]: bool(l["pedido"]) for l in _db().execute(
+        "SELECT tarefa_id, pedido FROM encaminhamentos WHERE andar = ? AND agente = ?", (andar, agente))}
+
+
+def pedido_original(texto: str) -> str:
+    """'[Pedido feito ao Copywriter] Me dá 3 ideias...' -> 'Me dá 3 ideias...'."""
+    return re.sub(r"^\[Pedido feito a[o]? [^\]]+\]\s*", "", texto)

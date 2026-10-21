@@ -11,7 +11,7 @@ from pathlib import Path
 
 import config
 
-GERAIS = ("00", "01", "08", "09")  # 08: formatos e zonas mortas · 09: planejamento no Monday
+GERAIS = ("00", "01", "08", "09", "10")  # 08: formatos · 09: planejamento no Monday · 10: fluxo do escritório
 # Agente -> documentos da função (prefixo do arquivo).
 DA_FUNCAO = {
     "social_media": ("02",), "gestor_trafego": ("02",), "analista_metricas": ("02",), "gestor": ("02",),

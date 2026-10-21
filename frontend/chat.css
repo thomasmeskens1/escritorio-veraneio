@@ -496,6 +496,12 @@
 }
 
 /* ---------- Andamento da tarefa ativa (ao lado da conversa) ---------- */
+/* Barras de rolagem escuras, no tom da janela (sem a barra branca nativa). */
+.janela-agente {
+  color-scheme: dark;
+  scrollbar-color: #495057 transparent;
+}
+
 .janela-agente.com-andamento {
   max-width: 980px;
   display: grid;
@@ -513,7 +519,7 @@
 
 .com-andamento > .janela-barra { grid-area: barra; }
 .com-andamento > #modal-onboarding { grid-area: onb; }
-.com-andamento > #modal-perfil { grid-area: perfil; }
+.com-andamento > #modal-perfil { grid-area: perfil; max-height: 34vh; } /* % não resolve na linha auto da grade */
 .com-andamento > #modal-restrito { grid-area: restrito; }
 .com-andamento > #modal-historico { grid-area: hist; }
 .com-andamento > #modal-pensando { grid-area: pensando; }

@@ -93,7 +93,10 @@ ESTILO_CHAT = ("Escreva como numa conversa de chat com um colega de trabalho: to
                "parágrafos breves. NÃO use formatação Markdown: nada de títulos com #, negrito com **, tabelas ou "
                "linhas ---. Se precisar listar, use poucos itens começando com '- '. Textos de entrega (legenda, "
                "roteiro, plano) podem vir em blocos separados por uma linha em branco.")
-INSTRUCOES = f"Responda em português do Brasil, de forma objetiva e acionável. {ESTILO_CHAT}"
+# Fluxo do escritório (manual 10): a resposta final sempre volta ao chat onde o usuário pediu.
+FLUXO = ("Quando um pedido passa por outros agentes (Gestor, especialistas, produção), a resposta final volta "
+         "sempre ao chat onde o usuário pediu: nunca mande o usuário procurar a resposta na conversa de outro agente.")
+INSTRUCOES = f"Responda em português do Brasil, de forma objetiva e acionável. {ESTILO_CHAT} {FLUXO}"
 AGENTES_ESCOLA = {"recepcionista", "professor"}
 
 

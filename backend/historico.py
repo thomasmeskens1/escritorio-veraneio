@@ -5,6 +5,7 @@ import json
 from fastapi import APIRouter, Header, HTTPException
 
 import auth
+import encaminhamento
 import tarefas
 from estado import buscar_agente, pode_acessar
 
@@ -32,16 +33,23 @@ def _anexos(linha) -> list[dict]:
     return [{"id": a["id"], "nome": a["nome_original"], "mime": a["mime"], "tamanho": a["tamanho"]} for a in linhas]
 
 
-def _mensagens_da_tarefa(linha) -> list[dict]:
+def _mensagens_da_tarefa(linha, encaminhada: bool | None = None) -> list[dict]:
+    """`encaminhada`: None = tarefa deste chat; True/False = nasceu aqui e rodou em outro agente (com/sem o
+    pedido do usuário no texto). A resposta vem assinada por quem respondeu."""
     tarefa_id = linha["id"]
-    mensagens = [{"autor": "voce", "texto": linha["texto"], "em": linha["criada_em"], "tarefa_id": tarefa_id,
-                  "anexos": _anexos(linha)}]
+    mensagens = []
+    if encaminhada is not False:
+        texto = encaminhamento.pedido_original(linha["texto"]) if encaminhada else linha["texto"]
+        mensagens.append({"autor": "voce", "texto": texto, "em": linha["criada_em"], "tarefa_id": tarefa_id,
+                          "anexos": _anexos(linha)})
     status = linha["status"]
     if status == "concluida":
+        quem = buscar_agente(linha["andar"], linha["agente"]) if encaminhada is not None else None
         mensagens.append({
             "autor": "agente", "texto": linha["resposta"] or "", "em": linha["concluida_em"], "tarefa_id": tarefa_id,
             "meta": {"modelo": linha["modelo"], "dificuldade": linha["dificuldade"],
-                     "tempo_segundos": round(linha["tempo_segundos"], 1), "adiada": linha["motivo"] is not None},
+                     "tempo_segundos": round(linha["tempo_segundos"], 1), "adiada": linha["motivo"] is not None,
+                     **({"por": quem.nome} if quem else {})},
         })
     elif status == "falhou":
         mensagens.append({"autor": "sistema", "texto": linha["motivo"] or "Falha ao executar a tarefa.",
@@ -62,14 +70,19 @@ def historico_do_chat(andar: str, agente_id: str, limite: int = 30, authorizatio
         raise HTTPException(status_code=404, detail="Agente não encontrado")
 
     limite = min(max(limite, 1), LIMITE_MAXIMO)
+    # Tarefas do chat + as que nasceram aqui e rodaram em outro agente (Gestor, produção).
+    vindas = encaminhamento.tarefas_do_chat(andar, agente_id)
+    marcadores = ",".join("?" * len(vindas)) or "NULL"
     linhas = tarefas._db().execute(
-        "SELECT * FROM tarefas WHERE usuario = ? AND andar = ? AND agente = ? ORDER BY id DESC LIMIT ?",
-        (usuario["sub"], andar, agente_id, limite),
+        f"SELECT * FROM tarefas WHERE usuario = ? AND ((andar = ? AND agente = ?) OR id IN ({marcadores})) "
+        "ORDER BY id DESC LIMIT ?",
+        (usuario["sub"], andar, agente_id, *vindas, limite),
     ).fetchall()
 
     mensagens, pendentes = [], []
     for linha in reversed(linhas):
-        mensagens.extend(_mensagens_da_tarefa(linha))
+        de_outro = linha["id"] in vindas and (linha["andar"], linha["agente"]) != (andar, agente_id)
+        mensagens.extend(_mensagens_da_tarefa(linha, vindas[linha["id"]] if de_outro else None))
         if linha["status"] in AVISOS_ANDAMENTO:
             pendentes.append(linha["id"])
     return {"mensagens": mensagens, "pendentes": pendentes}

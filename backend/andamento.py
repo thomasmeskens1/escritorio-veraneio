@@ -9,6 +9,7 @@ import json
 
 from fastapi import APIRouter, Header, HTTPException
 
+import encaminhamento
 import tarefas
 from api_painel import _filtro, _nome_do_agente, _usuario
 from estado import buscar_agente, pode_acessar
@@ -52,6 +53,8 @@ def _etapas_por_eventos(linha, eventos: list) -> list[dict]:
     etapas = [{"texto": "Pedido recebido", "status": "concluida"}]
     for i, e in enumerate(eventos):
         seguinte = eventos[i + 1:]
+        if e["tipo"] == "tentativa" and e["modelo"] == "claude-code/max" and linha["status"] in ("producao", "produzindo"):
+            continue  # a produção no Max já aparece na etapa de status, logo abaixo
         if e["tipo"] == "tentativa":
             falhou = any(s["tipo"] == "falha_modelo" and s["modelo"] == e["modelo"] for s in seguinte[:3])
             status = "falhou" if falhou else ("andamento" if not seguinte else "concluida")
@@ -77,14 +80,18 @@ def andamento(andar: str, agente_id: str, authorization: str = Header("")):
         raise HTTPException(status_code=404, detail="Agente não encontrado")
     filtro = _filtro(usuario)
     marcadores = ",".join("?" * len(ATIVAS))
+    # Também a tarefa que nasceu neste chat e roda em outro agente (Gestor, produção no Max).
+    vindas = list(encaminhamento.tarefas_do_chat(andar, agente_id))
+    ids = ",".join("?" * len(vindas)) or "NULL"
     linha = tarefas._db().execute(
-        f"SELECT * FROM tarefas WHERE agente = ? AND status IN ({marcadores}) "
+        f"SELECT * FROM tarefas WHERE ((andar = ? AND agente = ?) OR id IN ({ids})) AND status IN ({marcadores}) "
         + ("AND usuario = ? " if filtro else "") + "ORDER BY id DESC LIMIT 1",
-        (agente_id, *ATIVAS, *([filtro] if filtro else []))).fetchone()
+        (andar, agente_id, *vindas, *ATIVAS, *([filtro] if filtro else []))).fetchone()
     if not linha:
         return {"ativa": None}
     eventos = tarefas.eventos_de([linha["id"]]).get(linha["id"], [])
-    etapas = (_etapas_do_gestor(linha["id"], eventos) if agente_id == "gestor" else None) \
+    etapas = (_etapas_do_gestor(linha["id"], eventos) if linha["agente"] == "gestor" else None) \
         or _etapas_por_eventos(linha, eventos)
-    return {"ativa": {"tarefa_id": linha["id"], "status": linha["status"], "pedido": linha["texto"][:140],
-                      "etapas": etapas}}
+    return {"ativa": {"tarefa_id": linha["id"], "status": linha["status"],
+                      "pedido": encaminhamento.pedido_original(linha["texto"])[:140],
+                      "agente": _nome_do_agente(linha["agente"]), "etapas": etapas}}

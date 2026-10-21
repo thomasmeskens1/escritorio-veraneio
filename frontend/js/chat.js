@@ -207,8 +207,9 @@ function abrirChat(andar, agente) {
 }
 
 // Mensagem do agente no formato das respostas ao vivo (modelo na linha de metadados).
+// `por`: a resposta veio de outro agente (Gestor, produção) para o chat onde o pedido nasceu.
 function mensagemDoAgente(andar, agente, dados) {
-  const nome = dadosAgente(andar, agente).nome;
+  const nome = dados.por || dadosAgente(andar, agente).nome;
   const meta = metadadosResposta(dados);
   const autor = !meta && dados.modelo ? `${nome} · ${dados.modelo}` : nome;
   return { autor, texto: dados.texto, tipo: 'agente', meta, tarefa_id: dados.tarefa_id };

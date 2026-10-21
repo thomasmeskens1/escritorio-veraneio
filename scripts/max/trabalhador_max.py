@@ -40,8 +40,8 @@ PASTA_FINAL = "entrega"       # só o que o Claude Code grava aqui vai para o Dr
 RASCUNHOS = comum.DADOS / "producoes"  # rascunho local de cada peça (fora do Drive; base dos ajustes)
 DIAS_RASCUNHO = 60
 PASTA_DIRETRIZES = comum.DADOS / "conhecimento"   # manuais da Casa Veraneio (fora do git)
-DIRETRIZES = {"criador_imagens": ("00", "01", "08", "09", "04", "03"),
-              "editor_video": ("00", "01", "08", "09", "06", "05")}
+DIRETRIZES = {"criador_imagens": ("00", "01", "08", "09", "10", "04", "03"),
+              "editor_video": ("00", "01", "08", "09", "10", "06", "05")}
 
 INSTRUCOES = {
     "criador_imagens": (

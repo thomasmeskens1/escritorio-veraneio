@@ -46,8 +46,10 @@ function mostrarAndamento(ativa) {
     lista.append(item);
   });
   const feitas = ativa.etapas.filter((e) => e.status === 'concluida').length;
+  const titulo = chatAberto && ativa.agente && ativa.agente !== dadosAgente(chatAberto.andar, chatAberto.agente).nome
+    ? `Andamento · ${ativa.agente}` : 'Andamento';  // tarefa nascida aqui rodando em outro agente
   modalAndamento.replaceChildren(
-    novoEl('h3', null, 'Andamento'),
+    novoEl('h3', null, titulo),
     novoEl('p', 'andamento-pedido', ativa.pedido),
     novoEl('p', 'andamento-progresso', `${feitas} de ${ativa.etapas.length} etapas`),
     lista,

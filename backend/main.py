@@ -192,17 +192,25 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     # "...todos os dias às 8h" vira rotina agendada (vale mesmo com o agente ocupado agora).
     if agendamentos.e_agendamento(texto) and await agendamentos.criar(usuario["sub"], andar, agente.id, texto):
         return
+    # A resposta final sempre volta ao chat onde o usuário pediu (origem_id), mesmo rodando em outro agente.
+    origem_id = None
+    # "Ajuste na peça #33" no chat de origem: vai para quem produziu a peça, e a nova versão volta para cá.
+    if (produtor := producao.agente_da_peca(usuario["sub"], texto)) and produtor != agente.id:
+        origem_id, agente = agente.id, buscar_agente(andar, produtor) or agente
+        await gerenciador.enviar(ws, {
+            "tipo": "aviso", **alvo, "titulo": "Ajuste enviado", "liberar": True,
+            "texto": f"Mandei o ajuste para o {agente.nome}. A nova versão chega aqui quando ficar pronta."})
     # Peça completa pedida a um especialista do Marketing: o Gestor coordena a equipe.
-    origem_id = None  # pedido encaminhado: a resposta do Gestor também volta para este chat
-    if encaminhamento.para_o_gestor(andar, agente.id, texto):
+    elif encaminhamento.para_o_gestor(andar, agente.id, texto):
         origem_id = agente.id
         gestor = buscar_agente(andar, encaminhamento.GESTOR)
         await gerenciador.enviar(ws, {
             "tipo": "aviso", **alvo, "titulo": "Encaminhado ao Gestor", "liberar": True,
             "texto": f"Isso é uma peça completa, então encaminhei ao Gestor: ele monta o plano e aciona "
                      f"{agente.nome}, Designer, Criador de Imagens e quem mais precisar. "
-                     "A resposta final também chega aqui quando ele terminar."})
-        agente, texto, alvo = gestor, f"[Pedido feito ao {agente.nome}] {texto}", {"andar": andar, "agente": gestor.id}
+                     "A resposta final chega aqui, nesta conversa, quando a equipe terminar."})
+        agente, texto = gestor, f"[Pedido feito ao {agente.nome}] {texto}"
+    # Erros e avisos imediatos ficam no chat onde o usuário escreveu (alvo não muda).
     if agente.status == Status.trabalhando:
         return await erro(f"{agente.nome} já está trabalhando em outra tarefa.", **alvo)
     if not orquestrador.ha_modelo_disponivel():

@@ -132,7 +132,7 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
     cerebro.aprender_tarefa(tarefa_id)            # o trabalho concluído vira conhecimento
     linha = tarefas.obter(tarefa_id)
     await _entregar(linha)
-    await _avisar_origem(linha, f"O Gestor concluiu o pedido que chegou aqui:\n\n{resultado.texto}")
+    await entregar_na_origem(linha)
     producao_a_seguir = False
     if linha["agente"] == "gestor" and linha["usuario"] == config.DONO_MAX:
         producao_a_seguir = await _produzir_pecas(linha, resultado.texto)
@@ -155,22 +155,38 @@ async def _produzir_pecas(linha, consolidado: str) -> bool:
                     f"textos e as especificações abaixo, sem inventar dados.\n\nPedido original: {linha['texto']}"
                     f"\n\nResultado consolidado do Gestor:\n{consolidado[:8000]}")
         producao_id = await producao.enfileirar(linha["usuario"], linha["andar"], agente, briefing, titulo=titulo)
+        # A entrega da produção volta ao chat onde o usuário pediu (o do Gestor, se ele pediu direto ao Gestor).
+        encaminhamento.registrar(producao_id, *(encaminhamento.origem(linha["id"]) or (linha["andar"], "gestor")),
+                                 pedido=False)
         if (vinculo := monday._vinculo(linha["id"])):  # os criativos voltam para o mesmo item do Monday
             monday.vincular(producao_id, vinculo["item_id"], vinculo["usuario_monday"], vinculo["origem"] or "botao")
-        await gerenciador.enviar_para_usuario(linha["usuario"], {
-            "tipo": "aviso", "andar": linha["andar"], "agente": "gestor", "titulo": "Produção",
-            "texto": f"A peça final foi para o {agente.nome} produzir no Claude Code (Max). "
-                     f"O aviso de pronto chega na conversa do {agente.nome}."})
+        await avisar_na_origem(linha["id"], {"andar": linha["andar"], "agente": "gestor"},
+                               f"A peça final foi para o {agente.nome} produzir no Claude Code (Max). "
+                               "A entrega chega aqui quando ficar pronta.", "Produção")
         produziu = True
     return produziu
 
 
-async def _avisar_origem(linha, texto: str) -> None:
-    """Pedido encaminhado ao Gestor: a resposta também aparece no chat de quem recebeu o pedido."""
-    if (de := encaminhamento.origem(linha["id"])):
-        andar, agente = de
-        await gerenciador.enviar_para_usuario(linha["usuario"], {
-            "tipo": "aviso", "andar": andar, "agente": agente, "titulo": "Resposta do Gestor", "texto": texto})
+async def entregar_na_origem(linha) -> None:
+    """Tarefa que nasceu em outro chat (encaminhada ao Gestor, produção do projeto): a resposta final, ou a
+    falha, também aparece no chat onde o usuário pediu, assinada por quem respondeu."""
+    if not (de := encaminhamento.origem(linha["id"])):
+        return
+    andar, agente = de
+    if (andar, agente) == (linha["andar"], linha["agente"]):
+        return
+    quem = buscar_agente(linha["andar"], linha["agente"])
+    mensagem = {**_mensagem(linha), "andar": andar, "agente": agente, "por": quem.nome if quem else linha["agente"]}
+    await gerenciador.enviar_para_usuario(linha["usuario"], mensagem)
+
+
+async def avisar_na_origem(tarefa_id: int, alvo: dict, texto: str, titulo: str) -> None:
+    """Aviso que vale também para o chat de origem (ex.: "foi para a produção")."""
+    linha = tarefas.obter(tarefa_id)
+    destinos = [alvo, *([{"andar": d[0], "agente": d[1]}] if (d := encaminhamento.origem(tarefa_id)) else [])]
+    for destino in {(d["andar"], d["agente"]): d for d in destinos}.values():
+        await gerenciador.enviar_para_usuario(linha["usuario"], {"tipo": "aviso", **destino, "titulo": titulo,
+                                                                 "texto": texto})
 
 
 def _falhar(tarefa_id: int, motivo: str) -> None:
@@ -179,7 +195,7 @@ def _falhar(tarefa_id: int, motivo: str) -> None:
     cerebro.registrar_resultado(tarefa_id, False)
     monday.andamento(tarefa_id, "falhou", motivo)
     if encaminhamento.origem(tarefa_id):
-        _em_segundo_plano(_avisar_origem(tarefas.obter(tarefa_id), f"O Gestor não conseguiu concluir: {motivo}"))
+        _em_segundo_plano(entregar_na_origem(tarefas.obter(tarefa_id)))
 
 
 def _mensagem(linha) -> dict:
