@@ -165,6 +165,11 @@ def contexto(agente_id: str, historico: list = (), pedido: str = "") -> str:
     """Contexto fixo do agente: conversa recente, instruções e conhecimento específico."""
     historico = _historico_relevante(historico, pedido)
     partes = [_resumo_historico(historico)] if historico else []
+    if pedido:  # Lodge citado: a ficha oficial entra inteira (fichas.py, nível 2 da árvore de conhecimento)
+        import fichas  # import tardio: o Cérebro carrega o banco
+
+        if (fichas_lodges := fichas.fichas_citadas(pedido)):
+            partes.append(fichas_lodges)
     partes.append(INSTRUCOES)
     if agente_id in AGENTES_ESCOLA:
         partes.append(f"Baseie-se apenas neste manual da ferramenta:\n{MANUAL_ESCOLA}")

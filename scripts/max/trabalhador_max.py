@@ -215,6 +215,7 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
         "Contexto: Escritório Veraneio, equipe de marketing da Casa Veraneio. Responda em português do Brasil.",
         f"Conversa recente:\n{historico}" if historico else "",
         f"Pedido: {producao['texto']}",
+        producao.get("fichas") or "",  # fichas oficiais dos Lodges citados (dados do site)
         instrucao_versao(producao, versao),
         (f"Referências do item no Monday (ponto de partida, não regra absoluta):\n{lista_referencias}\n"
          "Abra com Read as que estão nesta pasta e use-as como inspiração de estilo, enquadramento ou texto.")

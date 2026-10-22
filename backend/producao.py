@@ -24,6 +24,7 @@ from pydantic import BaseModel
 import atividade
 import config
 import max_texto
+import fichas
 import monday
 import segredos
 import tarefas
@@ -378,6 +379,7 @@ async def proxima(authorization: str = Header("")):
         # Item do Monday: referências (links novos) para baixar e envio dos criativos no fim.
         "monday": bool(monday.item_da_tarefa(linha["id"])),
         "referencias": await asyncio.to_thread(monday.referencias_da_tarefa, linha["id"]),
+        "fichas": await asyncio.to_thread(fichas.fichas_citadas, linha["texto"]),  # dados oficiais dos Lodges citados
     }, "trabalho": None}
 
 
