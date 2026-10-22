@@ -28,7 +28,8 @@ TERMOS_COMPLEXOS = (
 )
 
 # Limites em segundos. Base: qwen3:4b nesta máquina leva ~3 min numa tarefa simples (benchmark).
-LIMITE_GRATUITO = 240
+LIMITE_GRATUITO = 240  # o MiniMax leva ~3 min nas respostas que dão certo; menos que isso descarta respostas boas
+MAX_GRATUITOS_IMEDIATOS = 3  # caminho imediato: até 3 gratuitos antes do Max/Haiku/local
 LIMITE_LOCAL = {Dificuldade.simples: 6 * 60, Dificuldade.media: 15 * 60}  # complexa não usa o local de imediato
 LIMITE_LOCAL_CONTINGENCIA = 30 * 60  # na fila, sem ninguém esperando, o local pode ir mais longe
 LIMITE_FILA = 5 * 60
@@ -57,14 +58,16 @@ def _utilizaveis(etapas: list[Etapa]) -> list[Etapa]:
     return [e for e in etapas if config.modelo_disponivel(e.modelo) and saude.disponivel(e.modelo)]
 
 
-def _gratuitos() -> list[Etapa]:
-    return [Etapa(m, LIMITE_GRATUITO) for m in config.MODELOS_GRATUITOS]
+def _gratuitos(maximo: int | None = None) -> list[Etapa]:
+    """Gratuitos na ordem da lista; os fora da rota (saude) saem antes de contar o máximo."""
+    disponiveis = [m for m in config.MODELOS_GRATUITOS if saude.disponivel(m)]
+    return [Etapa(m, LIMITE_GRATUITO) for m in disponiveis[:maximo]]
 
 
 def etapas_imediatas(dificuldade: Dificuldade, agente_id: str) -> list[Etapa]:
     """Gratuitos primeiro. Simples: Haiku antes do local (rápido e barato, com teto próprio).
     O local só para simples/médias de agentes que ele atende bem."""
-    etapas = _gratuitos()
+    etapas = _gratuitos(MAX_GRATUITOS_IMEDIATOS)  # alguém esperando: no pior caso 3 x 4 min, não 6 x 4 min
     if dificuldade == Dificuldade.simples and tarefas.chat_rapido_liberado(agente_id):
         etapas.append(Etapa(config.MODELO_FILA_PADRAO, LIMITE_FILA))
     if dificuldade in LIMITE_LOCAL and agente_id not in AGENTES_SEM_LOCAL and config.MODELO_LOCAL:

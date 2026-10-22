@@ -223,27 +223,29 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         return
     # A resposta final sempre volta ao chat onde o usuário pediu (origem_id), mesmo rodando em outro agente.
     origem_id = None
+    aviso = None  # "encaminhei/mandei para...": só sai depois de o pedido passar nas validações abaixo
     # "Ajuste na peça #33" no chat de origem: vai para quem produziu a peça, e a nova versão volta para cá.
     if (produtor := producao.agente_da_peca(usuario["sub"], texto)) and produtor != agente.id:
         origem_id, agente = agente.id, buscar_agente(andar, produtor) or agente
-        await gerenciador.enviar(ws, {
-            "tipo": "aviso", **alvo, "titulo": "Ajuste enviado", "liberar": True,
-            "texto": f"Mandei o ajuste para o {agente.nome}. A nova versão chega aqui quando ficar pronta."})
+        aviso = {"titulo": "Ajuste enviado",
+                 "texto": f"Mandei o ajuste para o {agente.nome}. A nova versão chega aqui quando ficar pronta."}
     # Peça completa pedida a um especialista do Marketing: o Gestor coordena a equipe.
     elif encaminhamento.para_o_gestor(andar, agente.id, texto):
         origem_id = agente.id
         gestor = buscar_agente(andar, encaminhamento.GESTOR)
-        await gerenciador.enviar(ws, {
-            "tipo": "aviso", **alvo, "titulo": "Encaminhado ao Gestor", "liberar": True,
-            "texto": f"Isso é uma peça completa, então encaminhei ao Gestor: ele monta o plano e aciona "
-                     f"{agente.nome}, Designer, Criador de Imagens e quem mais precisar. "
-                     "A resposta final chega aqui, nesta conversa, quando a equipe terminar."})
+        aviso = {"titulo": "Encaminhado ao Gestor",
+                 "texto": f"Isso é uma peça completa, então encaminhei ao Gestor: ele monta o plano e aciona "
+                          f"{agente.nome}, Designer, Criador de Imagens e quem mais precisar. "
+                          "A resposta final chega aqui, nesta conversa, quando a equipe terminar."}
         agente, texto = gestor, f"[Pedido feito ao {agente.nome}] {texto}"
     # Erros e avisos imediatos ficam no chat onde o usuário escreveu (alvo não muda).
-    if agente.status == Status.trabalhando:
+    # Produção (Criador de Imagens, Editor de Vídeo) tem fila: ocupado não impede pedir outra peça ou ajuste.
+    if agente.status == Status.trabalhando and agente.id not in AGENTES_PRODUCAO:
         return await erro(f"{agente.nome} já está trabalhando em outra tarefa.", **alvo)
     if not orquestrador.ha_modelo_disponivel():
         return await erro("Nenhum modelo de IA configurado no servidor.", **alvo)
+    if aviso:
+        await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "liberar": True, **aviso})
 
     # 'Faça uma legenda para o item "FEED | ..."': os dados do item do Monday entram no pedido.
     # O resultado também vai para o item (comentário e legenda), sem mudar o status dele.

@@ -30,6 +30,7 @@ const urlsAnexo = {}; // id do anexo -> Promise<blob URL> (miniaturas no histór
 let enviandoAnexos = false;
 
 const chave = (andar, agente) => `${andar}/${agente}`;
+const AGENTES_COM_FILA = new Set(['criador_imagens', 'editor_video']); // mesma lista de AGENTES_PRODUCAO
 
 const tamanhoLegivel = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
@@ -118,7 +119,9 @@ function atualizarChat() {
   if (!chatAberto) return;
   const { andar, agente } = chatAberto;
   const dados = dadosAgente(andar, agente);
-  const ocupado = dados.status === 'trabalhando' || pendentes.has(chave(andar, agente));
+  // Produção (Criador de Imagens, Editor de Vídeo) tem fila no Max: trabalhando não impede pedir outra peça/ajuste.
+  const comFila = AGENTES_COM_FILA.has(agente);
+  const ocupado = (dados.status === 'trabalhando' && !comFila) || pendentes.has(chave(andar, agente));
   const online = conectado();
   const restrito = producaoRestrita(andar, agente);
   const carregando = carregandoHistorico.has(chave(andar, agente));
@@ -262,6 +265,13 @@ async function carregarHistorico(andar, agente) {
     if (!dados) modalHistorico.prepend(criarMensagem({ autor: 'sistema', texto: 'Não foi possível carregar o histórico.', tipo: 'sistema' }));
     atualizarChat();
   }
+}
+
+// Reconectou: o que chegou enquanto a conexão estava fora (ex.: resposta do Gestor no chat de origem) só
+// existe no histórico salvo. Busca de novo (as assinaturas evitam mensagens repetidas).
+function recarregarHistoricos() {
+  historicoCarregado.clear();
+  if (chatAberto) carregarHistorico(chatAberto.andar, chatAberto.agente);
 }
 
 function fecharChat() {

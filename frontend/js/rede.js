@@ -52,6 +52,7 @@ function conectar() {
   ws.addEventListener('open', () => {
     ws.send(JSON.stringify({ tipo: 'auth', token: sessao.token }));
     atualizarConexao();
+    recarregarHistoricos();
   });
 
   ws.addEventListener('message', (e) => {

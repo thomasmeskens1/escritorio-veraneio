@@ -37,11 +37,17 @@ _trava = threading.Lock()
 _cache: dict[str, float] | None = None  # modelo -> até quando fica fora (lido do banco uma vez)
 
 
+_pronto = False  # tabelas criadas uma vez por processo
+
+
 def _db():
+    global _pronto
     import tarefas  # import tardio: tarefas importa config e o banco
 
     db = tarefas._db()
-    db.executescript(_ESQUEMA)
+    if not _pronto:
+        db.executescript(_ESQUEMA)
+        _pronto = True
     return db
 
 

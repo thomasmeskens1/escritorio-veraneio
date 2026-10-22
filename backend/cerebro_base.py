@@ -8,6 +8,7 @@ import json
 import logging
 import math
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
@@ -67,6 +68,7 @@ CREATE INDEX IF NOT EXISTS idx_consultas_tarefa ON consultas_cerebro(tarefa_id);
 _trava = threading.RLock()  # a conexão SQLite é compartilhada entre o loop e as threads dos agentes
 _versao = 0                 # muda a cada escrita no conteúdo: o índice em memória é refeito
 _indice = None
+REFAZER_INDICE_S = 15  # idade máxima do índice usado nas consultas (ver indice_atual)
 _pronto = False
 
 
@@ -180,7 +182,7 @@ def _pode_substituir(novo: str, antigo: str) -> bool:
 
 def _versionar(novo_id: int, vetor: np.ndarray) -> int:
     """Trechos do mesmo documento (mesmo tipo e ref) não se substituem: isso é papel do substituir_ref."""
-    indice = indice_atual()
+    indice = indice_atual(fresco=True)
     if not len(indice.ids):
         return 0
     with _trava:
@@ -203,6 +205,7 @@ def _versionar(novo_id: int, vetor: np.ndarray) -> int:
 class Indice:
     def __init__(self, linhas: list):
         self.versao = _versao
+        self.criado = time.monotonic()
         self.ids = [l["id"] for l in linhas]
         self.titulos = [l["titulo"] for l in linhas]
         self.conteudos = [l["conteudo"] for l in linhas]
@@ -233,16 +236,25 @@ class Indice:
         return self._bm25
 
 
-def indice_atual() -> Indice:
+def indice_atual(fresco: bool = False) -> Indice:
+    """Índice da busca. Na consulta dos agentes, um índice com até REFAZER_INDICE_S de idade serve: antes, cada
+    tarefa concluída mandava refazer tudo, segurando a trava e travando as consultas. `fresco` (versionamento e
+    consolidação) sempre reflete a última escrita. A leitura fica na trava (conexão compartilhada); a montagem
+    do índice (BM25, matriz), fora dela."""
     global _indice
     with _trava:
-        if _indice is None or _indice.versao != _versao:
-            versao = _versao
-            linhas = db().execute("SELECT id, fonte_tipo, fonte_ref, titulo, conteudo, embedding, modelo_embedding, "
-                                  "peso_fonte, atualizado_em FROM conhecimento WHERE ativo = 1 ORDER BY id").fetchall()
-            _indice = Indice(linhas)
-            _indice.versao = versao
-        return _indice
+        atual, versao = _indice, _versao
+        if atual is not None and (atual.versao == versao or
+                                  (not fresco and time.monotonic() - atual.criado < REFAZER_INDICE_S)):
+            return atual
+        linhas = db().execute("SELECT id, fonte_tipo, fonte_ref, titulo, conteudo, embedding, modelo_embedding, "
+                              "peso_fonte, atualizado_em FROM conhecimento WHERE ativo = 1 ORDER BY id").fetchall()
+    novo = Indice(linhas)
+    novo.versao, novo.criado = versao, time.monotonic()
+    with _trava:
+        if _indice is None or _indice.versao < versao:
+            _indice = novo
+    return novo
 
 
 # --- Busca ---------------------------------------------------------------------------------------
@@ -364,7 +376,7 @@ def restaurar_documentos_distintos() -> int:
 def consolidar() -> dict:
     """Rotina diária: embeddings que faltam, duplicados quase idênticos e decaimento dos trechos de tarefa."""
     gerar_embeddings(pendentes())
-    indice = indice_atual()
+    indice = indice_atual(fresco=True)
     com_vetor = np.nonzero(indice.tem_embedding)[0]
     removidos: dict[int, int] = {}
     for inicio in range(0, len(com_vetor), 256):
@@ -387,7 +399,16 @@ def consolidar() -> dict:
         decaidos = conexao.execute(
             "UPDATE conhecimento SET pontuacao = pontuacao * 0.9 WHERE fonte_tipo = 'tarefa' AND ativo = 1 "
             "AND pontuacao != 0 AND criado_em < ?", (agora(-timedelta(days=30)),)).rowcount
-    resultado = {"duplicados": len(removidos), "decaidos": decaidos, "pendentes": len(pendentes())}
+        # Versões antigas (inativas há 30+ dias) guardam o texto como histórico, mas não o vetor: era mais da
+        # metade do banco. Se um trecho for reativado, o vetor é recalculado (pendentes() pega ativo sem vetor).
+        liberados = conexao.execute(
+            "UPDATE conhecimento SET embedding = NULL WHERE ativo = 0 AND embedding IS NOT NULL "
+            "AND atualizado_em < ?", (agora(-timedelta(days=30)),)).rowcount
+    if liberados >= 100:
+        with _trava:
+            db().execute("VACUUM")  # devolve o espaço ao disco (fora de transação)
+    resultado = {"duplicados": len(removidos), "decaidos": decaidos, "vetores_liberados": liberados,
+                 "pendentes": len(pendentes())}
     log.info("Cérebro: consolidação %s", resultado)
     return resultado
 

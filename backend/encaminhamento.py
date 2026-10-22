@@ -52,13 +52,20 @@ def para_o_gestor(andar: str, agente_id: str, texto: str) -> bool:
 _ESQUEMA = "CREATE TABLE IF NOT EXISTS encaminhamentos (tarefa_id INTEGER PRIMARY KEY, andar TEXT, agente TEXT)"
 
 
+_pronto = False  # tabela e migração verificadas uma vez por processo
+
+
 def _db():
+    global _pronto
     import tarefas
     db = tarefas._db()
-    db.execute(_ESQUEMA)
-    colunas = {c["name"] for c in db.execute("PRAGMA table_info(encaminhamentos)")}
-    if "pedido" not in colunas:
-        db.execute("ALTER TABLE encaminhamentos ADD COLUMN pedido INTEGER DEFAULT 1")
+    if not _pronto:
+        db.execute(_ESQUEMA)
+        colunas = {c["name"] for c in db.execute("PRAGMA table_info(encaminhamentos)")}
+        if "pedido" not in colunas:
+            db.execute("ALTER TABLE encaminhamentos ADD COLUMN pedido INTEGER DEFAULT 1")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_encaminhamentos_chat ON encaminhamentos(andar, agente)")
+        _pronto = True
     return db
 
 

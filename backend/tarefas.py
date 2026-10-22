@@ -51,6 +51,10 @@ CREATE TABLE IF NOT EXISTS gastos_api (
     custo_usd REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_gastos_em ON gastos_api(em);
+-- Consultas mais frequentes (histórico do chat, andamento, painel, registro).
+CREATE INDEX IF NOT EXISTS idx_tarefas_chat ON tarefas(usuario, andar, agente, id);
+CREATE INDEX IF NOT EXISTS idx_tarefas_status ON tarefas(status);
+CREATE INDEX IF NOT EXISTS idx_eventos_tipo ON eventos(tipo, em);
 """
 
 # Colunas adicionadas depois da primeira versão do banco (migração simples).

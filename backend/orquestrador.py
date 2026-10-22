@@ -131,8 +131,9 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
     tarefas.atualizar(tarefa_id, status="concluida", modelo=modelo, resposta=resultado.texto,
                       tokens_entrada=resultado.tokens_entrada, tokens_saida=resultado.tokens_saida, custo_usd=resultado.custo_usd)
     tarefas.registrar_evento(tarefa_id, "concluida", modelo=modelo)
-    cerebro.registrar_resultado(tarefa_id, True)  # trechos usados ganham pontos
-    cerebro.aprender_tarefa(tarefa_id)            # o trabalho concluído vira conhecimento
+    # Fora do loop: o Cérebro usa uma trava própria e não pode congelar o WebSocket e as rotas.
+    await asyncio.to_thread(cerebro.registrar_resultado, tarefa_id, True)  # trechos usados ganham pontos
+    await asyncio.to_thread(cerebro.aprender_tarefa, tarefa_id)            # o trabalho concluído vira conhecimento
     linha = tarefas.obter(tarefa_id)
     await _entregar(linha)
     await entregar_na_origem(linha)
@@ -224,6 +225,7 @@ async def entregar_pendentes(login: str) -> None:
     """Respostas que ficaram prontas enquanto o usuário estava fora."""
     for linha in tarefas.nao_entregues(login):
         await _entregar(linha)
+        await entregar_na_origem(linha)  # e no chat onde o pedido nasceu, se foi em outro
 
 
 # --- Fila adiada -------------------------------------------------------------------------
