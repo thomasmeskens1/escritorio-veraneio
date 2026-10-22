@@ -49,7 +49,7 @@ function textoNatural(texto) {
     .trim();
 }
 
-function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id }) {
+function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes }) {
   const div = document.createElement('div');
   div.className = `msg msg-${tipo}`;
   const nome = document.createElement('span');
@@ -58,6 +58,7 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id }) {
   div.append(nome, document.createTextNode(tipo === 'agente' ? textoNatural(texto) : texto));
   if (anexos?.length) div.append(criarAnexosDaMensagem(anexos));
   if (tipo === 'agente' && tarefa_id && /^✅ Pedido concluído/.test(texto)) div.append(criarBotaoAjuste(tarefa_id));
+  if (opcoes?.length) div.append(criarOpcoes(opcoes));
   if (meta) {
     const linha = document.createElement('span');
     linha.className = 'msg-meta';
@@ -65,6 +66,26 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id }) {
     div.append(linha);
   }
   return div;
+}
+
+// Respostas rápidas (ex.: "Só o planejamento" / "Peça final"): o clique envia a resposta como mensagem.
+function criarOpcoes(opcoes) {
+  const grupo = document.createElement('div');
+  grupo.className = 'msg-opcoes';
+  opcoes.forEach(({ rotulo, texto }) => {
+    const botao = document.createElement('button');
+    botao.type = 'button';
+    botao.className = 'botao-secundario msg-ajuste';
+    botao.textContent = rotulo;
+    botao.addEventListener('click', () => {
+      if (modalInput.disabled || modalEnviar.disabled) return;
+      grupo.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+      modalInput.value = texto;
+      document.getElementById('modal-form').requestSubmit();
+    });
+    grupo.append(botao);
+  });
+  return grupo;
 }
 
 // Entrega de produção: "Pedir ajuste" prepara o pedido; a nova versão sai na mesma pasta (_v2, _v3...).
@@ -144,42 +165,19 @@ function atualizarChat() {
   else modalInput.placeholder = carregando ? 'Carregando histórico…' : 'Descreva a tarefa...';
 }
 
-// Altura da área visível: com a conversa no fim, nada do histórico aparece.
-const alturaEspacoLimpo = () => `${Math.max(120, modalHistorico.clientHeight + 16)}px`;
-
-// A ficha do agente abre/fecha e muda a altura da conversa: o espaço limpo acompanha (e o fim continua à vista).
+// A ficha do agente abre/fecha e muda a altura da conversa: quem estava no fim continua vendo a última mensagem.
+let alturaConversa = 0;
 new ResizeObserver(() => {
-  const espaco = modalHistorico.querySelector('.historico-limpo');
-  if (!espaco) return;
-  const noFim = modalHistorico.scrollHeight - modalHistorico.scrollTop - modalHistorico.clientHeight < 40;
-  espaco.style.minHeight = alturaEspacoLimpo();
-  if (noFim) rolarParaFim();
+  // "No fim" medido com a altura de antes: quem rolou para cima lendo o histórico não é puxado para baixo.
+  const estavaNoFim = modalHistorico.scrollHeight - modalHistorico.scrollTop - alturaConversa < 40;
+  alturaConversa = modalHistorico.clientHeight;
+  if (estavaNoFim && chatAberto) rolarParaFim();
 }).observe(modalHistorico);
 
-// Espaço do tamanho da janela entre o histórico e a conversa nova: o chat abre "limpo".
-function criarEspacoLimpo() {
-  const espaco = document.createElement('div');
-  espaco.className = 'historico-limpo';
-  espaco.style.minHeight = alturaEspacoLimpo();
-  const fim = document.createElement('span');
-  fim.className = 'historico-limpo-fim';
-  fim.textContent = 'Fim do histórico';
-  const dica = document.createElement('span');
-  dica.className = 'historico-limpo-dica';
-  dica.textContent = '↑ Role para cima para ver o histórico';
-  espaco.append(fim, dica);
-  return espaco;
-}
-
-// Redesenha a conversa do agente aberto (com o aviso de carregamento, se for o caso).
-// Mensagens de antes da abertura (`anterior`) ficam acima do espaço limpo; as novas, abaixo.
+// Redesenha a conversa do agente aberto (com o aviso de carregamento, se for o caso) e mostra a última interação.
 function renderizarHistorico(andar, agente) {
   const k = chave(andar, agente);
-  const mensagens = historicos[k] || [];
-  const nos = mensagens.map(criarMensagem);
-  const ultimaAnterior = mensagens.map((m) => !!m.anterior).lastIndexOf(true);
-  if (ultimaAnterior >= 0) nos.splice(ultimaAnterior + 1, 0, criarEspacoLimpo());
-  modalHistorico.replaceChildren(...nos);
+  modalHistorico.replaceChildren(...(historicos[k] || []).map(criarMensagem));
   if (carregandoHistorico.has(k)) {
     const aviso = document.createElement('p');
     aviso.className = 'msg-carregando';
@@ -196,13 +194,11 @@ function abrirChat(andar, agente) {
   ajustarAlturaInput();
   avisarAnexo('');
   renderizarSelecao();
-  // Tudo o que já existe vira "anterior": a conversa abre limpa, com o histórico acima.
-  (historicos[chave(andar, agente)] || []).forEach((m) => { m.anterior = true; });
   carregarHistorico(andar, agente);
   document.getElementById('modal-onboarding').hidden = agente !== 'recepcionista';
   modal.classList.add('aberto');
   ajustarAlturaInput();
-  renderizarHistorico(andar, agente); // com o modal visível, o espaço limpo mede a janela
+  renderizarHistorico(andar, agente); // abre na última interação (rolada até o fim)
   carregarPerfil(andar, agente);
   acompanharAndamento(andar, agente);
   atualizarChat();
@@ -252,7 +248,7 @@ async function carregarHistorico(andar, agente) {
   if (dados) {
     historicoCarregado.add(k);
     // Mensagem ao vivo que também está no histórico fica na posição cronológica dele.
-    const salvas = (dados.mensagens || []).map((m) => ({ ...converterDoServidor(andar, agente, m), anterior: true }));
+    const salvas = (dados.mensagens || []).map((m) => converterDoServidor(andar, agente, m));
     const noHistorico = new Set(salvas.map(assinaturaMensagem).filter(Boolean));
     const aoVivo = (historicos[k] || []).filter((m) => !noHistorico.has(assinaturaMensagem(m)));
     salvas.forEach((m) => marcarVista(k, m));
@@ -505,13 +501,14 @@ function receberAdiada({ andar, agente, texto, tarefa_id }) {
 // Aviso do servidor ligado a um agente (ex.: agente criado, agendamento criado): mensagem de sistema
 // no chat dele e toast se o chat não estiver aberto.
 // `liberar`: o pedido não vai gerar resposta neste chat (ex.: encaminhado ao Gestor, rotina agendada).
-function receberAviso({ andar, agente, texto, titulo, liberar }) {
+// `opcoes`: botões de resposta rápida ([{rotulo, texto}]); o clique envia o texto como mensagem.
+function receberAviso({ andar, agente, texto, titulo, liberar, opcoes }) {
   if (!andar || !agente) {
     console.info('Aviso do servidor:', texto);
     return;
   }
   if (liberar) pendentes.delete(chave(andar, agente));
-  adicionarMensagem(andar, agente, { autor: 'sistema', texto, tipo: 'sistema' });
+  adicionarMensagem(andar, agente, { autor: 'sistema', texto, tipo: 'sistema', opcoes });
   if (!chatEstaAberto(andar, agente)) mostrarToast(andar, agente, texto, titulo || 'Aviso');
   if (titulo === 'Rotina agendada') atualizarRotinas(andar, agente); // lista do popup do agente
   atualizarChat();
