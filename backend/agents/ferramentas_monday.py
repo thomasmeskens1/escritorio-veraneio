@@ -40,7 +40,8 @@ class _NovoItem(BaseModel):
     objetivo: str = Field("", description=f"Um de: {', '.join(OBJETIVOS)}")
     responsavel: str = Field("", description=f"Um de: {', '.join(RESPONSAVEIS)} (deixe vazio se não souber)")
     conta: str = Field("Casa Veraneio", description=f"Marca: {', '.join(CONTAS)}")
-    legenda: str = Field("", description="Rascunho da legenda (opcional)")
+    legenda: str = Field("", description="Rascunho da legenda, só para POST, CARROSSEL, REELS e SHORTS. Para STORIES "
+                                         "deixe VAZIO e não escreva nenhuma legenda (stories não têm legenda).")
 
 
 class VerPlanejamentoMonday(BaseTool):
@@ -68,6 +69,7 @@ class CriarItemMonday(BaseTool):
     name: str = "criar_item_monday"
     description: str = ("Cria um elemento (peça do planejamento) no board de Social Media do Monday, DENTRO do "
                         "grupo do mês certo (planejamento de dezembro → grupo 'Dezembro'). Um item por peça. "
+                        "STORIES: sem legenda (campo vazio). "
                         "Devolve a confirmação com o link ou o erro a corrigir.")
     args_schema: type[BaseModel] = _NovoItem
     criados: int = 0

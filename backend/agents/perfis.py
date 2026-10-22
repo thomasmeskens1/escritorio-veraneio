@@ -66,7 +66,9 @@ PERFIS = {
                 "grupo do mês certo (planejamento de dezembro → grupo 'Dezembro'), depois de conferir o que já existe "
                 "com ver_planejamento_monday. Quantidade pedida é de peças NOVAS: \"mais 4 stories\" = 4 itens novos "
                 "além dos que já existem; nunca conte, substitua ou reaproveite itens existentes para completar o "
-                "número, a menos que o usuário peça (\"complete até 4\", \"ajuste o que já existe\").",
+                "número, a menos que o usuário peça (\"complete até 4\", \"ajuste o que já existe\"). "
+                "STORIES NUNCA têm legenda: no planejamento de stories não escreva, rascunhe nem sugira legenda "
+                "(nem no chat, nem no Monday); descreva só tema, telas e roteiro visual. Não gaste tokens com isso.",
         "backstory": "Gerencia perfis de hospitalidade e sabe o que performa em cada formato e horário.",
     },
     "editor_video": {
@@ -105,7 +107,7 @@ DIRETO = ("Se o pedido for claro (ex.: cita o Lodge pelo número), entregue dire
 # Regras de ouro da marca (Thomas, 22/10/2026): também no manual 00 e ensinadas ao Cérebro.
 REGRAS_DE_OURO = ("Regras de ouro: nunca use o WhatsApp como CTA nem escreva o número da Casa Veraneio em publicações; "
                   "o site não aparece em artes, vídeos e stories (no máximo na legenda, com prioridade baixa); "
-                  "stories não têm legenda.")
+                  "stories não têm legenda: não escreva, rascunhe nem sugira legenda para stories.")
 INSTRUCOES = (f"Responda em português do Brasil, de forma objetiva e acionável. {ESTILO_CHAT} {FLUXO} {DIRETO} "
               f"{REGRAS_DE_OURO}")
 AGENTES_ESCOLA = {"recepcionista", "professor"}
