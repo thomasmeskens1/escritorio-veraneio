@@ -48,10 +48,19 @@ function mostrarAndamento(ativa) {
   const feitas = ativa.etapas.filter((e) => e.status === 'concluida').length;
   const titulo = chatAberto && ativa.agente && ativa.agente !== dadosAgente(chatAberto.andar, chatAberto.agente).nome
     ? `Andamento · ${ativa.agente}` : 'Andamento';  // tarefa nascida aqui rodando em outro agente
-  modalAndamento.replaceChildren(
+  modalAndamento.replaceChildren(...[
     novoEl('h3', null, titulo),
     novoEl('p', 'andamento-pedido', ativa.pedido),
     novoEl('p', 'andamento-progresso', `${feitas} de ${ativa.etapas.length} etapas`),
+    criarEstimativa(ativa.estimativa),
     lista,
-  );
+  ].filter(Boolean));
+}
+
+// "Tempo estimado: ~12 min (por volta de 15:40)", pelo ritmo das peças já feitas ou pela média do agente.
+function criarEstimativa(estimativa) {
+  if (!estimativa) return null;
+  const minutos = Math.max(1, Math.round(estimativa.restante_s / 60));
+  const hora = new Date(estimativa.previsao).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return novoEl('p', 'andamento-estimativa', `Tempo estimado: ~${minutos} min (por volta de ${hora})`);
 }

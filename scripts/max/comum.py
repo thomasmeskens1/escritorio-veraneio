@@ -6,7 +6,9 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime
@@ -108,19 +110,57 @@ def ambiente_seguro(base: dict | None = None) -> dict:
     return {k: v for k, v in (base or os.environ).items() if not _SEGREDO_NO_NOME.search(k)}
 
 
-def rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: dict | None = None) -> str:
+ARQUIVO_PROGRESSO = "progresso.txt"  # o Claude Code anota cada peça que começa ("1/4 | Criando Story 1")
+INTERVALO_PROGRESSO = 10
+
+
+def rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: dict | None = None,
+                 ao_progresso=None) -> str:
     """Roda o Claude Code com o prompt pela entrada padrão; devolve o texto final ou levanta RuntimeError.
-    Sempre isolado (ISOLAMENTO) e com o ambiente sem segredos."""
+    Sempre isolado (ISOLAMENTO) e com o ambiente sem segredos. `ao_progresso(linhas)`: chamado quando o
+    progresso.txt da pasta muda (a cada INTERVALO_PROGRESSO s)."""
     comando = [comando[0], *ISOLAMENTO, *comando[1:]]
-    processo = subprocess.run(comando, input=prompt, cwd=cwd, env=ambiente_seguro(env), capture_output=True, text=True,
-                              creationflags=SEM_JANELA,
-                              encoding="utf-8", errors="replace", timeout=timeout)
+    progresso = cwd / ARQUIVO_PROGRESSO
+    progresso.unlink(missing_ok=True)
+    visto: list[str] = []
+    inicio = time.monotonic()
+    with tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as saida_padrao, \
+            tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as saida_erro:
+        processo = subprocess.Popen(comando, stdin=subprocess.PIPE, stdout=saida_padrao, stderr=saida_erro, cwd=cwd,
+                                    env=ambiente_seguro(env), text=True, encoding="utf-8", errors="replace",
+                                    creationflags=SEM_JANELA)
+        processo.stdin.write(prompt)
+        processo.stdin.close()
+        while True:
+            try:
+                processo.wait(timeout=INTERVALO_PROGRESSO)
+                break
+            except subprocess.TimeoutExpired:
+                if time.monotonic() - inicio > timeout:
+                    processo.kill()
+                    processo.wait()
+                    raise subprocess.TimeoutExpired(comando, timeout)
+            if ao_progresso and progresso.exists():
+                linhas = [l.strip() for l in progresso.read_text(encoding="utf-8", errors="replace").splitlines()
+                          if l.strip()][-30:]
+                if linhas != visto:
+                    visto = linhas
+                    try:
+                        ao_progresso(linhas)
+                    except Exception as erro:  # progresso nunca derruba a produção
+                        log(f"   progresso não enviado ({erro})")
+        saida_padrao.seek(0)
+        saida_erro.seek(0)
+        texto_saida, texto_erro = saida_padrao.read(), saida_erro.read()
     try:
-        saida = json.loads(processo.stdout or "{}")
+        saida = json.loads(texto_saida or "{}")
     except ValueError:
-        saida = {"is_error": True, "result": (processo.stdout or "")[-500:]}
+        saida = {"is_error": True, "result": (texto_saida or "")[-500:]}
     if processo.returncode != 0 or saida.get("is_error"):
-        raise RuntimeError(saida.get("result") or processo.stderr[-500:] or "Claude Code terminou com erro.")
+        motivo = {"error_max_turns": "atingiu o limite de rodadas",
+                  "error_during_execution": "erro durante a execução"}.get(saida.get("subtype"), saida.get("subtype"))
+        raise RuntimeError(saida.get("result") or texto_erro[-500:]
+                           or f"Claude Code terminou com erro{f' ({motivo})' if motivo else ''}.")
     return saida.get("result", "")
 
 

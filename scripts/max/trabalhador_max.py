@@ -15,6 +15,7 @@ import os
 import re
 import shutil
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -231,6 +232,10 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
         f"{PASTA_FINAL}/EDITÁVEL/CENAS/ e manifest.json); (3) a legenda, quando a peça tiver (stories não têm), em "
         "\"Legenda - <peça>.docx\", gerada com python-docx, no lugar do Google Doc. Não use Higgsfield nem outra IA "
         "de imagem.",
+        "Se esta pasta já tiver arquivos de uma tentativa anterior interrompida, reaproveite-os e faça só o que falta.",
+        f"PROGRESSO: antes de começar cada peça, acrescente uma linha ao arquivo {comum.ARQUIVO_PROGRESSO} desta "
+        "pasta no formato \"k/n | o que está fazendo\" (ex.: \"1/4 | Criando Story 1 — Lodge 239\"; numa peça só: "
+        "\"1/1 | Montando a arte\"). O sistema mostra isso ao usuário enquanto você trabalha.",
         "Ao terminar, responda com um resumo curto (até 5 linhas) do que foi entregue.",
     ]))
 
@@ -238,7 +243,7 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
 def comando_producao() -> list[str]:
     # --restricted (comum.ISOLAMENTO) tira o Bash se --tools não o citar; arquivos só na pasta da peça + acervo.
     return [comum.claude_exe(), "-p", "--output-format", "json", "--permission-mode", "acceptEdits",
-            "--max-turns", "40", "--tools", "Read,Write,Edit,Glob,Bash",
+            "--max-turns", "120", "--tools", "Read,Write,Edit,Glob,Bash",  # 4 stories com editáveis passam de 40
             "--allowedTools", "Read,Write,Edit,Glob,Bash(ffmpeg:*),Bash(ffprobe:*),Bash(python:*)",
             "--add-dir", str(comum.ACERVO), "--add-dir", str(comum.CEREBRO)]
 
@@ -259,8 +264,20 @@ def produzir(producao: dict) -> None:
         referencias = baixar_referencias(producao, rascunho)
         antes = entregaveis(rascunho)
         # O pedido vai pela entrada padrão (texto longo, com quebras de linha).
-        resumo = comum.rodar_claude(comando_producao(), montar_prompt(producao, rascunho, anexos, versao, referencias),
-                                    rascunho, TEMPO_LIMITE, ambiente)
+        try:
+            resumo = comum.rodar_claude(comando_producao(),
+                                        montar_prompt(producao, rascunho, anexos, versao, referencias),
+                                        rascunho, TEMPO_LIMITE, ambiente,
+                                        ao_progresso=lambda linhas: comum.chamar(
+                                            "POST", f"/api/producao/{producao['tarefa_id']}/progresso", {"linhas": linhas}))
+        except (RuntimeError, subprocess.TimeoutExpired) as parada:
+            # Parou no meio, mas com artes prontas: entrega o que existe (antes, 19 PNGs prontos viraram "falha").
+            prontos = [n for n, m in entregaveis(rascunho).items()
+                       if antes.get(n) != m and Path(n).suffix.lower() in EXTENSOES_ARTE]
+            if not prontos:
+                raise
+            resumo = (f"O Claude Code parou antes de concluir ({parada}). Entreguei as {len(prontos)} arte(s) já "
+                      "prontas; se faltar algo (ex.: editável ou legenda), peça um ajuste nesta peça.")
         # Só os finais novos ou alterados vão para o Drive (sem pasta de trabalho na entrega).
         novos = sorted(nome for nome, mtime in entregaveis(rascunho).items() if antes.get(nome) != mtime)
         if not any(Path(n).suffix.lower() in EXTENSOES_ARTE for n in novos):

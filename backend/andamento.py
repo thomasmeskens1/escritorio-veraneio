@@ -6,6 +6,8 @@ Status de cada etapa: concluida | andamento | pendente | falhou.
 """
 
 import json
+import re
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Header, HTTPException
 
@@ -67,9 +69,60 @@ def _etapas_por_eventos(linha, eventos: list) -> list[dict]:
     if linha["status"] == "producao":
         etapas.append({"texto": "Na fila do Claude Code (Max) para produzir os arquivos", "status": "andamento"})
     elif linha["status"] == "produzindo":
-        etapas.append({"texto": "Produzindo os arquivos no Claude Code (Max)", "status": "andamento"})
+        etapas += _etapas_da_producao(linha["id"])
     etapas.append({"texto": "Entregar a resposta no chat", "status": "pendente"})
     return etapas
+
+
+PECA = re.compile(r"^\s*(\d+)\s*/\s*(\d+)\s*\|\s*(.+)$")
+
+
+def _peca(linha_progresso: str) -> tuple[int, int, str] | None:
+    achou = PECA.match(linha_progresso)
+    return (int(achou.group(1)), int(achou.group(2)), achou.group(3).strip()) if achou else None
+
+
+def _etapas_da_producao(tarefa_id: int) -> list[dict]:
+    """"Criando Story 1 de 4"...: o que o Claude Code anotou; as peças que faltam aparecem como pendentes."""
+    import producao  # import tardio: produção depende do orquestrador
+
+    linhas = producao.progresso_de(tarefa_id)
+    if not linhas:
+        return [{"texto": "Produzindo os arquivos no Claude Code (Max)", "status": "andamento"}]
+    etapas = [{"texto": (p[2] if (p := _peca(l)) else l), "status": "concluida"} for l in linhas]
+    etapas[-1]["status"] = "andamento"
+    if (ultima := _peca(linhas[-1])) and ultima[1] > ultima[0]:
+        etapas += [{"texto": f"Peça {k} de {ultima[1]}", "status": "pendente"} for k in range(ultima[0] + 1, ultima[1] + 1)]
+    return etapas
+
+
+def _segundos(iso: str) -> float:
+    return datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+
+
+def _estimativa(linha, eventos: list) -> dict | None:
+    """Tempo que falta: pelo ritmo das peças já feitas (produção com progresso) ou pela média das últimas
+    tarefas concluídas do mesmo agente. None se ainda não há base para estimar."""
+    agora = datetime.now(timezone.utc).timestamp()
+    inicio = next((_segundos(e["em"]) for e in reversed(eventos) if e["tipo"] == "tentativa"), None)
+    restante = None
+    if linha["status"] == "produzindo" and inicio:
+        import producao
+
+        pecas = [p for l in producao.progresso_de(linha["id"]) if (p := _peca(l))]
+        if pecas and pecas[-1][0] >= 2:  # ritmo real: tempo por peça já concluída
+            atual, total, _ = pecas[-1]
+            restante = (agora - inicio) / (atual - 1) * (total - atual + 1)
+    if restante is None:
+        media = tarefas._db().execute(
+            "SELECT AVG(tempo_segundos) FROM (SELECT tempo_segundos FROM tarefas WHERE agente = ? AND status = "
+            "'concluida' AND tempo_segundos > 0 ORDER BY id DESC LIMIT 10)", (linha["agente"],)).fetchone()[0]
+        if not media:
+            return None
+        restante = media - (agora - _segundos(linha["criada_em"]))
+    restante = max(restante, 60)
+    return {"restante_s": round(restante),
+            "previsao": datetime.fromtimestamp(agora + restante, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
 
 
 @rotas.get("/agentes/{andar}/{agente_id}/andamento")
@@ -94,4 +147,5 @@ def andamento(andar: str, agente_id: str, authorization: str = Header("")):
         or _etapas_por_eventos(linha, eventos)
     return {"ativa": {"tarefa_id": linha["id"], "status": linha["status"],
                       "pedido": encaminhamento.pedido_original(linha["texto"])[:140],
-                      "agente": _nome_do_agente(linha["agente"]), "etapas": etapas}}
+                      "agente": _nome_do_agente(linha["agente"]), "etapas": etapas,
+                      "estimativa": _estimativa(linha, eventos)}}

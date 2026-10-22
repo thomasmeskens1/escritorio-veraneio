@@ -194,6 +194,33 @@ async def enfileirar(login: str, andar: str, agente: Agente, texto: str, anexos:
     return tarefa_id
 
 
+class Progresso(BaseModel):
+    linhas: list[str] = []
+
+
+_ESQUEMA_PROGRESSO = ("CREATE TABLE IF NOT EXISTS producao_progresso (tarefa_id INTEGER PRIMARY KEY, linhas TEXT NOT NULL, "
+                      "atualizado_em TEXT NOT NULL)")
+
+
+def progresso_de(tarefa_id: int) -> list[str]:
+    """Linhas "k/n | o que está fazendo" que o Claude Code anotou nesta produção (painel de andamento)."""
+    db = _db()
+    db.execute(_ESQUEMA_PROGRESSO)
+    linha = db.execute("SELECT linhas FROM producao_progresso WHERE tarefa_id = ?", (tarefa_id,)).fetchone()
+    return json.loads(linha["linhas"]) if linha else []
+
+
+@rotas.post("/{tarefa_id}/progresso")
+async def registrar_progresso(tarefa_id: int, progresso: Progresso, authorization: str = Header("")):
+    _exigir_operador(authorization)
+    linhas = [segredos.limpar(l)[:160] for l in progresso.linhas[-30:]]
+    with _db() as db:
+        db.execute(_ESQUEMA_PROGRESSO)
+        db.execute("INSERT OR REPLACE INTO producao_progresso VALUES (?, ?, ?)",
+                   (tarefa_id, json.dumps(linhas, ensure_ascii=False), _agora()))
+    return {"ok": True}
+
+
 class Conclusao(BaseModel):
     resumo: str
     pasta: str               # caminho relativo dentro de "ESCRITÓRIO VERANEIO"
