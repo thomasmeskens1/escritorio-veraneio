@@ -222,6 +222,10 @@ def contexto(agente_id: str, historico: list = (), pedido: str = "") -> str:
         if (fichas_lodges := fichas.fichas_citadas(pedido)):
             partes.append(fichas_lodges)
     partes.append(INSTRUCOES)
+    import correcoes  # import tardio: usa o banco
+
+    if (regras := correcoes.regras_para(agente_id)):  # correções do Thomas aprovadas como regra
+        partes.append(regras)
     if agente_id in AGENTES_ESCOLA:
         partes.append(f"Baseie-se apenas neste manual da ferramenta:\n{MANUAL_ESCOLA}")
     if agente_id == "construtor":

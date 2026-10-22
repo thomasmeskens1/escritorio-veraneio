@@ -452,3 +452,78 @@
     max-height: 40%;
   }
 }
+
+/* Correções do Thomas que viram regra (ficha do Cérebro) */
+.perfil-correcoes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.perfil-correcoes h4 {
+  margin: 0;
+}
+
+.correcao-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #1b1e24;
+  border: 1px solid #2b3035;
+  border-left: 3px solid #f4a261;
+  border-radius: 8px;
+}
+
+.correcao-meta {
+  color: #868e96;
+}
+
+.correcao-antes summary,
+.correcao-regras summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: #adb5bd;
+}
+
+.correcao-antes p {
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+  color: #868e96;
+  white-space: pre-wrap;
+}
+
+.correcao-regra {
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: #e9ecef;
+  background: #14161a;
+  border: 1px solid #343a40;
+  border-radius: 6px;
+  resize: vertical;
+}
+
+.correcao-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.correcao-acoes button,
+.correcao-regra-ativa button {
+  padding: 4px 10px;
+  font-size: 0.72rem;
+}
+
+.correcao-regra-ativa {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: #ced4da;
+}

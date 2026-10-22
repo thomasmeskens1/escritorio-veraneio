@@ -49,7 +49,10 @@ async function carregarPerfil(andar, agente) {
   delete errosPerfil[k];
   renderizarPerfil();
   carregarRotinas(andar, agente);
-  if (ehCerebro(andar, agente)) carregarConhecimento(andar, agente);
+  if (ehCerebro(andar, agente)) {
+    carregarConhecimento(andar, agente);
+    carregarCorrecoes(andar, agente); // correções do Thomas para virar regra (js/correcoes.js)
+  }
   try {
     const dados = await buscarAgente(andar, agente);
     if (!dados) return;
@@ -86,6 +89,7 @@ function renderizarPerfil() {
   if (dados.exemplo) corpo.append(criarExemplo(dados.exemplo));
   corpo.append(criarFatos(dados));
   if (ehCerebro(chatAberto.andar, chatAberto.agente) && !conhecimento.oculto) corpo.append(criarConhecimento());
+  if (ehCerebro(chatAberto.andar, chatAberto.agente) && !correcoes.oculto) corpo.append(criarCorrecoes());
   if (dados.tipo === 'ia') corpo.append(criarRotinas(chatAberto.andar, chatAberto.agente));
   const ajustes = dados.aprendizado?.ajustes;
   if (Array.isArray(ajustes) && ajustes.length) corpo.append(criarAjustesAgente(ajustes));

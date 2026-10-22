@@ -13,6 +13,7 @@ import aprendizado
 import atividade
 import cerebro
 import config
+import correcoes
 import encaminhamento
 import espera
 import max_texto
@@ -264,6 +265,9 @@ async def entregar_pendentes(login: str) -> None:
     for linha in tarefas.nao_entregues(login):
         await _entregar(linha)
         await entregar_na_origem(linha)  # e no chat onde o pedido nasceu, se foi em outro
+    if login == config.DONO_MAX and (aviso := correcoes.lembrete_semanal()):  # revisão semanal das correções
+        await gerenciador.enviar_para_usuario(login, {"tipo": "aviso", "andar": "cobertura", "agente": "cerebro",
+                                                      "titulo": "Correções para revisar", "texto": aviso})
 
 
 # --- Fila adiada -------------------------------------------------------------------------

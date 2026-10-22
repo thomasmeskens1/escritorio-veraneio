@@ -17,6 +17,7 @@ import agentes_dinamicos
 import aprendizado
 import atividade
 import config
+import correcoes
 import encaminhamento
 import espera
 import modelos_uso
@@ -116,6 +117,7 @@ app.include_router(anexos.rotas)
 app.include_router(monday.rotas)
 app.include_router(andamento.rotas)
 app.include_router(modelos_uso.rotas)
+app.include_router(correcoes.rotas)
 
 
 class Credenciais(BaseModel):
@@ -230,6 +232,8 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     if agendamentos.e_agendamento(texto) and await agendamentos.criar(usuario["sub"], andar, agente.id, texto):
         return
     # Produção em espera neste chat (o Gestor fez uma pergunta): esta mensagem é a resposta.
+    # Correção do Thomas a uma resposta recente vira observação para a revisão semanal (o pedido segue normal).
+    correcoes.registrar_se_correcao(usuario["sub"], andar, agente.id, texto)
     if (pendente := espera.no_chat(usuario["sub"], andar, agente.id)):
         texto_aviso = await orquestrador.retomar_producao(pendente, texto)
         return await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "titulo": "Produção", "liberar": True,
