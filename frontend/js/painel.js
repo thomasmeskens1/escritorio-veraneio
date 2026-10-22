@@ -134,20 +134,41 @@ async function carregarTarefas() {
 function renderizarPainel({ resumo = {}, tarefas = [] }) {
   const blocos = [
     criarResumo(resumo), criarCredito(resumo.anthropic), criarModelosFora(resumo.modelos_fora),
-    criarAprendizado(resumo.aprendizado), criarListaTarefas(tarefas),
+    criarSaudeModelos(resumo.modelos_7d), criarAprendizado(resumo.aprendizado), criarListaTarefas(tarefas),
   ];
   painelConteudo.replaceChildren(...blocos.filter(Boolean));
 }
 
-// Modelos que estouraram cota/crédito e estão fora da rota até a cota voltar.
+// Modelos fora da rota: pausa curta (cota, limite, lentidão) ou AFASTADOS por falha recorrente (7 dias).
 function criarModelosFora(modelos = []) {
   if (!modelos.length) return null;
   const caixa = novoEl('section', 'credito');
   caixa.append(novoEl('h3', null, 'Modelos fora da rota'));
-  modelos.forEach(({ modelo, motivo, volta_em: volta }) => {
+  modelos.forEach(({ modelo, motivo, volta_em: volta, afastado, falhas_24h: falhas }) => {
     const quando = new Date(volta).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    caixa.append(novoEl('p', 'credito-legenda', `${abreviarModelo(modelo)} · ${motivo} · volta em ${quando}`));
+    const linha = novoEl('p', `credito-legenda${afastado ? ' modelo-afastado' : ''}`,
+      `${afastado ? '⚠ ' : ''}${abreviarModelo(modelo)} · ${motivo} · ${falhas} falha(s) em 24 h · volta em ${quando}`);
+    caixa.append(linha);
   });
+  return caixa;
+}
+
+// Saúde de cada modelo nos últimos 7 dias: ajuda a decidir se um modelo deve sair da lista de vez.
+function criarSaudeModelos(modelos = []) {
+  if (!modelos.length) return null;
+  const caixa = novoEl('section', 'credito');
+  caixa.append(novoEl('h3', null, 'Saúde dos modelos (7 dias)'));
+  const tabela = novoEl('table', 'saude-modelos');
+  const cabecalho = novoEl('tr');
+  ['Modelo', 'Tentativas', 'Falhas', 'Taxa de falha', 'Tempo médio'].forEach((t) => cabecalho.append(novoEl('th', null, t)));
+  tabela.append(cabecalho);
+  modelos.forEach(({ modelo, tentativas, falhas, taxa_falha: taxa, tempo_medio_s: tempo }) => {
+    const linha = novoEl('tr', taxa >= 0.5 ? 'saude-ruim' : taxa >= 0.2 ? 'saude-atencao' : null);
+    [abreviarModelo(modelo), tentativas, falhas, `${Math.round(taxa * 100)}%`, tempo != null ? `${tempo} s` : '—']
+      .forEach((v) => linha.append(novoEl('td', null, String(v))));
+    tabela.append(linha);
+  });
+  caixa.append(tabela);
   return caixa;
 }
 

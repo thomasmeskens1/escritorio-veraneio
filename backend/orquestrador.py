@@ -79,9 +79,11 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
         return None, "Max ocupado"
     except asyncio.TimeoutError:
         erro = f"excedeu {etapa.limite_s // 60} min"
+        if not etapa.modelo.startswith(("claude-code/", "ollama/")):  # Max e local demoram por natureza
+            saude.registrar_falha(etapa.modelo, erro)  # lento agora: outro modelo assume por 15 min
     except Exception as e:
         erro = str(e)
-        saude.registrar_falha(etapa.modelo, erro)  # estourou? sai da rota até a cota voltar
+        saude.registrar_falha(etapa.modelo, erro)  # sai da rota por um tempo; falha recorrente afasta por 7 dias
     finally:
         tarefas.registrar_tentativa(tarefa["id"], time.monotonic() - inicio)
     tarefas.registrar_evento(tarefa["id"], "falha_modelo", agente.id, etapa.modelo, erro)
@@ -94,6 +96,7 @@ async def _executar_etapas(tarefa, agente: Agente, etapas: list[Etapa]) -> bool:
     for etapa in etapas:
         resultado, _ = await _tentar(tarefa, agente, etapa)
         if resultado:
+            saude.registrar_sucesso(etapa.modelo)  # modelo em teste depois de afastado: histórico limpo
             await _concluir(tarefa["id"], etapa.modelo, resultado)
             return True
     return False

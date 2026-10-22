@@ -45,6 +45,7 @@ def listar_tarefas(authorization: str = Header("")):
                 "pausado": tarefas.orcamento_pausado(),  # Claude pausado; a fila segue em contingência
             },
             "modelos_fora": saude.resumo(),
+            "modelos_7d": saude.estatisticas(7),  # saúde de cada modelo: tentativas, falhas, tempo médio
             "aprendizado": aprendizado.resumo(_nome_do_agente),
         },
         "tarefas": [_tarefa_publica(linha) for linha in tarefas.listar(filtro)],

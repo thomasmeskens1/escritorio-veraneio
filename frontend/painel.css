@@ -374,3 +374,42 @@
     width: auto;
   }
 }
+
+/* Modelos afastados por falha recorrente e saúde dos modelos (7 dias) */
+.modelo-afastado {
+  color: #ff8787;
+  font-weight: 600;
+}
+
+.saude-modelos {
+  width: 100%;
+  margin-top: 8px;
+  font-size: 0.75rem;
+  border-collapse: collapse;
+}
+
+.saude-modelos th,
+.saude-modelos td {
+  padding: 5px 8px;
+  text-align: right;
+  border-bottom: 1px solid #2b3035;
+}
+
+.saude-modelos th:first-child,
+.saude-modelos td:first-child {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.saude-modelos th {
+  font-weight: 600;
+  color: #868e96;
+}
+
+.saude-modelos td {
+  color: #ced4da;
+  font-variant-numeric: tabular-nums;
+}
+
+.saude-atencao td { color: #f4a261; }
+.saude-ruim td { color: #ff8787; }
