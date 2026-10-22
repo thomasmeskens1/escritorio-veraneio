@@ -38,7 +38,8 @@ class _NovoItem(BaseModel):
     data_entrega: str = Field("", description="AAAA-MM-DD (alguns dias antes da postagem)")
     horario: str = Field("", description="HH:MM, 24 h")
     objetivo: str = Field("", description=f"Um de: {', '.join(OBJETIVOS)}")
-    responsavel: str = Field("", description=f"Um de: {', '.join(RESPONSAVEIS)} (deixe vazio se não souber)")
+    responsavel: str = Field("", description=f"Um de: {', '.join(RESPONSAVEIS)}. Obrigatório e sempre o que o "
+                                             "usuário disse: nunca escolha por conta própria.")
     conta: str = Field("Casa Veraneio", description=f"Marca: {', '.join(CONTAS)}")
     legenda: str = Field("", description="Rascunho da legenda, só para POST, CARROSSEL, REELS e SHORTS. Para STORIES "
                                          "deixe VAZIO e não escreva nenhuma legenda (stories não têm legenda).")
@@ -83,6 +84,10 @@ class CriarItemMonday(BaseTool):
         if not monday.tipo_do_item(nome):
             return (f"Nome inválido: use 'TIPO | Descrição' com TIPO um de {', '.join(monday.TIPOS)} "
                     "(ex.: 'POST | Check-in no Lodge 208').")
+        # O Thomas aloca a equipe: sem responsável dito por ele, o item não é criado e o agente pergunta.
+        if not _escolher(responsavel, RESPONSAVEIS):
+            return (f"Responsável não informado. NÃO crie os itens ainda: apresente o plano e pergunte ao usuário "
+                    f"quem é o responsável por cada peça ({', '.join(RESPONSAVEIS)}). Crie depois da resposta.")
         mes = _escolher(grupo, MESES)
         if not mes:
             return f"Grupo inválido '{grupo}': use o nome do mês (ex.: {', '.join(MESES[10:])})."
