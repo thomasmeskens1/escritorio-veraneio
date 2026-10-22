@@ -99,6 +99,7 @@ function iniciarSessao(nova) {
   telaLogin.hidden = true;
   document.getElementById('app').hidden = false;
   document.getElementById('usuario-logado').textContent = `${sessao.usuario} · ${sessao.role}`;
+  configurarModelos(); // ícone "Modelos de IA" só para a diretoria
   configurarElevador();
   iniciarEscritorio();
   conectar();
@@ -113,6 +114,7 @@ function encerrarSessao(aviso = '') {
   fecharPainel();
   limparRegistro();
   limparEquipe();
+  limparModelos();
   limparChat();
   limparPerfis();
   atualizarContadores({});

@@ -19,6 +19,7 @@ import atividade
 import config
 import encaminhamento
 import espera
+import modelos_uso
 import monday
 import cerebro
 import historico
@@ -110,6 +111,7 @@ app.include_router(cerebro.rotas)
 app.include_router(anexos.rotas)
 app.include_router(monday.rotas)
 app.include_router(andamento.rotas)
+app.include_router(modelos_uso.rotas)
 
 
 class Credenciais(BaseModel):

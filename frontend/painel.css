@@ -413,3 +413,11 @@
 
 .saude-atencao td { color: #f4a261; }
 .saude-ruim td { color: #ff8787; }
+
+.painel-detalhes {
+  margin-left: 8px;
+  padding: 2px 10px;
+  font-size: 0.68rem;
+  letter-spacing: normal;
+  text-transform: none;
+}

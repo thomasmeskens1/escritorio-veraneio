@@ -157,7 +157,14 @@ function criarModelosFora(modelos = []) {
 function criarSaudeModelos(modelos = []) {
   if (!modelos.length) return null;
   const caixa = novoEl('section', 'credito');
-  caixa.append(novoEl('h3', null, 'Saúde dos modelos (7 dias)'));
+  const titulo = novoEl('h3', null, 'Saúde dos modelos (7 dias) ');
+  if (sessao?.role === 'diretoria') {
+    const detalhes = novoEl('button', 'botao-secundario painel-detalhes', 'Ver tudo');
+    detalhes.type = 'button';
+    detalhes.addEventListener('click', () => { fecharPainel(); abrirModelos(); });
+    titulo.append(detalhes);
+  }
+  caixa.append(titulo);
   const tabela = novoEl('table', 'saude-modelos');
   const cabecalho = novoEl('tr');
   ['Modelo', 'Tentativas', 'Falhas', 'Taxa de falha', 'Tempo médio'].forEach((t) => cabecalho.append(novoEl('th', null, t)));

@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="perfil.css">
   <link rel="stylesheet" href="registro.css">
   <link rel="stylesheet" href="equipe.css">
+  <link rel="stylesheet" href="modelos.css">
   <link rel="stylesheet" href="onboarding.css">
   <!-- Phaser servido pelo próprio sistema (mesmo arquivo do cdnjs, hash conferido): a CSP só aceita scripts locais -->
   <script src="vendor/phaser-3.80.1.min.js"></script>
@@ -82,6 +83,11 @@
       </ul>
 
       <div class="topo-acoes">
+        <button id="abrir-modelos" class="topo-icone" type="button" aria-label="Modelos de IA" title="Modelos de IA: uso, falhas e custo" hidden>
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>
+          </svg>
+        </button>
         <button id="abrir-registro" class="topo-icone" type="button" aria-label="Registro de atividade" title="Registro de atividade">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>
@@ -173,6 +179,21 @@
       </section>
     </div>
 
+    <!-- Modelos de IA (diretoria): uso das LLMs, falhas e custo (js/modelos.js) -->
+    <div id="modelos" class="modal">
+      <section class="janela janela-painel janela-modelos" role="dialog" aria-modal="true" aria-labelledby="modelos-titulo">
+        <header class="janela-barra">
+          <span class="janela-luzes" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="janela-titulo">
+            <h2 id="modelos-titulo">Modelos de IA</h2>
+            <p id="modelos-resumo"></p>
+          </div>
+          <button id="modelos-fechar" class="fechar" type="button" aria-label="Fechar">×</button>
+        </header>
+        <div id="modelos-conteudo" class="modelos-conteudo"></div>
+      </section>
+    </div>
+
     <!-- Registro de atividade -->
     <div id="registro" class="modal">
       <section class="janela janela-painel" role="dialog" aria-modal="true" aria-labelledby="registro-titulo">
@@ -229,6 +250,7 @@
   <script src="js/andamento.js"></script>
   <script src="js/registro.js"></script>
   <script src="js/equipe.js"></script>
+  <script src="js/modelos.js"></script>
   <script src="js/onboarding.js"></script>
   <script src="js/topo.js"></script>
   <script src="js/rede.js"></script>
