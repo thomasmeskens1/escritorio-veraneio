@@ -60,7 +60,13 @@ _CHAVES = {"anthropic/": ANTHROPIC_API_KEY, "openrouter/": OPENROUTER_API_KEY}
 # Única conta que pode acionar a produção de PNG/MP4 pelo Claude Code (plano Max pessoal).
 DONO_MAX = os.getenv("DONO_MAX", "thomas@casaveraneio.com").strip().lower()
 
-ARQUIVO_BANCO = Path(__file__).resolve().parent / "dados" / "escritorio.db"
+# Dados do sistema (tokens, anexos, manuais, projetos): pasta compartilhada com o PC (trabalhador Max, backup).
+DADOS_DIR = Path(__file__).resolve().parent / "dados"
+# O banco fica num volume do Docker (ARQUIVO_BANCO no compose): na pasta compartilhada do Windows cada leitura e
+# escrita custava 10 a 40 vezes mais. Sem a variável, fica em dados/ (rodando fora do Docker).
+ARQUIVO_BANCO = Path(os.getenv("ARQUIVO_BANCO", DADOS_DIR / "escritorio.db"))
+# Cópia consistente do banco em dados/ (a cada 6 h) para o backup diário do Windows, que não enxerga o volume.
+ARQUIVO_COPIA_BANCO = DADOS_DIR / "escritorio.copia.db"
 # Documentos oficiais e diretrizes dos agentes (fora do git: o repositório é público).
 PASTA_CONHECIMENTO = Path(__file__).resolve().parent / "dados" / "conhecimento"
 FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", Path(__file__).resolve().parent.parent / "frontend"))

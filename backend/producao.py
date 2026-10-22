@@ -33,7 +33,7 @@ from estado import Agente
 
 log = logging.getLogger("veraneio.producao")
 
-ARQUIVO_TOKEN = config.ARQUIVO_BANCO.parent / "operador.token"
+ARQUIVO_TOKEN = config.DADOS_DIR / "operador.token"
 MODELO_MAX = "claude-code/max"
 TIPOS_TRABALHO = {"anexo", "site"}
 

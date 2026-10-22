@@ -25,7 +25,7 @@ from auth import validar_token
 
 log = logging.getLogger("veraneio.anexos")
 
-BACKEND_DIR = config.ARQUIVO_BANCO.parent.parent  # backend/ (caminhos gravados são relativos a ela)
+BACKEND_DIR = config.DADOS_DIR.parent  # backend/ (caminhos gravados são relativos a ela)
 PASTA = BACKEND_DIR / "dados" / "anexos"
 TAMANHO_MAX = 15 * 1024 * 1024
 MAX_POR_MENSAGEM = 4

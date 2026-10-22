@@ -32,7 +32,11 @@ def fazer_backup() -> Path:
     parcial = final.with_suffix(".zip.parcial")  # o Drive só sincroniza o arquivo pronto
     with tempfile.TemporaryDirectory() as temporaria:
         copia_banco = Path(temporaria) / "escritorio.db"
-        origem, destino = sqlite3.connect(DADOS / "escritorio.db"), sqlite3.connect(copia_banco)
+        # O banco vive num volume do Docker; a API deixa uma cópia consistente em dados/ a cada 6 h.
+        fonte = DADOS / "escritorio.copia.db"
+        if not fonte.exists():  # sistema antigo (banco ainda em dados/)
+            fonte = DADOS / "escritorio.db"
+        origem, destino = sqlite3.connect(fonte), sqlite3.connect(copia_banco)
         try:
             origem.backup(destino)
         finally:  # `with` não fecha a conexão; no Windows o arquivo ficaria preso
@@ -43,7 +47,7 @@ def fazer_backup() -> Path:
             for arquivo in sorted(DADOS.rglob("*")):
                 relativo = arquivo.relative_to(DADOS)
                 if (not arquivo.is_file() or arquivo.name in FORA or arquivo.suffix in EXTENSOES_FORA
-                        or relativo.parts[0] == "__pycache__" or arquivo.name.startswith("escritorio.db")):
+                        or relativo.parts[0] == "__pycache__" or arquivo.name.startswith("escritorio.")):
                     continue
                 pacote.write(arquivo, relativo.as_posix())
     parcial.replace(final)

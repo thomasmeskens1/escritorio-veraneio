@@ -16,7 +16,7 @@ import config
 from agents.perfis import ESTILO_CHAT
 from estado import ANDARES
 
-PASTA_PROJETOS = config.ARQUIVO_BANCO.parent / "projetos"
+PASTA_PROJETOS = config.DADOS_DIR / "projetos"
 MAX_ETAPAS = 8  # micro-tarefas: cada especialista com uma entrega focada
 TRECHO_ETAPA = 1500   # caracteres de cada etapa anterior enviados à próxima
 TRECHO_FINAL = 2500   # caracteres de cada etapa enviados à consolidação

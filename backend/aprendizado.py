@@ -28,7 +28,7 @@ LIMITE_FILA_SUBIR = 0.5                               # metade ou mais precisou 
 TEMPO_ALTO = {"simples": 120, "media": 600}           # mediana acima disso: sobe um nível
 TEMPO_BAIXO_MEDIA = 30                                # média sempre rápida e sem fila: desce para simples
 
-PASTA = config.ARQUIVO_BANCO.parent / "aprendizado"
+PASTA = config.DADOS_DIR / "aprendizado"
 ARQUIVO_MODELO = PASTA / "modelo.joblib"
 ARQUIVO_META = PASTA / "modelo.json"
 

@@ -21,7 +21,7 @@ _FORMATOS = re.compile(
 
 def _valores() -> list[str]:
     valores = [v for k, v in os.environ.items() if _NOME_SEGREDO.search(k) and len(v or "") >= 12]
-    token = config.ARQUIVO_BANCO.parent / "operador.token"
+    token = config.DADOS_DIR / "operador.token"
     if token.exists():
         valores.append(token.read_text(encoding="utf-8").strip())
     return sorted({v for v in valores if v}, key=len, reverse=True)

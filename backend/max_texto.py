@@ -20,7 +20,7 @@ LIMITE_S = 15 * 60
 ONLINE_S = 90            # o trabalhador pede a fila a cada ~10 s quando está livre
 AGENTES_COM_FERRAMENTAS = {"construtor", "social_media"}
 
-ARQUIVO_CONTATO = config.ARQUIVO_BANCO.parent / "max.contato"  # a data de modificação = último contato
+ARQUIVO_CONTATO = config.DADOS_DIR / "max.contato"  # a data de modificação = último contato
 _trava = threading.Lock()
 
 

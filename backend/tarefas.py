@@ -70,9 +70,13 @@ def _agora(depois: timedelta = timedelta()) -> str:
 def _db() -> sqlite3.Connection:
     global _conexao
     if _conexao is None:
-        config.ARQUIVO_BANCO.parent.mkdir(exist_ok=True)
+        config.ARQUIVO_BANCO.parent.mkdir(parents=True, exist_ok=True)
+        _migrar_para_o_volume()
         _conexao = sqlite3.connect(config.ARQUIVO_BANCO, check_same_thread=False)
         _conexao.row_factory = sqlite3.Row
+        if config.ARQUIVO_BANCO.parent != config.DADOS_DIR:  # WAL só é seguro fora da pasta compartilhada
+            _conexao.execute("PRAGMA journal_mode=WAL")
+            _conexao.execute("PRAGMA synchronous=NORMAL")
         _conexao.executescript(_ESQUEMA)
         existentes = {linha["name"] for linha in _conexao.execute("PRAGMA table_info(tarefas)")}
         for coluna, tipo in _COLUNAS_NOVAS.items():
@@ -84,6 +88,34 @@ def _db() -> sqlite3.Connection:
                                  "SELECT concluida_em, id, agente, modelo, dificuldade, custo_usd FROM tarefas "
                                  "WHERE custo_usd > 0 AND concluida_em IS NOT NULL")
     return _conexao
+
+
+def _migrar_para_o_volume() -> None:
+    """1ª subida com o banco no volume: copia (de forma consistente) o banco antigo de dados/ e guarda o antigo
+    como .migrado, para nunca haver dois bancos "vivos"."""
+    antigo = config.DADOS_DIR / "escritorio.db"
+    if config.ARQUIVO_BANCO == antigo or config.ARQUIVO_BANCO.exists() or not antigo.exists():
+        return
+    origem, destino = sqlite3.connect(antigo), sqlite3.connect(config.ARQUIVO_BANCO)
+    try:
+        origem.backup(destino)
+    finally:
+        origem.close()
+        destino.close()
+    antigo.replace(antigo.with_suffix(".db.migrado"))
+
+
+def copiar_para_backup() -> None:
+    """Cópia consistente do banco em dados/ para o backup diário do Windows (que não enxerga o volume)."""
+    if config.ARQUIVO_BANCO.parent == config.DADOS_DIR:
+        return
+    temporario = config.ARQUIVO_COPIA_BANCO.with_suffix(".tmp")
+    destino = sqlite3.connect(temporario)
+    try:
+        _db().backup(destino)
+    finally:
+        destino.close()
+    temporario.replace(config.ARQUIVO_COPIA_BANCO)
 
 
 def iniciar() -> None:

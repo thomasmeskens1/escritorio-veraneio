@@ -40,7 +40,7 @@ EM_PRODUCAO, NA_FILA, REVISAO, AGUARDANDO, FALHA = "Em produção", "Na fila", "
 SEM_CONTA = {"", "Sem definição"}
 MARCA_LEGENDA = ("<<LEGENDA>>", "<<FIM DA LEGENDA>>")
 ESPERA_GESTOR_S, ESPERA_MAXIMA_S = 15, 4 * 3600
-ARQUIVO_SEGREDO = config.ARQUIVO_BANCO.parent / "monday.webhook.token"
+ARQUIVO_SEGREDO = config.DADOS_DIR / "monday.webhook.token"
 CITACAO = re.compile(r"\bitem\s+[\"“”']([^\"“”']{3,200})[\"“”']", re.IGNORECASE)
 # Padrão do nome dos itens: "TIPO | Descrição". O tipo define o formato da peça (manual 09).
 TIPOS = {

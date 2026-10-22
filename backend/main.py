@@ -36,6 +36,7 @@ TAMANHO_MAX_TEXTO = 4000
 MAX_FALHAS_LOGIN = 5          # senhas erradas seguidas por usuário/IP antes do bloqueio
 MAX_FALHAS_IP = 20            # senhas erradas de um IP (qualquer usuário) antes do bloqueio
 BLOQUEIO_LOGIN_S = 15 * 60
+INTERVALO_COPIA_BANCO_S = 6 * 3600
 
 _falhas_login: dict[tuple[str, str], list[float]] = {}  # (usuário, IP) -> horários das falhas
 _falhas_ip: dict[str, list[float]] = {}                 # IP -> horários das falhas (usuários aleatórios)
@@ -51,9 +52,21 @@ async def ciclo_de_vida(_: FastAPI):
     cerebro.iniciar()  # conhecimento: tabelas, indexação inicial e consolidação diária
     fila = asyncio.create_task(orquestrador.processar_fila())
     agendamentos.iniciar()  # rotinas agendadas (recarrega as ativas do banco)
+    copias = asyncio.create_task(copiar_banco_periodicamente())
     yield
     agendamentos.parar()
     fila.cancel()
+    copias.cancel()
+
+
+async def copiar_banco_periodicamente() -> None:
+    """O banco vive num volume do Docker: a cada 6 h uma cópia consistente vai para dados/ (backup diário)."""
+    while True:
+        try:
+            await asyncio.to_thread(tarefas.copiar_para_backup)
+        except Exception:
+            log.exception("Não foi possível copiar o banco para o backup.")
+        await asyncio.sleep(INTERVALO_COPIA_BANCO_S)
 
 
 # Sem /docs, /redoc e /openapi.json: não expõe o mapa da API.
