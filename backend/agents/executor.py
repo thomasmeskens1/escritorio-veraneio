@@ -152,8 +152,11 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
     ferramentas = [] if agente_id == cerebro.ID else [ConsultarCerebro(agente=agente_id, tarefa_id=tarefa_id)]
     if agente_id == "construtor":
         ferramentas.append(CriarAgente(tarefa_id=tarefa_id))
-    if "Sua etapa (" not in descricao:  # dentro de projeto do Gestor, a etapa não cria itens no Monday
-        ferramentas += ferramentas_monday.para(agente_id)  # Social Media: ver/criar itens no board
+    # Social Media: ver/criar itens no board. Só em tarefas da conta do Thomas (usa o token do sistema) e fora
+    # de projeto do Gestor (a etapa não cria itens no Monday).
+    tarefa = tarefas.obter(tarefa_id) if tarefa_id else None
+    if "Sua etapa (" not in descricao and tarefa and tarefa["usuario"] == config.DONO_MAX:
+        ferramentas += ferramentas_monday.para(agente_id)
     perfil = dict(PERFIS[agente_id])
     # Diretrizes da Casa Veraneio (regras, marca e manual da função); versão curta no modelo local.
     if (extras := diretrizes.para(agente_id, compacto=modelo.startswith("ollama/"))):
@@ -163,10 +166,12 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
     saida = Crew(agents=[agente], tasks=[Task(description=descricao, expected_output=esperado, agent=agente)]).kickoff()
 
     uso = saida.token_usage
+    custo = tarefas.custo_estimado(modelo, uso.prompt_tokens, uso.completion_tokens)
+    tarefas.registrar_gasto(tarefa_id, agente_id, modelo, custo)  # na hora: vale mesmo se a tentativa for descartada
     with _trava_total:  # etapas do Gestor podem rodar em paralelo
         total.tokens_entrada += uso.prompt_tokens
         total.tokens_saida += uso.completion_tokens
-        total.custo_usd += tarefas.custo_estimado(modelo, uso.prompt_tokens, uso.completion_tokens)
+        total.custo_usd += custo
     return saida.raw
 
 

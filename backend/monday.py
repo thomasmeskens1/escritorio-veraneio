@@ -29,6 +29,9 @@ log = logging.getLogger(__name__)
 API = "https://api.monday.com/v2"
 VERSAO_API = "2025-04"
 TOKEN = os.getenv("MONDAY_API_TOKEN", "").strip()
+# Quem pode acionar o Escritório pelo Monday (botão Enviar) e ter comentários lidos no briefing: ids de usuário do
+# Monday separados por vírgula; vazio = só o dono do token da API (a conta do Thomas).
+USUARIOS_AUTORIZADOS = os.getenv("MONDAY_USUARIOS_AUTORIZADOS", "").strip()
 BOARD = 18436414505
 COL_BOTAO, COL_STATUS, COL_CONTA = "button_mm8bdsnh", "status", "color_mks99tq4"
 COL_LEGENDA, COL_REFERENCIAS, COL_CRIATIVOS = "texto_longo_1_mkmf3wmy", "file_mm8bmmxv", "arquivos_mkmd1v3v"
@@ -64,6 +67,8 @@ _MIGRACOES = ("ALTER TABLE monday_tarefas ADD COLUMN usuario_monday INTEGER",   
               "ALTER TABLE monday_tarefas ADD COLUMN origem TEXT DEFAULT 'botao'")  # botao | chat
 _esquema_criado = False
 _em_andamento: set[asyncio.Task] = set()
+_enviando: set[int] = set()  # itens entre o clique e a criação da tarefa (clique duplo = um projeto só)
+_autorizados: set[int] | None = None
 
 
 def _db():
@@ -112,7 +117,7 @@ def _api(consulta: str, variaveis: dict | None = None) -> dict:
 _CAMPOS_ITEM = """id name board { id } group { title } creator { name }
   column_values { id type text ... on FileValue { files { __typename
     ... on FileAssetValue { asset { name public_url } } ... on FileLinkValue { name url } } } }
-  updates(limit: 5) { text_body creator { name } created_at }"""
+  updates(limit: 5) { text_body creator { id name } created_at }"""
 
 
 def obter_item(item_id: int) -> dict | None:
@@ -225,6 +230,26 @@ def criar_webhook(url: str) -> dict:
 
 # ---------- Briefing ----------
 
+def autorizados() -> set[int]:
+    """Usuários do Monday que podem acionar o Escritório (padrão: o dono do token, lido uma vez da API)."""
+    global _autorizados
+    if _autorizados is None:
+        ids = {int(i) for i in re.findall(r"\d+", USUARIOS_AUTORIZADOS)}
+        if not ids and TOKEN:
+            try:
+                ids = {int(_api("query { me { id } }")["me"]["id"])}
+            except Exception as erro:  # sem resposta agora: tenta de novo na próxima vez
+                log.warning("Monday: não li o usuário do token (%s)", erro)
+                return set()
+        _autorizados = ids
+    return _autorizados
+
+
+def _do_autorizado(atualizacao: dict) -> bool:
+    criador = (atualizacao.get("creator") or {}).get("id")
+    return str(criador or "").isdigit() and int(criador) in autorizados()
+
+
 def briefing(item: dict) -> str:
     """Pedido ao Gestor/agente com os dados do item (texto, colunas, referências, comentários recentes)."""
     campos = {c["id"]: (c.get("text") or "").strip() for c in item["column_values"]}
@@ -241,9 +266,11 @@ def briefing(item: dict) -> str:
     # Criativos já anexados não entram: são resultado de outra versão e confundem o formato pedido.
     if (lista := arquivos(item, COL_REFERENCIAS)):
         linhas.append("- Referências (ponto de partida, não regra absoluta): " + ", ".join(a["nome"] for a in lista))
+    # Só comentários de quem está autorizado: texto de terceiros nunca vira instrução para a produção.
     comentarios = [f"  · {u['creator']['name'] if u.get('creator') else '?'}: {u['text_body'][:300]}"
                    for u in item.get("updates") or []
-                   if u.get("text_body") and "Escritório Veraneio" not in u["text_body"][:60]]  # do próprio sistema
+                   if u.get("text_body") and "Escritório Veraneio" not in u["text_body"][:60]  # do próprio sistema
+                   and _do_autorizado(u)]
     if comentarios:
         linhas.append("- Comentários recentes:\n" + "\n".join(comentarios))
     return "\n".join(linhas)
@@ -394,9 +421,22 @@ async def _recusar(item_id: int, usuario: int | None, comentario: str, alerta: s
 
 
 async def _enviar_ao_gestor(item_id: int, usuario: int | None = None) -> None:
+    if item_id in _enviando:  # clique duplo: o primeiro já está cuidando deste item
+        return
+    _enviando.add(item_id)
+    try:
+        await _enviar_ao_gestor_unico(item_id, usuario)
+    finally:
+        _enviando.discard(item_id)
+
+
+async def _enviar_ao_gestor_unico(item_id: int, usuario: int | None) -> None:
     import orquestrador  # import tardio: o orquestrador avisa este módulo
     from estado import Status, buscar_agente
 
+    if usuario not in await asyncio.to_thread(autorizados):
+        return await _recusar(item_id, usuario, "Só a conta autorizada pode enviar itens ao Escritório Veraneio.",
+                              "Escritório Veraneio: sua conta não está autorizada a enviar itens.")
     try:
         item = await asyncio.to_thread(obter_item, item_id)
     except Exception as erro:

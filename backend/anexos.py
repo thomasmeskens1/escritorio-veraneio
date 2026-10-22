@@ -266,6 +266,8 @@ def _imagem_para_api(dados: bytes, mime: str) -> tuple[bytes, str]:
 async def _descrever_pela_api(linha) -> str:
     if not config.ANTHROPIC_API_KEY:
         raise RuntimeError("ANTHROPIC_API_KEY não configurada")
+    if not tarefas.api_liberada():  # o orçamento do mês vale também para a leitura de anexos
+        raise RuntimeError("orçamento da API pausado")
     dados = await asyncio.to_thread(_absoluto(linha["caminho"]).read_bytes)
     if linha["mime"] == "application/pdf":
         bloco = {"type": "document", "source": {"type": "base64", "media_type": "application/pdf",
@@ -279,6 +281,8 @@ async def _descrever_pela_api(linha) -> str:
         model=modelo, max_tokens=700,
         messages=[{"role": "user", "content": [bloco, {"type": "text", "text": PROMPT_DESCRICAO}]}],
     )
+    tarefas.registrar_gasto(None, "anexos", config.MODELO_FILA_PADRAO, tarefas.custo_estimado(
+        config.MODELO_FILA_PADRAO, resposta.usage.input_tokens, resposta.usage.output_tokens))
     texto = "".join(getattr(b, "text", "") for b in resposta.content).strip()
     if not texto:
         raise RuntimeError("Resposta vazia do modelo")

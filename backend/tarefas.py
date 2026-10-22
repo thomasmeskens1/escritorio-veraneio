@@ -40,6 +40,17 @@ CREATE TABLE IF NOT EXISTS eventos (
     detalhe TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_eventos_tarefa ON eventos(tarefa_id);
+-- Livro de gastos da API: cada chamada paga entra na hora (tentativas que falham ou estouram o tempo também).
+CREATE TABLE IF NOT EXISTS gastos_api (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    em TEXT NOT NULL,
+    tarefa_id INTEGER,
+    agente TEXT,
+    modelo TEXT,
+    dificuldade TEXT,
+    custo_usd REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gastos_em ON gastos_api(em);
 """
 
 # Colunas adicionadas depois da primeira versão do banco (migração simples).
@@ -67,6 +78,11 @@ def _db() -> sqlite3.Connection:
         for coluna, tipo in _COLUNAS_NOVAS.items():
             if coluna not in existentes:
                 _conexao.execute(f"ALTER TABLE tarefas ADD COLUMN {coluna} {tipo}")
+        if not _conexao.execute("SELECT 1 FROM gastos_api LIMIT 1").fetchone():  # 1ª vez: traz o que já foi gasto
+            with _conexao:
+                _conexao.execute("INSERT INTO gastos_api (em, tarefa_id, agente, modelo, dificuldade, custo_usd) "
+                                 "SELECT concluida_em, id, agente, modelo, dificuldade, custo_usd FROM tarefas "
+                                 "WHERE custo_usd > 0 AND concluida_em IS NOT NULL")
     return _conexao
 
 
@@ -195,11 +211,22 @@ def custo_estimado(modelo: str, tokens_entrada: int, tokens_saida: int) -> float
     return (tokens_entrada * preco_entrada + tokens_saida * preco_saida) / 1_000_000
 
 
+def registrar_gasto(tarefa_id: int | None, agente: str, modelo: str, custo_usd: float) -> None:
+    """Toda chamada paga à API, na hora: o orçamento enxerga também tentativas que falharam ou estouraram o tempo."""
+    if custo_usd <= 0:
+        return
+    tarefa = obter(tarefa_id) if tarefa_id else None
+    with _db() as db:
+        db.execute("INSERT INTO gastos_api (em, tarefa_id, agente, modelo, dificuldade, custo_usd) "
+                   "VALUES (?, ?, ?, ?, ?, ?)",
+                   (_agora(), tarefa_id or None, agente, modelo, tarefa["dificuldade"] if tarefa else None, custo_usd))
+
+
 def gasto_mes_usd(dificuldade: str | None = None) -> float:
     inicio = datetime.now(timezone.utc).strftime("%Y-%m-01T00:00:00Z")
     filtro, params = ("AND dificuldade = ?", (dificuldade,)) if dificuldade else ("", ())
     linha = _db().execute(
-        f"SELECT COALESCE(SUM(custo_usd), 0) FROM tarefas WHERE concluida_em >= ? {filtro}", (inicio, *params)
+        f"SELECT COALESCE(SUM(custo_usd), 0) FROM gastos_api WHERE em >= ? {filtro}", (inicio, *params)
     ).fetchone()
     return float(linha[0])
 

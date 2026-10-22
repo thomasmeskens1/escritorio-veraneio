@@ -141,7 +141,10 @@ def aprender_tarefa(tarefa_id: int) -> int | None:
     """Tarefa concluída vira um trecho "tarefa" (pedido + resposta resumida). O embedding vem em segundo plano."""
     try:
         linha = tarefas.obter(tarefa_id)
+        # Só as tarefas da conta do Thomas viram conhecimento: o Cérebro é consultado por todos, então tarefa de
+        # outro usuário vazaria pedidos dele ou plantaria "fatos" sem passar pelo ensino (só o dono ensina).
         if (not linha or linha["status"] != "concluida" or not linha["resposta"]
+                or linha["usuario"] != config.DONO_MAX
                 or linha["agente"] == ID or linha["agente"] in AGENTES_PRODUCAO):
             return None
         andar = andar_do_agente(linha["agente"])

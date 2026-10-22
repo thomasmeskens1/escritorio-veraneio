@@ -26,13 +26,20 @@ MAX_PARALELAS = 4      # etapas da mesma fase rodando ao mesmo tempo (limite dos
 
 
 # "Me dá 3 ideias de post", "sugestões de pauta": o usuário quer um plano em texto, não a peça pronta.
-IDEACAO = re.compile(r"\b(ideias?|sugest[aã]o|sugest[oõ]es|brainstorm|plano de a[cç][aã]o|conceitos?|propostas?|"
-                     r"op[cç][oõ]es|pautas?)\b", re.IGNORECASE)
+# Exige a FORMA de um pedido de ideias, não só a palavra: "Crie um post sobre as opções de café da manhã" é peça.
+IDEACAO = re.compile(
+    r"\b(me\s+d[aáê]|d[eê]-?me|quero|queria|preciso\s+de|traga|liste|sugira|sugerir|pense\s+em|levante|gere)\b"
+    r"[^.?!\n]{0,40}?\b(ideias?|sugest[aã]o|sugest[oõ]es|conceitos?|op[cç][oõ]es|propostas?|pautas?)\b"
+    r"|\bbrainstorm|\bplano\s+de\s+a[cç][aã]o\b|^\s*(ideias?|sugest[oõ]es)\b", re.IGNORECASE)
 
 
 def e_ideacao(pedido: str, contexto: str = "") -> bool:
-    """Pedido de ideias/plano (sem produção de arquivos). Item do Monday com formato definido é sempre peça."""
-    return "FORMATO DA PEÇA" not in f"{pedido}{contexto}" and bool(IDEACAO.search(pedido[:400]))
+    """Pedido de ideias/plano (sem produção de arquivos). Item do Monday com formato definido é sempre peça.
+    Só o texto do usuário (1º parágrafo, sem a descrição dos anexos que vem depois) decide."""
+    if "FORMATO DA PEÇA" in f"{pedido}{contexto}":
+        return False
+    texto = re.sub(r"^\[Pedido feito a[o]? [^\]]+\]\s*", "", pedido).split("\n\n")[0]
+    return bool(IDEACAO.search(texto[:400]))
 
 
 class Cancelado(Exception):

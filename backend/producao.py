@@ -12,10 +12,11 @@ Além das produções (tabela tarefas), a fila tem "trabalhos do Max" (tabela tr
 import asyncio
 import hmac
 import json
+import logging
 import re
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
@@ -24,10 +25,13 @@ import atividade
 import config
 import max_texto
 import monday
+import segredos
 import tarefas
 from auth import validar_token
 from conexoes import gerenciador
 from estado import Agente
+
+log = logging.getLogger("veraneio.producao")
 
 ARQUIVO_TOKEN = config.ARQUIVO_BANCO.parent / "operador.token"
 MODELO_MAX = "claude-code/max"
@@ -116,8 +120,13 @@ _VERBOS_INICIAIS = re.compile(
     r"^(?:(?:por favor|pfv|quero|preciso de|gostaria de|crie|criar|cria|fa[cç]a|fazer|produza|produzir|gere|gerar|"
     r"monte|montar|desenvolva|elabore|me|uma?|o|a|os|as)\s+)+", re.IGNORECASE)
 _LIGACOES = {"de", "do", "da", "dos", "das", "para", "com", "e", "em", "no", "na", "o", "a", "ao", "à"}
-PEDIDO_AJUSTE = re.compile(r"^\s*(ajuste|ajustes|ajustar|altere|alterar|troque|trocar|mude|mudar|corrija|corrigir|"
-                           r"refa[cç]a|aumente|diminua|tire|remova|coloque|substitua|deixe)\b", re.IGNORECASE)
+# Ajuste explícito ("ajuste...", "corrija...") ou verbo genérico ("troque o título...") sem cara de peça nova.
+PEDIDO_AJUSTE = re.compile(r"^\s*(ajuste|ajustes|ajustar|altere|alterar|corrija|corrigir|refa[cç]a)\b", re.IGNORECASE)
+VERBO_GENERICO = re.compile(r"^\s*(troque|trocar|mude|mudar|aumente|diminua|tire|remova|coloque|substitua|deixe)\b",
+                            re.IGNORECASE)
+# "Coloque o Lodge 12 num stories de boas-vindas" é peça nova, não ajuste da anterior.
+PECA_NOVA = re.compile(r"\b(posts?|stories|story|reels?|carross[eé]is|carrossel|shorts|v[ií]deo|lodges?\s*\d+)\b",
+                       re.IGNORECASE)
 
 
 def titulo_curto(texto: str) -> str:
@@ -149,7 +158,8 @@ def agente_da_peca(login: str, texto: str) -> str | None:
 def base_do_ajuste(login: str, agente_id: str, texto: str) -> int | None:
     """Pedido de ajuste ("Ajuste na peça #20: ...", "troque o título...") -> produção a ajustar; None = peça nova."""
     citada = re.search(r"#(\d+)", texto)
-    if not (citada or PEDIDO_AJUSTE.search(texto)):
+    generico = VERBO_GENERICO.search(texto) and not PECA_NOVA.search(texto)
+    if not (citada or PEDIDO_AJUSTE.search(texto) or generico):
         return None
     return ultima_concluida(login, agente_id, int(citada.group(1)) if citada else None)
 
@@ -269,6 +279,7 @@ async def novo_trabalho(dados: NovoTrabalho, authorization: str = Header("")):
 @rotas.post("/trabalhos/{trabalho_id}/concluir")
 async def concluir_trabalho(trabalho_id: int, dados: Resultado, authorization: str = Header("")):
     _exigir_operador(authorization)
+    dados.resultado = segredos.limpar(dados.resultado)  # o que o Max devolve nunca leva chave/token adiante
     trabalho = _finalizar_trabalho(trabalho_id, "concluido", dados.resultado)
     if trabalho["tipo"] == "anexo" and trabalho["payload"].get("anexo_id"):
         import anexos  # import tardio: anexos depende deste módulo
@@ -279,17 +290,36 @@ async def concluir_trabalho(trabalho_id: int, dados: Resultado, authorization: s
 @rotas.post("/trabalhos/{trabalho_id}/falhar")
 async def falhar_trabalho(trabalho_id: int, falha: Falha, authorization: str = Header("")):
     _exigir_operador(authorization)
-    _finalizar_trabalho(trabalho_id, "falhou", falha.erro[:500])
+    _finalizar_trabalho(trabalho_id, "falhou", segredos.limpar(falha.erro[:500]))
     return {"ok": True}
 
 
 # --- Fila do trabalhador -----------------------------------------------------------------
+
+def _retomar_orfaos() -> list[str]:
+    """O trabalhador é instância única e só pede a fila quando está livre: o que ainda consta "em produção" ou
+    "executando" é sobra de uma execução que caiu (PC reiniciado, processo encerrado). Volta para a fila; texto
+    (alguém esperava a resposta) falha. Reservas de texto paradas há mais de 30 min também são liberadas.
+    Devolve os agentes que estavam presos em "trabalhando"."""
+    limite = (datetime.now(timezone.utc) - timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with _db() as db:
+        presos = [l["agente"] for l in db.execute("SELECT agente FROM tarefas WHERE status = 'produzindo'")]
+        db.execute("UPDATE tarefas SET status = 'producao' WHERE status = 'produzindo'")
+        db.execute("UPDATE trabalhos_max SET status = 'falhou', resultado = 'o trabalhador reiniciou' "
+                   "WHERE tipo = 'texto' AND (status = 'executando' OR (status = 'reservado' AND criado_em < ?))",
+                   (limite,))
+        db.execute("UPDATE trabalhos_max SET status = 'pendente' WHERE status = 'executando'")
+    return presos
+
 
 @rotas.get("/proxima")
 async def proxima(authorization: str = Header("")):
     """Reserva o próximo item: anexo/texto (alguém esperando) > produção > demais trabalhos. Ambos nulos = fila vazia."""
     _exigir_operador(authorization)
     max_texto.registrar_contato()  # o trabalhador está ligado
+    for agente in _retomar_orfaos():  # produção que ficou pela metade não prende mais o agente nem o Max
+        log.warning("Produção interrompida de %s voltou para a fila.", agente)
+        await atividade.liberar(agente)
     if (trabalho := _reservar_trabalho(("anexo", "texto"))):
         return {"producao": None, "trabalho": trabalho}
     linha = _db().execute(
@@ -347,6 +377,7 @@ async def concluir(tarefa_id: int, conclusao: Conclusao, authorization: str = He
     with _db() as db:  # a pasta fica registrada para os ajustes desta peça
         db.execute("UPDATE producao_info SET pasta = ? WHERE tarefa_id = ?", (conclusao.pasta, tarefa_id))
     arquivos = "\n".join(f"- {nome}" for nome in conclusao.arquivos) or "- (nenhum arquivo listado)"
+    conclusao.resumo = segredos.limpar(conclusao.resumo)  # vai ao chat e ao Monday: nunca leva chave/token
     resposta = (f"✅ Pedido concluído pelo Claude Code (Max).\n\n{conclusao.resumo.strip()}\n\n"
                 f"Arquivos em ESCRITÓRIO VERANEIO/{conclusao.pasta}:\n{arquivos}")
     await _finalizar(tarefa_id, "concluida", resposta, "concluida",
@@ -359,6 +390,7 @@ async def concluir(tarefa_id: int, conclusao: Conclusao, authorization: str = He
 @rotas.post("/{tarefa_id}/falhar")
 async def falhar(tarefa_id: int, falha: Falha, authorization: str = Header("")):
     _exigir_operador(authorization)
+    falha.erro = segredos.limpar(falha.erro)
     motivo = f"A produção pelo Claude Code (Max) falhou: {falha.erro[:300]}"
     await _finalizar(tarefa_id, "falhou", motivo, "falhou", falha.erro[:300])
     monday.andamento(tarefa_id, "falhou", motivo)

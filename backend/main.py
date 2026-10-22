@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import agendamentos
 import andamento
@@ -34,9 +34,11 @@ log = logging.getLogger("veraneio")
 
 TAMANHO_MAX_TEXTO = 4000
 MAX_FALHAS_LOGIN = 5          # senhas erradas seguidas por usuário/IP antes do bloqueio
+MAX_FALHAS_IP = 20            # senhas erradas de um IP (qualquer usuário) antes do bloqueio
 BLOQUEIO_LOGIN_S = 15 * 60
 
 _falhas_login: dict[tuple[str, str], list[float]] = {}  # (usuário, IP) -> horários das falhas
+_falhas_ip: dict[str, list[float]] = {}                 # IP -> horários das falhas (usuários aleatórios)
 
 
 @asynccontextmanager
@@ -96,20 +98,34 @@ app.include_router(andamento.rotas)
 
 
 class Credenciais(BaseModel):
-    usuario: str
-    senha: str
+    usuario: str = Field(max_length=120)
+    senha: str = Field(max_length=200)  # o hash custa caro: senha gigante não chega a ser calculada
+
+
+def _podar_falhas(agora: float) -> None:
+    """Esquece falhas antigas: os registros não crescem sem limite."""
+    if len(_falhas_login) + len(_falhas_ip) < 500:
+        return
+    for registro in (_falhas_login, _falhas_ip):
+        for chave in [c for c, ts in registro.items() if not ts or agora - ts[-1] >= BLOQUEIO_LOGIN_S]:
+            del registro[chave]
 
 
 @app.post("/api/login")
 def login(credenciais: Credenciais, request: Request):
-    chave = (credenciais.usuario.strip().lower(), request.client.host if request.client else "")
+    ip = request.client.host if request.client else ""
+    chave = (credenciais.usuario.strip().lower(), ip)
     agora = time.monotonic()
+    _podar_falhas(agora)
     falhas = [t for t in _falhas_login.get(chave, []) if agora - t < BLOQUEIO_LOGIN_S]
-    if len(falhas) >= MAX_FALHAS_LOGIN:
+    falhas_ip = [t for t in _falhas_ip.get(ip, []) if agora - t < BLOQUEIO_LOGIN_S]
+    # Antes do hash (caro): tentativas com usuários aleatórios do mesmo IP também esbarram no limite.
+    if len(falhas) >= MAX_FALHAS_LOGIN or len(falhas_ip) >= MAX_FALHAS_IP:
         raise HTTPException(status_code=429, detail="Muitas tentativas. Tente de novo em alguns minutos.")
     usuario = autenticar(credenciais.usuario, credenciais.senha)
     if not usuario:
         _falhas_login[chave] = [*falhas, agora]
+        _falhas_ip[ip] = [*falhas_ip, agora]
         raise HTTPException(status_code=401, detail="Usuário ou senha inválidos")
     _falhas_login.pop(chave, None)
     return {"token": criar_token(usuario), "usuario": usuario["nome"], "role": usuario["role"]}
@@ -218,8 +234,9 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
 
     # 'Faça uma legenda para o item "FEED | ..."': os dados do item do Monday entram no pedido.
     # O resultado também vai para o item (comentário e legenda), sem mudar o status dele.
+    # Só a conta do Thomas lê e escreve no Monday pelo chat (usa o token do sistema).
     contexto, item_citado = (await asyncio.to_thread(monday.contexto_citado, texto)
-                             if monday.CITACAO.search(texto) else ("", None))
+                             if usuario["sub"] == config.DONO_MAX and monday.CITACAO.search(texto) else ("", None))
 
     def ao_criar(tarefa_id: int) -> None:
         if origem_id:
