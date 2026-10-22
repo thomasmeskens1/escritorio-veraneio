@@ -33,7 +33,8 @@ SECOES = {
            "9": ("gestor", "designer", "criador_imagens", "copywriter", "social_media", "moviemaker")},
     "02": {"1": ESTRATEGIA, "2": ("gestor", "social_media"), "3": ("gestor", "social_media"),
            "4": ("gestor", "social_media"), "5": ("social_media",), "6": ("gestor_trafego", "analista_metricas"),
-           "7": ("social_media", "designer"), "8": ("social_media",), "9": ESTRATEGIA},
+           "7": ("social_media", "designer"), "8": ("social_media",), "9": ESTRATEGIA,
+           "10": ("gestor", "social_media", "copywriter", "designer", "analista_metricas")},  # método Instagram
     "05": {"1": ("moviemaker",), "2": ("moviemaker", "editor_video"), "3": ("moviemaker",),
            "4": ("moviemaker", "editor_video"), "5": ("moviemaker", "editor_video"), "6": ("moviemaker",),
            "7": ("moviemaker", "editor_video"), "8": ("moviemaker", "editor_video")},
