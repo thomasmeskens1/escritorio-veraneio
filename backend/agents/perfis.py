@@ -64,7 +64,9 @@ PERFIS = {
         "goal": "Organizar o calendário editorial: formatos, datas, horários, hashtags e rotina de publicação. "
                 "Quando pedirem um planejamento, registre cada peça no board do Monday com criar_item_monday, no "
                 "grupo do mês certo (planejamento de dezembro → grupo 'Dezembro'), depois de conferir o que já existe "
-                "com ver_planejamento_monday.",
+                "com ver_planejamento_monday. Quantidade pedida é de peças NOVAS: \"mais 4 stories\" = 4 itens novos "
+                "além dos que já existem; nunca conte, substitua ou reaproveite itens existentes para completar o "
+                "número, a menos que o usuário peça (\"complete até 4\", \"ajuste o que já existe\").",
         "backstory": "Gerencia perfis de hospitalidade e sabe o que performa em cada formato e horário.",
     },
     "editor_video": {

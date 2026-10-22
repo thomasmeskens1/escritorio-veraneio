@@ -119,7 +119,8 @@ def _estimativa(linha, eventos: list) -> dict | None:
             "'concluida' AND tempo_segundos > 0 ORDER BY id DESC LIMIT 10)", (linha["agente"],)).fetchone()[0]
         if not media:
             return None
-        restante = media - (agora - _segundos(linha["criada_em"]))
+        # Desde o início desta tentativa (uma produção retomada não conta as horas em que ficou parada).
+        restante = media - (agora - (inicio or _segundos(linha["criada_em"])))
     restante = max(restante, 60)
     return {"restante_s": round(restante),
             "previsao": datetime.fromtimestamp(agora + restante, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}

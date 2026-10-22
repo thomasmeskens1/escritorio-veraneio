@@ -107,14 +107,13 @@ def _exigir_operador_ou_dono(authorization: str) -> None:
 
 def iniciar() -> None:
     token_operador()
-    # Item interrompido por reinício volta para a fila. O trabalhador pode continuar produzindo mesmo assim
-    # (ele roda fora do servidor): por isso a conclusão também é aceita em "producao" (ver _finalizar).
+    # O que está "produzindo" NÃO volta para a fila no reinício do servidor: o trabalhador roda fora dele e
+    # continua produzindo (antes, o painel mostrava "na fila" uma peça em produção). Se o trabalhador caiu de
+    # verdade, a sobra é recuperada quando ele pede o próximo item (_retomar_orfaos).
     with _db() as db:
-        db.execute("UPDATE tarefas SET status = 'producao' WHERE status = 'produzindo'")
         # Texto pelo Max: quem esperava a resposta não existe mais após o reinício.
         db.execute("UPDATE trabalhos_max SET status = 'falhou', resultado = 'reinício do servidor' "
                    "WHERE tipo = 'texto' AND status IN ('reservado', 'pendente', 'executando')")
-        db.execute("UPDATE trabalhos_max SET status = 'pendente' WHERE status = 'executando'")
 
 
 _VERBOS_INICIAIS = re.compile(
