@@ -7,8 +7,8 @@ JWT_SECRET = os.getenv("JWT_SECRET", "")
 JWT_ALGORITMO = "HS256"
 JWT_VALIDADE_HORAS = 8
 
-if not JWT_SECRET:
-    raise RuntimeError("Defina JWT_SECRET no .env (veja .env.example).")
+if len(JWT_SECRET) < 32:  # segredo curto permite adivinhar e forjar tokens
+    raise RuntimeError("Defina JWT_SECRET no .env com pelo menos 32 caracteres (veja .env.example).")
 
 
 def _lista(nome: str, padrao: str) -> list[str]:

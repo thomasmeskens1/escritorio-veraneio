@@ -158,12 +158,14 @@ async def _produzir_pecas(linha, consolidado: str) -> bool:
         briefing = (f"Produza a peça final do projeto #{linha['id']}, coordenado pelo Gestor. Siga o plano, os "
                     f"textos e as especificações abaixo, sem inventar dados.\n\nPedido original: {linha['texto']}"
                     f"\n\nResultado consolidado do Gestor:\n{consolidado[:8000]}")
-        producao_id = await producao.enfileirar(linha["usuario"], linha["andar"], agente, briefing, titulo=titulo)
-        # A entrega da produção volta ao chat onde o usuário pediu (o do Gestor, se ele pediu direto ao Gestor).
-        encaminhamento.registrar(producao_id, *(encaminhamento.origem(linha["id"]) or (linha["andar"], "gestor")),
-                                 pedido=False)
-        if (vinculo := monday._vinculo(linha["id"])):  # os criativos voltam para o mesmo item do Monday
-            monday.vincular(producao_id, vinculo["item_id"], vinculo["usuario_monday"], vinculo["origem"] or "botao")
+        def vincular(producao_id: int) -> None:
+            # A entrega volta ao chat onde o usuário pediu (o do Gestor, se ele pediu direto ao Gestor).
+            encaminhamento.registrar(producao_id, *(encaminhamento.origem(linha["id"]) or (linha["andar"], "gestor")),
+                                     pedido=False)
+            if (vinculo := monday._vinculo(linha["id"])):  # os criativos voltam para o mesmo item do Monday
+                monday.vincular(producao_id, vinculo["item_id"], vinculo["usuario_monday"], vinculo["origem"] or "botao")
+
+        await producao.enfileirar(linha["usuario"], linha["andar"], agente, briefing, titulo=titulo, ao_criar=vincular)
         await avisar_na_origem(linha["id"], {"andar": linha["andar"], "agente": "gestor"},
                                f"A peça final foi para o {agente.nome} produzir no Claude Code (Max). "
                                "A entrega chega aqui quando ficar pronta.", "Produção")

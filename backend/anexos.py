@@ -177,9 +177,10 @@ def _linhas(ids: list[str], login: str | None = None) -> list:
     return [linhas[i] for i in ids if i in linhas and (login is None or linhas[i]["usuario"] == login)]
 
 
-def caminhos(ids: list[str]) -> list[str]:
-    """Caminhos relativos a backend/ (ex.: dados/anexos/ab12cd34ef56.png), para a produção PNG/MP4."""
-    return [linha["caminho"] for linha in _linhas(ids)]
+def caminhos(ids: list[str], login: str | None = None) -> list[str]:
+    """Caminhos relativos a backend/ (ex.: dados/anexos/ab12cd34ef56.png), para a produção PNG/MP4.
+    Com `login`, só os anexos desse usuário."""
+    return [linha["caminho"] for linha in _linhas(ids, login)]
 
 
 def salvar_descricao(anexo_id: str, descricao: str, status: str = "descrito") -> None:

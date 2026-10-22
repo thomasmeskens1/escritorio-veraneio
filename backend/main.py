@@ -72,11 +72,12 @@ async def copiar_banco_periodicamente() -> None:
 # Sem /docs, /redoc e /openapi.json: não expõe o mapa da API.
 app = FastAPI(title="Escritório Veraneio", lifespan=ciclo_de_vida, docs_url=None, redoc_url=None, openapi_url=None)
 
-# Cabeçalhos de segurança: a página só roda scripts do próprio sistema e do CDN do Phaser.
+# Cabeçalhos de segurança: a página só roda scripts do próprio sistema (o Phaser também é servido daqui) e só
+# conversa com a própria origem (inclusive o WebSocket).
 CABECALHOS_SEGURANCA = {
     "Content-Security-Policy": (
-        "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' ws: wss:; font-src 'self' data:; "
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self' data:; "
         "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"),
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -261,10 +262,9 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
 
     if agente.id in AGENTES_PRODUCAO:  # só chega aqui o dono do plano Max (checado acima)
         # "Ajuste na peça #20: ..." ou "troque o título...": nova versão da peça anterior, na mesma pasta.
-        tarefa_id = await producao.enfileirar(usuario["sub"], andar, agente, f"{texto}\n\n{contexto}".strip(),
-                                              anexos=anexos.caminhos(anexos_ids),
-                                              base=producao.base_do_ajuste(usuario["sub"], agente.id, texto))
-        ao_criar(tarefa_id)
+        await producao.enfileirar(usuario["sub"], andar, agente, f"{texto}\n\n{contexto}".strip(),
+                                  anexos=anexos.caminhos(anexos_ids, usuario["sub"]),
+                                  base=producao.base_do_ajuste(usuario["sub"], agente.id, texto), ao_criar=ao_criar)
     else:
         await orquestrador.nova_tarefa(usuario["sub"], andar, agente, texto, anexos_ids, contexto=contexto,
                                        ao_criar=ao_criar)

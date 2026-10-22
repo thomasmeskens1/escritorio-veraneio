@@ -29,6 +29,7 @@ import segredos
 import tarefas
 from auth import validar_token
 from conexoes import gerenciador
+from agents.perfis import _historico_relevante
 from estado import Agente
 
 log = logging.getLogger("veraneio.producao")
@@ -165,9 +166,11 @@ def base_do_ajuste(login: str, agente_id: str, texto: str) -> int | None:
 
 
 async def enfileirar(login: str, andar: str, agente: Agente, texto: str, anexos: list[str] | None = None,
-                     titulo: str = "", base: int | None = None) -> int:
+                     titulo: str = "", base: int | None = None, ao_criar=None) -> int:
     """`anexos`: caminhos de anexos.caminhos(). `titulo`: nome da pasta de entrega (padrão: tirado do pedido).
-    `base`: produção que está sendo ajustada (mesma pasta, nova versão)."""
+    `base`: produção que está sendo ajustada (mesma pasta, nova versão).
+    `ao_criar(tarefa_id)`: vínculos (Monday, chat de origem) gravados ANTES de a tarefa entrar na fila; antes, o
+    trabalhador podia pegá-la sem o vínculo e os criativos não voltavam ao item do Monday."""
     tarefa_id = tarefas.criar(login, andar, agente.id, texto, "complexa")
     with _db() as db:
         if base:
@@ -177,6 +180,8 @@ async def enfileirar(login: str, andar: str, agente: Agente, texto: str, anexos:
         if anexos:
             db.execute("INSERT OR REPLACE INTO producao_anexos (tarefa_id, caminhos) VALUES (?, ?)",
                        (tarefa_id, json.dumps(list(anexos))))
+    if ao_criar:
+        ao_criar(tarefa_id)
     tarefas.atualizar(tarefa_id, status="producao")
     detalhe = f"Ajuste da produção #{base}" if base else "Produção de arquivo pelo Claude Code (Max)"
     tarefas.registrar_evento(tarefa_id, "recebida", agente.id, detalhe=detalhe)
@@ -340,7 +345,9 @@ async def proxima(authorization: str = Header("")):
         # Ajuste: mesma pasta e mesmo rascunho local da produção ajustada.
         "base": {"tarefa_id": base, "pasta": pasta_base["pasta"]} if pasta_base else None,
         "texto": linha["texto"], "criada_em": linha["criada_em"],
-        "historico": [dict(h) for h in tarefas.historico(linha["usuario"], linha["andar"], linha["agente"], linha["id"])],
+        # Sem conversas sobre outros Lodges (mesmo filtro do chat: perfis._historico_relevante).
+        "historico": [dict(h) for h in _historico_relevante(
+            tarefas.historico(linha["usuario"], linha["andar"], linha["agente"], linha["id"]), linha["texto"])],
         "anexos": _anexos_da_producao(linha["id"]),
         # Item do Monday: referências (links novos) para baixar e envio dos criativos no fim.
         "monday": bool(monday.item_da_tarefa(linha["id"])),
