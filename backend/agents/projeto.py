@@ -39,6 +39,8 @@ def e_ideacao(pedido: str, contexto: str = "") -> bool:
     if "FORMATO DA PEÇA" in f"{pedido}{contexto}":
         return False
     texto = re.sub(r"^\[Pedido feito a[o]? [^\]]+\]\s*", "", pedido).split("\n\n")[0]
+    if (escolha := re.match(r"^\s*(planejamento|pe[cç]a\s+final)\s*:", texto, re.IGNORECASE)):
+        return escolha.group(1).lower().startswith("plan")  # resposta aos botões "Só o planejamento" / "Peça final"
     return bool(IDEACAO.search(texto[:400]))
 
 

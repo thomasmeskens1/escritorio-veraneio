@@ -61,6 +61,8 @@ def _etapas_por_eventos(linha, eventos: list) -> list[dict]:
             falhou = any(s["tipo"] == "falha_modelo" and s["modelo"] == e["modelo"] for s in seguinte[:3])
             status = "falhou" if falhou else ("andamento" if not seguinte else "concluida")
             etapas.append({"texto": f"Trabalhando com {_modelo_curto(e['modelo'])}", "status": status})
+        elif e["tipo"] == "item_monday":  # Social Media: cada peça do planejamento criada no board
+            etapas.append({"texto": f"Criou no Monday — {e['detalhe']}", "status": "concluida"})
         elif e["tipo"] == "consulta_cerebro":
             etapas.append({"texto": f"Consultou o Cérebro: {(e['detalhe'] or '')[:90]}", "status": "concluida"})
         elif e["tipo"] == "adiada":

@@ -102,7 +102,12 @@ FLUXO = ("Quando um pedido passa por outros agentes (Gestor, especialistas, prod
 # Pedido claro = entrega direta. Teste real: "ideia de post para o Lodge 20" voltou com 3 opções de Lodge.
 DIRETO = ("Se o pedido for claro (ex.: cita o Lodge pelo número), entregue direto usando os dados do Cérebro "
           "desse Lodge; só peça confirmação quando faltar algo essencial que não está no pedido nem no Cérebro.")
-INSTRUCOES = f"Responda em português do Brasil, de forma objetiva e acionável. {ESTILO_CHAT} {FLUXO} {DIRETO}"
+# Regras de ouro da marca (Thomas, 22/10/2026): também no manual 00 e ensinadas ao Cérebro.
+REGRAS_DE_OURO = ("Regras de ouro: nunca use o WhatsApp como CTA nem escreva o número da Casa Veraneio em publicações; "
+                  "o site não aparece em artes, vídeos e stories (no máximo na legenda, com prioridade baixa); "
+                  "stories não têm legenda.")
+INSTRUCOES = (f"Responda em português do Brasil, de forma objetiva e acionável. {ESTILO_CHAT} {FLUXO} {DIRETO} "
+              f"{REGRAS_DE_OURO}")
 AGENTES_ESCOLA = {"recepcionista", "professor"}
 
 

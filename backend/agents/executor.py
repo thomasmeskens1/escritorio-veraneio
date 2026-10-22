@@ -156,7 +156,7 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
     # de projeto do Gestor (a etapa não cria itens no Monday).
     tarefa = tarefas.obter(tarefa_id) if tarefa_id else None
     if "Sua etapa (" not in descricao and tarefa and tarefa["usuario"] == config.DONO_MAX:
-        ferramentas += ferramentas_monday.para(agente_id)
+        ferramentas += ferramentas_monday.para(agente_id, tarefa_id)
     perfil = dict(PERFIS[agente_id])
     # Diretrizes da Casa Veraneio (regras, marca e manual da função); versão curta no modelo local.
     if (extras := diretrizes.para(agente_id, compacto=modelo.startswith("ollama/"))):

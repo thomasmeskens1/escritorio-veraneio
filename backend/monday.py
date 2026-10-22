@@ -44,7 +44,8 @@ ARQUIVO_SEGREDO = config.DADOS_DIR / "monday.webhook.token"
 CITACAO = re.compile(r"\bitem\s+[\"“”']([^\"“”']{3,200})[\"“”']", re.IGNORECASE)
 # Padrão do nome dos itens: "TIPO | Descrição". O tipo define o formato da peça (manual 09).
 TIPOS = {
-    "STORIES": "Stories do Instagram: vertical 9:16, 1080×1920, sem legenda",
+    "STORIES": ("Stories do Instagram: vertical 9:16, 1080×1920, sem legenda. Vídeo predomina, mas também vale "
+                "arte estática, inclusive 2 a 5 telas do mesmo tema em sequência (um carrossel nos stories)"),
     "POST": "Single post estático do feed: UMA imagem 3:4, 1080×1440, com legenda (não é vídeo nem carrossel)",
     "CARROSSEL": "Carrossel do feed: várias imagens 3:4, 1080×1440 cada, com legenda",
     "REELS": "Reels do Instagram: vídeo vertical 9:16, 1080×1920, com legenda",

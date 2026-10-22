@@ -11,6 +11,7 @@ from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 
 import monday
+import tarefas
 
 OBJETIVOS = ["Venda", "Comercial", "Interação", "Informativo/Educacional", "Criativo", "Síte"]
 RESPONSAVEIS = ["Bruna", "Fran", "Luiz", "Thomas"]
@@ -70,6 +71,7 @@ class CriarItemMonday(BaseTool):
                         "Devolve a confirmação com o link ou o erro a corrigir.")
     args_schema: type[BaseModel] = _NovoItem
     criados: int = 0
+    tarefa_id: int = 0  # cada item criado vira uma etapa no painel de andamento
 
     def _run(self, nome: str, grupo: str, data_postagem: str = "", data_entrega: str = "", horario: str = "",
              objetivo: str = "", responsavel: str = "", conta: str = "Casa Veraneio", legenda: str = "") -> str:
@@ -98,7 +100,8 @@ class CriarItemMonday(BaseTool):
         if (r := _escolher(responsavel, RESPONSAVEIS)):
             valores["dropdown_mm8b5ds4"] = {"labels": [r]}
         valores[monday.COL_CONTA] = {"label": _escolher(conta, CONTAS) or "Casa Veraneio"}
-        if legenda.strip():
+        # Stories não têm legenda (manual 09): não grava, mesmo que o modelo tenha escrito uma.
+        if legenda.strip() and monday.tipo_do_item(nome) != "STORIES":
             valores[monday.COL_LEGENDA] = {"text": legenda.strip()[:5000]}
         try:
             alvo = monday.grupo_por_nome(mes, criar=True)
@@ -106,11 +109,13 @@ class CriarItemMonday(BaseTool):
         except Exception as erro:
             return f"Não foi possível criar no Monday: {erro}"
         self.criados += 1
+        if self.tarefa_id:
+            tarefas.registrar_evento(self.tarefa_id, "item_monday", "social_media", detalhe=f"{alvo['title']}: {item['name']}")
         return f"Criado em {alvo['title']}: {item['name']} ({item['url']})"
 
 
-def para(agente_id: str) -> list[BaseTool]:
+def para(agente_id: str, tarefa_id: int = 0) -> list[BaseTool]:
     """Ferramentas do Monday do agente (hoje, só o Social Media)."""
     if agente_id != "social_media" or not monday.ativo():
         return []
-    return [VerPlanejamentoMonday(), CriarItemMonday()]
+    return [VerPlanejamentoMonday(), CriarItemMonday(tarefa_id=tarefa_id)]
