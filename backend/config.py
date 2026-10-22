@@ -58,7 +58,10 @@ PRECOS_ANTHROPIC = {
 _CHAVES = {"anthropic/": ANTHROPIC_API_KEY, "openrouter/": OPENROUTER_API_KEY}
 
 # Única conta que pode acionar a produção de PNG/MP4 pelo Claude Code (plano Max pessoal).
-DONO_MAX = os.getenv("DONO_MAX", "thomas@casaveraneio.com").strip().lower()
+# Sem padrão no código (o repositório é público): o login do dono vem só do .env.
+DONO_MAX = os.getenv("DONO_MAX", "").strip().lower()
+if not DONO_MAX:
+    raise RuntimeError("Defina DONO_MAX no .env (login do dono do plano Max; veja .env.example).")
 
 # Dados do sistema (tokens, anexos, manuais, projetos): pasta compartilhada com o PC (trabalhador Max, backup).
 DADOS_DIR = Path(__file__).resolve().parent / "dados"
