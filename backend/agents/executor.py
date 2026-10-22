@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 import agentes_dinamicos
 import atividade
 import config
+import encaminhamento
 import cerebro
 import max_texto
 import saude
@@ -178,7 +179,7 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
 def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa, historico: list,
                        cancelar: threading.Event) -> Resultado:
     total = Resultado(texto="")
-    if agente_id == "gestor":
+    if agente_id == "gestor" and not encaminhamento.pergunta_simples(texto):
         # Com o Claude, só o Gestor (plano e revisão) usa o modelo forte; a equipe usa o padrão, bem mais barato.
         equipe = config.MODELO_FILA_PADRAO if etapa.modelo == config.MODELO_FILA_COMPLEXO else etapa.modelo
 

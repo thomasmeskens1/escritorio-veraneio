@@ -60,6 +60,18 @@ def para_o_gestor(andar: str, agente_id: str, texto: str) -> bool:
     return not (escopo and re.search(rf"\b({escopo})\b", texto, re.IGNORECASE))
 
 
+# Verbos de pedido de trabalho: "Pode montar um post do Lodge 1?" é pedido, mesmo terminando em "?".
+PEDIDO_TRABALHO = re.compile(r"\b(mont\w*|fa[cç]\w*|faz|cri\w*|produz\w*|prepar\w*|elabor\w*|desenvolv\w*|"
+                             r"planej\w*|escrev\w*|ger\w*|organiz\w*|ajust\w*)\b", re.IGNORECASE)
+
+
+def pergunta_simples(texto: str) -> bool:
+    """Dúvida que o Gestor responde direto, sem montar projeto com a equipe (plano + etapas + revisão).
+    Stress test: cada pergunta simples virava um projeto de ~3 min e estourava a cota dos modelos gratuitos."""
+    return (e_pergunta(texto) and not texto.lstrip().startswith("[") and not escolha(texto)
+            and not PEDIDO_TRABALHO.search(texto))
+
+
 def precisa_escolher(andar: str, agente_id: str, texto: str) -> bool:
     """Peça pedida a um especialista sem dizer se quer o planejamento ou o arquivo pronto ("Monta 4 stories para
     dezembro"): pergunta antes de acionar a produção. Teste real: o pedido virou produção no Max sem consulta."""
