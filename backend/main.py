@@ -18,6 +18,7 @@ import aprendizado
 import atividade
 import config
 import encaminhamento
+import espera
 import monday
 import cerebro
 import historico
@@ -222,6 +223,11 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     # "...todos os dias às 8h" vira rotina agendada (vale mesmo com o agente ocupado agora).
     if agendamentos.e_agendamento(texto) and await agendamentos.criar(usuario["sub"], andar, agente.id, texto):
         return
+    # Produção em espera neste chat (o Gestor fez uma pergunta): esta mensagem é a resposta.
+    if (pendente := espera.no_chat(usuario["sub"], andar, agente.id)):
+        texto_aviso = await orquestrador.retomar_producao(pendente, texto)
+        return await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "titulo": "Produção", "liberar": True,
+                                             "texto": texto_aviso})
     # A resposta final sempre volta ao chat onde o usuário pediu (origem_id), mesmo rodando em outro agente.
     origem_id = None
     aviso = None  # "encaminhei/mandei para...": só sai depois de o pedido passar nas validações abaixo
@@ -230,6 +236,14 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         origem_id, agente = agente.id, buscar_agente(andar, produtor) or agente
         aviso = {"titulo": "Ajuste enviado",
                  "texto": f"Mandei o ajuste para o {agente.nome}. A nova versão chega aqui quando ficar pronta."}
+    # Peça pedida sem dizer se quer o planejamento ou o arquivo pronto: pergunta antes (botões no chat).
+    elif encaminhamento.precisa_escolher(andar, agente.id, texto):
+        return await gerenciador.enviar(ws, {
+            "tipo": "aviso", **alvo, "titulo": "Planejamento ou peça final?", "liberar": True,
+            "texto": "Antes de acionar a equipe: você quer só o planejamento (ideias, textos e roteiro, sem produzir "
+                     "arquivos) ou a peça final pronta (artes e vídeos produzidos no Max)?",
+            "opcoes": [{"rotulo": "Só o planejamento", "texto": f"Planejamento: {texto}"},
+                       {"rotulo": "Peça final", "texto": f"Peça final: {texto}"}]})
     # Peça completa pedida a um especialista do Marketing: o Gestor coordena a equipe.
     elif encaminhamento.para_o_gestor(andar, agente.id, texto):
         origem_id = agente.id
@@ -239,6 +253,10 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
                           f"{agente.nome}, Designer, Criador de Imagens e quem mais precisar. "
                           "A resposta final chega aqui, nesta conversa, quando a equipe terminar."}
         agente, texto = gestor, f"[Pedido feito ao {agente.nome}] {texto}"
+        # Pedido de peça pelo chat: o formato pedido (STORIES, POST...) vai explícito, como nos itens do Monday.
+        # Teste real: "4 stories" foi respondido depois como REELS.
+        if (formato := monday.linha_de_formato(texto)):
+            texto = f"{texto}\n\n{formato}"
     # Erros e avisos imediatos ficam no chat onde o usuário escreveu (alvo não muda).
     # Produção (Criador de Imagens, Editor de Vídeo) tem fila: ocupado não impede pedir outra peça ou ajuste.
     if agente.status == Status.trabalhando and agente.id not in AGENTES_PRODUCAO:

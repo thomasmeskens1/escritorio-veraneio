@@ -227,7 +227,9 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
                      f"Revise e consolide tudo numa entrega final coerente para o usuário (até ~{PALAVRAS_FINAL} palavras). "
                      "Entregue só o que ele pediu. NÃO inclua bastidores: observações internas, conferência de "
                      "dados, especificações técnicas (medidas, zonas mortas, fontes, cores), quem fez o quê nem "
-                     "próximos passos de Drive, Monday ou produção. "
+                     "próximos passos de Drive, Monday ou produção. Se faltar uma decisão do usuário para "
+                     "produzir, não assuma nada: termine com uma linha \"PERGUNTA: <pergunta objetiva>\" "
+                     "(a produção espera a resposta). "
                      f"{ESTILO_CHAT}")
         _gravar(final, executar("gestor", descricao, "Entrega final consolidada e revisada.", "gestor"))
     return final.read_text(encoding="utf-8")

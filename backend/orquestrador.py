@@ -14,6 +14,7 @@ import atividade
 import cerebro
 import config
 import encaminhamento
+import espera
 import max_texto
 import monday
 import saude
@@ -139,8 +140,43 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
     await entregar_na_origem(linha)
     producao_a_seguir = False
     if linha["agente"] == "gestor" and linha["usuario"] == config.DONO_MAX:
-        producao_a_seguir = await _produzir_pecas(linha, resultado.texto)
+        if (pergunta := espera.pergunta_pendente(resultado.texto)) and _vai_produzir(linha["id"]):
+            await _esperar_resposta(linha, pergunta)  # a produção só começa quando o usuário responder
+            producao_a_seguir = True                  # o item do Monday não vai para Revisão ainda
+        else:
+            producao_a_seguir = await _produzir_pecas(linha, resultado.texto)
     monday.andamento(tarefa_id, "concluida", resultado.texto, producao_a_seguir)
+
+
+def _vai_produzir(tarefa_id: int) -> bool:
+    from agents.projeto import agentes_de_producao
+
+    return bool(agentes_de_producao(tarefa_id))
+
+
+async def _esperar_resposta(linha, pergunta: str) -> None:
+    """Guarda a produção e pergunta no chat onde o pedido nasceu (o do Gestor, se foi pedido direto a ele)."""
+    andar, agente = encaminhamento.origem(linha["id"]) or (linha["andar"], linha["agente"])
+    espera.guardar(linha["id"], linha["usuario"], andar, agente, pergunta)
+    await gerenciador.enviar_para_usuario(linha["usuario"], {
+        "tipo": "aviso", "andar": andar, "agente": agente, "titulo": "Produção em espera",
+        "texto": f"Antes de produzir, o Gestor precisa da sua resposta: {pergunta}\n\nResponda aqui mesmo: a "
+                 "produção no Max só começa depois disso.",
+        "opcoes": [{"rotulo": "Seguir como está", "texto": "Pode seguir com a produção como está."},
+                   {"rotulo": "Cancelar produção", "texto": "Cancelar a produção."}]})
+
+
+async def retomar_producao(pendente, resposta: str) -> str:
+    """Resposta do usuário a uma produção em espera: vira decisão final no briefing (ou cancela)."""
+    espera.remover(pendente["tarefa_id"])
+    linha = tarefas.obter(pendente["tarefa_id"])
+    if espera.CANCELAR.search(resposta):
+        monday.andamento(linha["id"], "concluida", "Produção cancelada pelo usuário.", False)
+        return "Combinado: a produção foi cancelada. O plano do Gestor continua aqui no chat."
+    consolidado = (f"{linha['resposta']}\n\nDECISÃO DO USUÁRIO sobre a pergunta \"{pendente['pergunta']}\" "
+                   f"(vale sobre o que estiver acima): {resposta}")
+    await _produzir_pecas(linha, consolidado)
+    return "Anotado! Segui com a produção usando a sua resposta. A entrega chega aqui quando ficar pronta."
 
 
 async def _produzir_pecas(linha, consolidado: str) -> bool:

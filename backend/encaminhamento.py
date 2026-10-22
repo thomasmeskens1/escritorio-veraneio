@@ -35,13 +35,38 @@ def e_pergunta(texto: str) -> bool:
     return texto.strip().endswith("?") or bool(PERGUNTA.search(texto))
 
 
+# Resposta aos botões "Só o planejamento" / "Peça final" (ou digitada assim pelo usuário).
+ESCOLHA = re.compile(r"^\s*(planejamento|pe[cç]a\s+final)\s*:\s*", re.IGNORECASE)
+# Pedido que já deixa claro que quer o arquivo pronto: não precisa perguntar.
+PRODUCAO_EXPLICITA = re.compile(r"\b(produza|produzir|produção|pe[cç]a\s+final|arte\s+final|artes?|png|mp4|"
+                                r"criativos?|renderiz\w*|v[ií]deo\s+final|edite|monte\s+o\s+v[ií]deo)\b",
+                                re.IGNORECASE)
+
+
+def escolha(texto: str) -> str | None:
+    """"planejamento" | "peca" quando o texto começa com a resposta aos botões; None nos demais."""
+    achou = ESCOLHA.match(texto)
+    return None if not achou else ("planejamento" if achou.group(1).lower().startswith("plan") else "peca")
+
+
 def para_o_gestor(andar: str, agente_id: str, texto: str) -> bool:
     if andar != ANDAR or agente_id == GESTOR or not buscar_agente(ANDAR, GESTOR):
         return False
+    if (decidido := escolha(texto)):  # o usuário já escolheu: planejamento fica com o especialista
+        return decidido == "peca"
     if not PECAS.search(texto) or e_pergunta(texto):
         return False
     escopo = ESCOPO.get(agente_id)  # agentes criados pelo Construtor: toda peça vai ao Gestor
     return not (escopo and re.search(rf"\b({escopo})\b", texto, re.IGNORECASE))
+
+
+def precisa_escolher(andar: str, agente_id: str, texto: str) -> bool:
+    """Peça pedida a um especialista sem dizer se quer o planejamento ou o arquivo pronto ("Monta 4 stories para
+    dezembro"): pergunta antes de acionar a produção. Teste real: o pedido virou produção no Max sem consulta."""
+    from agents.projeto import e_ideacao  # import tardio: projeto carrega o andar inteiro
+
+    return (para_o_gestor(andar, agente_id, texto) and not escolha(texto)
+            and not PRODUCAO_EXPLICITA.search(texto) and not e_ideacao(texto))
 
 
 # --- Resposta de volta a quem recebeu o pedido ------------------------------------------------

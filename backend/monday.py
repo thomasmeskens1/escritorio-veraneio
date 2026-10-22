@@ -91,6 +91,24 @@ def tipo_do_item(nome: str) -> str | None:
     return casamento.group(1) if casamento and casamento.group(1) in TIPOS else None
 
 
+# Tipo citado num pedido de chat ("monta 4 stories para dezembro"); stories antes de post ("post nos stories").
+TIPO_NO_TEXTO = [("STORIES", r"stories|story"), ("CARROSSEL", r"carross[eé]is|carrossel"), ("REELS", r"reels?"),
+                 ("SHORTS", r"shorts"), ("POST", r"posts?")]
+
+
+def tipo_no_texto(texto: str) -> str | None:
+    for tipo, padrao in TIPO_NO_TEXTO:
+        if re.search(rf"\b({padrao})\b", texto or "", re.IGNORECASE):
+            return tipo
+    return None
+
+
+def linha_de_formato(texto: str) -> str:
+    """"FORMATO DA PEÇA (obrigatório): ..." para pedidos de chat (o item do Monday já traz a dele no briefing)."""
+    tipo = tipo_no_texto(texto)
+    return f"FORMATO DA PEÇA (obrigatório): {tipo} = {TIPOS[tipo]}. Produza exatamente este formato." if tipo else ""
+
+
 def ativo() -> bool:
     return bool(TOKEN)
 
