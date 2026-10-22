@@ -19,18 +19,36 @@ def _lista(nome: str, padrao: str) -> list[str]:
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")  # créditos inclusos no plano Max
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+
+def _chave(nome: str) -> str:
+    """Chave do .env; o texto de exemplo ("sua_chave_...") conta como ausente."""
+    valor = os.getenv(nome, "").strip()
+    return "" if valor.lower().startswith("sua_chave") else valor
+
+
+# Planos gratuitos oficiais (sem cartão): Groq e Mistral. Sem chave válida, os modelos deles ficam fora da rota.
+GROQ_API_KEY = _chave("GROQ_API_KEY")
+MISTRAL_API_KEY = _chave("MISTRAL_API_KEY")
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+MISTRAL_BASE_URL = "https://api.mistral.ai/v1"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
 
 # Execução imediata: gratuitos em ordem e depois o local (sem custo). Ordem definida por benchmark
 # (velocidade, resposta em pt-BR e chamada de ferramentas); o Gemma vai por último por falhar em ferramentas.
 MODELOS_GRATUITOS = _lista(
     "MODELOS_GRATUITOS",
-    "openrouter/nvidia/nemotron-3-super-120b-a12b:free,"
+    # Groq (plano gratuito, 2-3 s por resposta; 8 mil tokens/min: usa os manuais compactos, e no limite sai da
+    # rota por 2 min); Mistral entra quando houver chave válida; Nemotron Super por último (afastado no teste).
+    "groq/openai/gpt-oss-120b,"
     "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free,"
+    "mistral/mistral-medium-latest,"
     "openrouter/minimax/minimax-m3.1-flash:free,"
+    "groq/qwen/qwen3.8-27b,"
     "openrouter/dots-studio/dots-3-note-preview:free,"
     "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,"
-    "openrouter/google/gemma-4-31b-it:free",
+    "openrouter/google/gemma-4-31b-it:free,"
+    "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
 )
 MODELO_LOCAL = os.getenv("MODELO_LOCAL", "ollama/qwen3:4b").strip()
 # Embeddings do Cérebro (RAG), locais pelo Ollama: custo zero.
@@ -55,7 +73,8 @@ PRECOS_ANTHROPIC = {
 }
 
 # Provedor -> chave exigida (modelos sem chave configurada são ignorados).
-_CHAVES = {"anthropic/": ANTHROPIC_API_KEY, "openrouter/": OPENROUTER_API_KEY}
+_CHAVES = {"anthropic/": ANTHROPIC_API_KEY, "openrouter/": OPENROUTER_API_KEY, "groq/": GROQ_API_KEY,
+           "mistral/": MISTRAL_API_KEY}
 
 # Única conta que pode acionar a produção de PNG/MP4 pelo Claude Code (plano Max pessoal).
 # Sem padrão no código (o repositório é público): o login do dono vem só do .env.

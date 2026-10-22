@@ -97,6 +97,14 @@ def _llm(modelo: str, limite_s: int) -> LLM:
     if modelo.startswith("openrouter/"):
         return LLM(model=modelo, base_url=config.OPENROUTER_BASE_URL, api_key=config.OPENROUTER_API_KEY,
                    timeout=90, max_retries=0)
+    # Groq e Mistral seguem a API da OpenAI: conector nativo "openai/" apontando para o endereço deles
+    # (o CrewAI não tem conector próprio para eles sem instalar o LiteLLM).
+    if modelo.startswith("groq/"):
+        return LLM(model=f"openai/{modelo.removeprefix('groq/')}", base_url=config.GROQ_BASE_URL,
+                   api_key=config.GROQ_API_KEY, timeout=90, max_retries=0)
+    if modelo.startswith("mistral/"):
+        return LLM(model=f"openai/{modelo.removeprefix('mistral/')}", base_url=config.MISTRAL_BASE_URL,
+                   api_key=config.MISTRAL_API_KEY, timeout=90, max_retries=0)
     if modelo.startswith("ollama/"):
         return LLM(model=modelo, base_url=config.OLLAMA_BASE_URL, timeout=limite_s, max_retries=0)
     return LLM(model=modelo, timeout=90, max_retries=0)
@@ -160,7 +168,7 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
         ferramentas += ferramentas_monday.para(agente_id, tarefa_id)
     perfil = dict(PERFIS[agente_id])
     # Diretrizes da Casa Veraneio (regras, marca e manual da função); versão curta no modelo local.
-    if (extras := diretrizes.para(agente_id, compacto=modelo.startswith("ollama/"))):
+    if (extras := diretrizes.para(agente_id, compacto=modelo.startswith(("ollama/", "groq/")))):
         perfil["backstory"] = f"{perfil['backstory']}\n\n{extras}"
     agente = Agent(**perfil, llm=_llm(modelo, limite_s), tools=ferramentas,
                    max_iter=MAX_ITERACOES, max_retry_limit=0, verbose=False)
