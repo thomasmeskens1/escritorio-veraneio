@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -21,6 +22,13 @@ CEREBRO = DRIVE / "CÉREBRO"   # toda gravação de conhecimento vai para cá
 # Acervo de fotos/vídeos dos lodges: SOMENTE LEITURA.
 ACERVO = Path(os.getenv("ESCRITORIO_ACERVO",
                         r"G:\Drives compartilhados\(NOVO) CASA VERANEIO\LODGES\FOTOS E VIDEOS LODGES"))
+# Pasta de trabalho do Claude Code FORA do repositório: lá ele não herda o .claude/ nem o CLAUDE.md do projeto
+# (que liberam MCP) e as ferramentas de arquivo ficam presas a ela (--restricted).
+TRABALHO = Path(os.getenv("ESCRITORIO_TRABALHO", Path(os.environ.get("LOCALAPPDATA", Path.home())) / "EscritorioVeraneio"))
+# Isolamento de toda chamada ao Claude Code: sem configurações do usuário/projeto, sem nenhum servidor MCP.
+ISOLAMENTO = ["--restricted", "--strict-mcp-config"]
+# Variáveis de ambiente com cara de segredo não passam para o Claude Code (nem para o Python que ele roda).
+_SEGREDO_NO_NOME = re.compile(r"KEY|TOKEN|SECRET|SENHA|PASSWORD|CREDENTIAL|MONDAY|OPENROUTER|JWT", re.IGNORECASE)
 LOTE_CEREBRO = 10           # documentos por chamada de ingestão
 TEMPO_INGESTAO = 300        # o Cérebro calcula os embeddings na hora
 ARQUIVO_LOG = DADOS / "trabalhador_max.log"
@@ -79,15 +87,32 @@ def enviar_arquivo(caminho_api: str, arquivo: Path, timeout: int = 300) -> dict:
         return json.load(resposta)
 
 
-def baixar(url: str, destino: Path, timeout: int = 300) -> None:
+def baixar(url: str, destino: Path, timeout: int = 300, max_bytes: int | None = None) -> None:
+    """Baixa para `destino`; acima de `max_bytes` interrompe e apaga o parcial."""
     requisicao = urllib.request.Request(url, headers={"User-Agent": "EscritorioVeraneio/1.0"})
-    with urllib.request.urlopen(requisicao, timeout=timeout) as resposta, destino.open("wb") as arquivo:
-        shutil.copyfileobj(resposta, arquivo)
+    try:
+        with urllib.request.urlopen(requisicao, timeout=timeout) as resposta, destino.open("wb") as arquivo:
+            lido = 0
+            while bloco := resposta.read(1024 * 1024):
+                lido += len(bloco)
+                if max_bytes and lido > max_bytes:
+                    raise ValueError(f"arquivo maior que {max_bytes // (1024 * 1024)} MB")
+                arquivo.write(bloco)
+    except Exception:
+        destino.unlink(missing_ok=True)
+        raise
+
+
+def ambiente_seguro(base: dict | None = None) -> dict:
+    """Cópia do ambiente sem chaves, tokens e senhas (o Claude Code usa o login Max salvo, não variáveis)."""
+    return {k: v for k, v in (base or os.environ).items() if not _SEGREDO_NO_NOME.search(k)}
 
 
 def rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: dict | None = None) -> str:
-    """Roda o Claude Code com o prompt pela entrada padrão; devolve o texto final ou levanta RuntimeError."""
-    processo = subprocess.run(comando, input=prompt, cwd=cwd, env=env, capture_output=True, text=True,
+    """Roda o Claude Code com o prompt pela entrada padrão; devolve o texto final ou levanta RuntimeError.
+    Sempre isolado (ISOLAMENTO) e com o ambiente sem segredos."""
+    comando = [comando[0], *ISOLAMENTO, *comando[1:]]
+    processo = subprocess.run(comando, input=prompt, cwd=cwd, env=ambiente_seguro(env), capture_output=True, text=True,
                               creationflags=SEM_JANELA,
                               encoding="utf-8", errors="replace", timeout=timeout)
     try:

@@ -25,7 +25,8 @@ def arquivo_do_anexo(payload: dict) -> Path:
 def montar_anexo(payload: dict) -> tuple[list[str], str, Path]:
     """(comando, prompt, pasta de trabalho) para o Claude Code ler o anexo."""
     arquivo = arquivo_do_anexo(payload)
-    comando = [comum.claude_exe(), "-p", "--output-format", "json", "--max-turns", "4", "--allowedTools", "Read"]
+    comando = [comum.claude_exe(), "-p", "--output-format", "json", "--max-turns", "4", "--tools", "Read",
+               "--allowedTools", "Read"]
     tipo = "PDF" if payload.get("mime") == "application/pdf" else "imagem"
     prompt = (f"{payload.get('prompt') or 'Descreva o anexo em português do Brasil, de forma objetiva.'}\n\n"
               f"Arquivo ({tipo}): ./{arquivo.name} (nome original: {payload.get('nome', arquivo.name)}). "
@@ -51,15 +52,14 @@ def executar_site(payload: dict) -> str:
 
 # --- texto (tarefa de agente pelo plano Max, no lugar da API) -------------------------------
 
-PASTA_TEXTO = comum.DADOS / "max_texto"
-SEM_FERRAMENTAS = "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,NotebookEdit,Task"
+PASTA_TEXTO = comum.TRABALHO / "max_texto"  # fora do repositório (sem .claude/ do projeto)
 
 
 def executar_texto(payload: dict) -> str:
     """O pedido já vem completo (persona, diretrizes, Cérebro e tarefa); o Claude Code só escreve a resposta."""
     PASTA_TEXTO.mkdir(parents=True, exist_ok=True)
-    comando = [comum.claude_exe(), "-p", "--output-format", "json", "--max-turns", "3",
-               "--disallowedTools", SEM_FERRAMENTAS]
+    # Só escreve a resposta: nenhuma ferramenta (lista de permissão vazia, não lista de bloqueio) e nenhum MCP.
+    comando = [comum.claude_exe(), "-p", "--output-format", "json", "--max-turns", "3", "--tools", ""]
     texto = comum.rodar_claude(comando, payload["prompt"], PASTA_TEXTO, min(int(payload.get("limite_s", 900)), 900))
     if not texto.strip():
         raise RuntimeError("O Claude Code não devolveu texto.")
