@@ -249,6 +249,51 @@ def comando_producao() -> list[str]:
             "--add-dir", str(comum.ACERVO), "--add-dir", str(comum.CEREBRO)]
 
 
+# Conferência técnica depois do render (ideia do OpenMontage): medida e duração de cada arquivo final contra o
+# formato pedido. Não bloqueia a entrega; o resultado vai no resumo, com ⚠ quando algo sai do formato.
+MEDIDAS_ACEITAS = {(1080, 1440), (1080, 1920), (1080, 1080), (1080, 1350)}
+MEDIDA_PEDIDA = re.compile(r"(\d{3,4})\s*[x×]\s*(\d{3,4})")
+
+
+def medida(arquivo: Path, ambiente: dict) -> tuple[int, int, float | None] | None:
+    """(largura, altura, duração em s ou None) de PNG/JPG (Pillow) ou MP4/MOV (ffprobe)."""
+    try:
+        if arquivo.suffix.lower() in {".png", ".jpg", ".jpeg"}:
+            from PIL import Image
+
+            with Image.open(arquivo) as imagem:
+                return imagem.width, imagem.height, None
+        if arquivo.suffix.lower() in {".mp4", ".mov"}:
+            saida = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                    "stream=width,height:format=duration", "-of", "csv=p=0:s=x", str(arquivo)],
+                                   capture_output=True, text=True, env=ambiente, timeout=60,
+                                   creationflags=comum.SEM_JANELA).stdout.split()
+            largura, altura = (int(v) for v in saida[0].split("x")[:2])
+            return largura, altura, round(float(saida[1]), 1) if len(saida) > 1 else None
+    except Exception:  # noqa: BLE001 - conferência nunca derruba a entrega
+        return None
+    return None
+
+
+def conferir_entrega(pasta: Path, nomes: list[str], pedido: str, ambiente: dict) -> str:
+    """Linha para o resumo: medidas conferidas e o que saiu do formato pedido (ou do conjunto aceito)."""
+    formato = re.search(r"FORMATO DA PEÇA[^\n]*", pedido)
+    pedidas = {tuple(int(v) for v in m) for m in MEDIDA_PEDIDA.findall(formato.group(0))} if formato else set()
+    aceitas = pedidas or MEDIDAS_ACEITAS
+    fora, conferidos = [], 0
+    for nome in nomes:
+        if Path(nome).suffix.lower() not in EXTENSOES_ARTE or not (m := medida(pasta / nome, ambiente)):
+            continue
+        conferidos += 1
+        if (m[0], m[1]) not in aceitas:
+            fora.append(f"{nome} ({m[0]}×{m[1]})")
+    if not conferidos:
+        return ""
+    if fora:
+        return f"⚠ Conferência técnica: {len(fora)} arquivo(s) fora do formato pedido: {', '.join(fora[:5])}."
+    return f"Conferência técnica: {conferidos} arquivo(s) no formato certo."
+
+
 def produzir(producao: dict) -> None:
     entrega = pasta_de_entrega(producao)
     relativa = entrega.relative_to(DRIVE).as_posix()
@@ -288,6 +333,9 @@ def produzir(producao: dict) -> None:
             shutil.copy2(rascunho / PASTA_FINAL / nome, entrega / nome)
         versao_arquivo.write_text(str(versao))
         arquivos = [n for n in novos if "/" not in n or n.lower().endswith(".pptx")]  # sem listar cada cena
+        if (conferencia := conferir_entrega(rascunho / PASTA_FINAL, novos, producao["texto"], ambiente)):
+            resumo = f"{resumo}\n\n{conferencia}"
+            log(f"   {conferencia}")
         if producao.get("monday"):  # antes de concluir: o item já recebe os criativos quando vira "Revisão"
             enviar_criativos(producao, entrega, arquivos)
     except Exception as erro:
