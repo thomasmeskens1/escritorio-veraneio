@@ -52,6 +52,10 @@ async def ciclo_de_vida(_: FastAPI):
     aprendizado.carregar()
     atividade.vincular_loop(asyncio.get_running_loop())
     cerebro.iniciar()  # conhecimento: tabelas, indexação inicial e consolidação diária
+    from agents.diretrizes import verificar  # manuais por função: nenhum agente pode ficar sem regra obrigatória
+    for agente_id, situacao in verificar().items():
+        if situacao["faltando"]:
+            log.warning("Diretrizes de %s sem %s: confira o mapa SECOES.", agente_id, situacao["faltando"])
     fila = asyncio.create_task(orquestrador.processar_fila())
     agendamentos.iniciar()  # rotinas agendadas (recarrega as ativas do banco)
     copias = asyncio.create_task(copiar_banco_periodicamente())
