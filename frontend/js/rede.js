@@ -26,6 +26,7 @@ function tratarMensagem(msg) {
     case 'estado':
       aplicarEstado(msg.andares);
       atualizarContadores(msg.andares);
+      renderizarEquipe(); // tela Equipe aberta: status ao vivo
       break;
     case 'resposta_agente':
       receberResposta(msg);

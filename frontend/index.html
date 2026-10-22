@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="topo.css">
   <link rel="stylesheet" href="perfil.css">
   <link rel="stylesheet" href="registro.css">
+  <link rel="stylesheet" href="equipe.css">
   <link rel="stylesheet" href="onboarding.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.1/phaser.min.js"></script>
 </head>
@@ -55,18 +56,27 @@
         </div>
       </div>
 
+      <!-- Contadores: cada um abre a tela "Equipe" já filtrada por aquele status (js/equipe.js) -->
       <ul class="contadores" aria-label="Agentes por status">
-        <li class="contador contador-disponivel" title="Agentes disponíveis">
-          <strong id="contador-disponivel">0</strong><span>Disponíveis</span>
+        <li>
+          <button class="contador contador-disponivel" type="button" data-status="disponivel" title="Agentes disponíveis: ver a equipe">
+            <strong id="contador-disponivel">0</strong><span>Disponíveis</span>
+          </button>
         </li>
-        <li class="contador contador-trabalhando" title="Agentes trabalhando">
-          <strong id="contador-trabalhando">0</strong><span>Trabalhando</span>
+        <li>
+          <button class="contador contador-trabalhando" type="button" data-status="trabalhando" title="Agentes trabalhando: ver a equipe">
+            <strong id="contador-trabalhando">0</strong><span>Trabalhando</span>
+          </button>
         </li>
-        <li class="contador contador-construindo" title="Agentes em construção">
-          <strong id="contador-construindo">0</strong><span>Em construção</span>
+        <li>
+          <button class="contador contador-construindo" type="button" data-status="construindo" title="Agentes em construção: ver a equipe">
+            <strong id="contador-construindo">0</strong><span>Em construção</span>
+          </button>
         </li>
-        <li class="contador contador-dormindo" title="Agentes pausados">
-          <strong id="contador-dormindo">0</strong><span>Pausados</span>
+        <li>
+          <button class="contador contador-dormindo" type="button" data-status="dormindo" title="Agentes pausados: ver a equipe">
+            <strong id="contador-dormindo">0</strong><span>Pausados</span>
+          </button>
         </li>
       </ul>
 
@@ -146,6 +156,22 @@
       </section>
     </div>
 
+    <!-- Equipe: agentes de todos os andares com função, descrição e status ao vivo -->
+    <div id="equipe" class="modal">
+      <section class="janela janela-painel janela-equipe" role="dialog" aria-modal="true" aria-labelledby="equipe-titulo">
+        <header class="janela-barra">
+          <span class="janela-luzes" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="janela-titulo">
+            <h2 id="equipe-titulo">Equipe</h2>
+            <p id="equipe-resumo"></p>
+          </div>
+          <button id="equipe-fechar" class="fechar" type="button" aria-label="Fechar">×</button>
+        </header>
+        <div id="equipe-filtros" class="equipe-filtros" role="tablist" aria-label="Filtrar por status"></div>
+        <div id="equipe-conteudo" class="equipe-conteudo"></div>
+      </section>
+    </div>
+
     <!-- Registro de atividade -->
     <div id="registro" class="modal">
       <section class="janela janela-painel" role="dialog" aria-modal="true" aria-labelledby="registro-titulo">
@@ -201,6 +227,7 @@
   <script src="js/perfil.js"></script>
   <script src="js/andamento.js"></script>
   <script src="js/registro.js"></script>
+  <script src="js/equipe.js"></script>
   <script src="js/onboarding.js"></script>
   <script src="js/topo.js"></script>
   <script src="js/rede.js"></script>

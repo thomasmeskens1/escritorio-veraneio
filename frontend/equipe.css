@@ -1,0 +1,216 @@
+/* ---------- Equipe (contadores do topo) ---------- */
+.janela-equipe {
+  max-width: 1040px;
+  height: min(720px, 100%);
+}
+
+/* Filtros por status, com a contagem de cada um */
+.equipe-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #2b3035;
+}
+
+.equipe-filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #1b1e24;
+  color: #adb5bd;
+  font-size: 0.78rem;
+  border: 1px solid #343a40;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.equipe-filtro strong {
+  min-width: 20px;
+  padding: 1px 6px;
+  font-size: 0.72rem;
+  text-align: center;
+  background: #2b3035;
+  border-radius: 999px;
+  color: #e9ecef;
+  font-variant-numeric: tabular-nums;
+}
+
+.equipe-filtro:hover {
+  border-color: #495057;
+  color: #e9ecef;
+}
+
+.equipe-filtro[aria-selected="true"] {
+  background: #2b3035;
+  border-color: var(--cor-filtro, #f4a261);
+  color: #f8f9fa;
+}
+
+.filtro-todos { --cor-filtro: #f4a261; }
+.filtro-disponivel { --cor-filtro: #40c057; }
+.filtro-trabalhando { --cor-filtro: #f4a261; }
+.filtro-construindo { --cor-filtro: #748ffc; }
+.filtro-dormindo { --cor-filtro: #868e96; }
+
+/* Lista: um bloco por andar, cartões em grade */
+.equipe-conteudo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.equipe-andar h3 {
+  margin: 0 0 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #868e96;
+}
+
+.equipe-grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  align-items: start;
+  gap: 10px;
+}
+
+.equipe-cartao {
+  --cor-status: #868e96;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: #1b1e24;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  border: 1px solid #2b3035;
+  border-left: 3px solid var(--cor-status);
+  border-radius: 10px;
+}
+
+button.equipe-cartao {
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+button.equipe-cartao:hover,
+button.equipe-cartao:focus-visible {
+  border-color: #495057;
+  border-left-color: var(--cor-status);
+  transform: translateY(-1px);
+}
+
+.equipe-cartao.status-disponivel { --cor-status: #40c057; }
+.equipe-cartao.status-trabalhando { --cor-status: #f4a261; }
+.equipe-cartao.status-construindo { --cor-status: #748ffc; }
+.equipe-cartao.status-dormindo { --cor-status: #868e96; }
+
+.equipe-cartao-topo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.equipe-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #1b1e24;
+  background: var(--cor-status);
+  border-radius: 50%;
+}
+
+.equipe-identidade {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.equipe-nome {
+  font-size: 0.92rem;
+  color: #f8f9fa;
+}
+
+.equipe-funcao {
+  font-size: 0.74rem;
+  color: #adb5bd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.equipe-status {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  font-size: 0.68rem;
+  color: #dee2e6;
+  background: #2b3035;
+  border-radius: 999px;
+}
+
+.equipe-status i {
+  width: 7px;
+  height: 7px;
+  background: var(--cor-status);
+  border-radius: 50%;
+}
+
+.status-trabalhando .equipe-status i {
+  animation: equipe-pulso 1.2s ease-in-out infinite;
+}
+
+@keyframes equipe-pulso {
+  50% { opacity: 0.35; }
+}
+
+.equipe-descricao {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #ced4da;
+}
+
+.equipe-acao {
+  margin-top: auto;
+  font-size: 0.72rem;
+  color: #f4a261;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+button.equipe-cartao:hover .equipe-acao,
+button.equipe-cartao:focus-visible .equipe-acao {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .equipe-acao { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.equipe-cartao { transition: none; }
+  button.equipe-cartao:hover { transform: none; }
+  .status-trabalhando .equipe-status i { animation: none; }
+}
+
+@media (max-width: 640px) {
+  .equipe-grade { grid-template-columns: minmax(0, 1fr); }
+  .equipe-filtros { flex-wrap: nowrap; overflow-x: auto; }
+  .equipe-filtro { flex: none; }
+}

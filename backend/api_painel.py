@@ -7,7 +7,7 @@ import config
 import saude
 import tarefas
 from auth import validar_token
-from estado import AGENTES_PRODUCAO, andar_do_agente, buscar_agente, pode_acessar
+from estado import ANDARES, AGENTES_PRODUCAO, andar_do_agente, buscar_agente, pode_acessar
 
 rotas = APIRouter(prefix="/api")
 
@@ -60,6 +60,18 @@ def _tarefa_publica(linha) -> dict:
         "custo_usd": round(linha["custo_usd"], 4), "criada_em": linha["criada_em"],
         "concluida_em": linha["concluida_em"], "motivo": linha["motivo"],
     }
+
+
+@rotas.get("/equipe")
+def listar_equipe(authorization: str = Header("")):
+    """Tela "Equipe" (contadores do topo): agentes dos andares acessíveis com função e descrição.
+    O status ao vivo vem do WebSocket; aqui vai só o que não muda a cada segundo."""
+    usuario = _usuario(authorization)
+    return {"andares": [
+        {"andar": andar, "agentes": [
+            {"id": a.id, "nome": a.nome, "funcao": a.funcao, "descricao": a.descricao, "tipo": a.tipo}
+            for a in agentes.values()]}
+        for andar, agentes in ANDARES.items() if pode_acessar(usuario["role"], andar)]}
 
 
 @rotas.get("/agentes/{andar}/{agente_id}")

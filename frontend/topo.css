@@ -67,10 +67,22 @@
   list-style: none;
 }
 
+.contadores > li {
+  display: flex;
+  min-width: 0;
+}
+
+/* Cada contador é um botão: abre a tela "Equipe" filtrada por aquele status (js/equipe.js). */
 .contador {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   justify-content: center;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
   min-width: 92px;
   height: 46px;
   padding: 0 12px;
@@ -90,6 +102,12 @@
   font-size: 0.68rem;
   color: #adb5bd;
   white-space: nowrap;
+}
+
+.contador:hover,
+.contador:focus-visible {
+  background: #23272e;
+  border-color: #495057;
 }
 
 .contador-disponivel { border-left-color: #40c057; }
