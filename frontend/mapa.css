@@ -57,34 +57,10 @@
   cursor: grabbing;
 }
 
-/* Silhueta do cérebro: hemisférios com dobras (giros) */
-.mapa-hemisferio {
-  fill: url(#mapa-massa);
-  stroke: #d16bff;
-  stroke-width: 2;
-  stroke-opacity: 0.55;
-}
-
-.mapa-halo {
-  fill: none;
-  stroke: #d16bff;
-  stroke-width: 12;
-  stroke-opacity: 0.12;
-}
-
-.mapa-giro {
-  fill: none;
-  stroke: #d16bff;
-  stroke-opacity: 0.26;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-}
-
 .mapa-linha {
   fill: none;
   stroke-width: 0.9;
   opacity: 0.32;
-  transition: opacity 0.2s;
 }
 
 .mapa-linha.nivel-1 {
@@ -96,7 +72,6 @@
 .mapa-ponto {
   stroke-width: 0;
   opacity: 0.92;
-  transition: opacity 0.2s;
 }
 
 .mapa-ponto.nivel-0,
@@ -128,8 +103,11 @@
 }
 
 /* Foco: tudo apaga, menos a trilha da raiz até o ponto sob o mouse (o movimento é feito no JS) */
-.mapa-focando .mapa-linha,
-.mapa-focando .mapa-ponto {
+.mapa-camada {
+  transition: opacity 0.2s;
+}
+
+.mapa-focando .mapa-camada {
   opacity: 0.07;
 }
 
@@ -137,12 +115,12 @@
   opacity: 0.3;
 }
 
-.mapa-focando .mapa-linha.ativa {
+.mapa-trilha .mapa-linha {
   opacity: 1;
   stroke-width: 2.6;
 }
 
-.mapa-focando .mapa-ponto.ativo {
+.mapa-trilha .mapa-ponto {
   opacity: 1;
 }
 

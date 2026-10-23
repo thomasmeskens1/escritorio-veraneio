@@ -1,5 +1,5 @@
-// Forma do Mapa do Cérebro: a silhueta (dois hemisférios com dobras), as regiões de cada empresa e a simulação
-// de forças que acomoda os pontos. O desenho e a interação ficam em js/mapa_cerebro.js.
+// Forma do Mapa do Cérebro: o espaço (dois hemisférios com dobras, que não são desenhados), as regiões de cada
+// empresa e a simulação de forças que acomoda os pontos. O desenho e a interação ficam em js/mapa_cerebro.js.
 
 // Hemisfério (unidades do SVG): meia largura, meia altura e o vão da fissura entre os dois.
 const MEIA_LARGURA = 500;
@@ -40,24 +40,6 @@ function normalizar(x, y, lado) {
 
 function desnormalizar(u, v, lado) {
   return [u * MEIA_LARGURA, centroHemisferio(lado) + (v * lado < 0 ? v / ACHATAMENTO : v) * MEIA_ALTURA];
-}
-
-// Traça o contorno (escala 1 = borda); `mostrar` corta trechos, para os giros internos ficarem abertos.
-function contorno(lado, escala = 1, onda = 0, mostrar = () => true) {
-  let d = '';
-  let desenhando = false;
-  for (let k = 0; k <= 180; k += 1) {
-    const angulo = (k / 180) * 2 * Math.PI;
-    if (!mostrar(angulo)) {
-      desenhando = false;
-      continue;
-    }
-    const r = escala * dobras(angulo, lado) * (1 + onda * Math.sin(17 * angulo + escala * 13 + lado));
-    const [x, y] = desnormalizar(r * Math.cos(angulo), r * Math.sin(angulo), lado);
-    d += `${desenhando ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`;
-    desenhando = true;
-  }
-  return d;
 }
 
 // Mantém o ponto dentro do hemisfério e da faixa da sua empresa, com uma folga da borda.
@@ -175,12 +157,12 @@ function separar(nos, acaso) {
   });
 }
 
-// Ligação levemente torta (como um axônio), da posição do pai até o ponto.
-function curva(no, acaso) {
+// Ligação levemente torta (como um axônio), da posição atual do pai até a do ponto; `no.curvatura` é sorteada
+// uma vez, para a curva acompanhar os pontos quando flutuam.
+function curva(no) {
   const { x: x1, y: y1 } = no.pai;
   const { x: x2, y: y2 } = no;
-  const curvatura = (acaso() - 0.5) * 0.6;
-  const cx = (x1 + x2) / 2 - (y2 - y1) * curvatura;
-  const cy = (y1 + y2) / 2 + (x2 - x1) * curvatura;
+  const cx = (x1 + x2) / 2 - (y2 - y1) * no.curvatura;
+  const cy = (y1 + y2) / 2 + (x2 - x1) * no.curvatura;
   return `M${x1.toFixed(1)},${y1.toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`;
 }

@@ -1,9 +1,10 @@
 // Mapa do Cérebro (diretoria): o conhecimento ativo desenhado como um cérebro, em SVG, sem biblioteca.
-// Dois hemisférios: a empresa com mais documentos ocupa o de cima, as outras dividem o de baixo, cada uma na sua
-// região. Os pontos (fonte → grupo → documento) se acomodam por uma pequena simulação de forças — molas nas
+// Os pontos ocupam dois hemisférios (só o espaço; a silhueta não é desenhada): a empresa com mais documentos
+// fica no de cima, as outras dividem o de baixo, cada uma na sua região. Os pontos (fonte → grupo → documento) se acomodam por uma pequena simulação de forças — molas nas
 // ligações, colisão entre pontos e a silhueta do cérebro como limite —, o que dá o aspecto orgânico; o raio de
-// cada documento cresce com o nº de trechos. Passar o mouse acende a trilha da raiz até o ponto, com impulsos
-// correndo por ela; sinapses aleatórias mantêm o cérebro "vivo". Roda do mouse = zoom; arrastar = mover.
+// cada documento cresce com o nº de trechos. Os pontos flutuam devagar o tempo todo; passar o mouse acende a
+// trilha da raiz até o ponto, com um impulso lento correndo por ela; sinapses de vez em quando mantêm o cérebro
+// "vivo". Roda do mouse = zoom; arrastar = mover.
 // O movimento é feito em JavaScript (não depende das animações do sistema estarem ligadas). A forma e a
 // acomodação dos pontos ficam em js/mapa_forma.js.
 
@@ -11,7 +12,9 @@
 const CORES_EMPRESA = { casa_veraneio: '#ff9f1c', cv_corporativo: '#00e5ff', casa_vero: '#39ff14', '*': '#d16bff' };
 const NS_SVG = 'http://www.w3.org/2000/svg';
 const RAIO_TOQUE = 16; // px de tolerância do mouse em volta de um ponto
-const VELOCIDADE = 0.45; // unidades do SVG por ms, dos impulsos na trilha
+const VELOCIDADE = 0.2; // unidades do SVG por ms, dos impulsos
+const INTERVALO_SINAPSE = 1200; // ms entre uma sinapse e outra
+const FLUTUACAO = [0, 2, 2.5, 3, 4]; // amplitude da flutuação por profundidade (unidades do SVG)
 const janelaMapa = document.getElementById('mapa-cerebro');
 const areaMapa = document.getElementById('mapa-area');
 const dicaMapa = document.getElementById('mapa-dica');
@@ -86,30 +89,24 @@ function desenharMapa(raiz) {
   const juntar = svg('feMerge');
   juntar.append(svg('feMergeNode', { in: 'desfoque' }), svg('feMergeNode', { in: 'desfoque' }), svg('feMergeNode', { in: 'SourceGraphic' }));
   filtro.append(juntar);
-  const massa = svg('radialGradient', { id: 'mapa-massa' });
-  massa.append(svg('stop', { offset: '0%', 'stop-color': '#2a1145' }), svg('stop', { offset: '100%', 'stop-color': '#0d0716' }));
-  defs.append(filtro, massa);
-
-  // Sem filtro na silhueta (seria redesenhada a cada quadro da animação): o halo é um traço largo e translúcido.
-  const camadaCerebro = svg('g');
-  [-1, 1].forEach((lado) => {
-    camadaCerebro.append(svg('path', { d: `${contorno(lado)}Z`, class: 'mapa-halo' }),
-      svg('path', { d: `${contorno(lado)}Z`, class: 'mapa-hemisferio' }));
-    [0.86, 0.72, 0.58, 0.44, 0.3, 0.16].forEach((escala) => camadaCerebro.append(svg('path', {
-      d: contorno(lado, escala, 0.06, (a) => Math.sin(4 * a + escala * 11 + lado) > -0.45), class: 'mapa-giro' })));
-  });
-  const camadaLinhas = svg('g');
-  const camadaPontos = svg('g');
-  const camadaBrilho = svg('g');
+  defs.append(filtro);
+  const camadaLinhas = svg('g', { class: 'mapa-camada' });
+  const camadaPontos = svg('g', { class: 'mapa-camada' });
+  const camadaBrilho = svg('g', { class: 'mapa-camada' });
+  const camadaTrilha = svg('g', { class: 'mapa-trilha' });
   const camadaFaiscas = svg('g');
   const camadaRotulos = svg('g');
   const rotulosTrilha = svg('g');
-  desenho.append(defs, camadaCerebro, camadaLinhas, camadaPontos, camadaBrilho, camadaFaiscas, camadaRotulos, rotulosTrilha);
+  desenho.append(defs, camadaLinhas, camadaPontos, camadaBrilho, camadaTrilha, camadaFaiscas, camadaRotulos, rotulosTrilha);
 
   const acaso = sorteio(7);
   todos.forEach((no) => {
+    // flutuação: cada ponto com a sua fase e o seu ritmo (8 a 14 s por volta)
+    Object.assign(no, { baseX: no.x, baseY: no.y, fase: acaso() * 2 * Math.PI, ritmo: (2 * Math.PI) / (8000 + acaso() * 6000),
+      amplitude: FLUTUACAO[Math.min(no.profundidade, FLUTUACAO.length - 1)] });
     if (no.pai) {
-      no.linha = svg('path', { d: curva(no, acaso), class: `mapa-linha nivel-${no.profundidade}`, stroke: no.cor });
+      no.curvatura = (acaso() - 0.5) * 0.6;
+      no.linha = svg('path', { d: curva(no), class: `mapa-linha nivel-${no.profundidade}`, stroke: no.cor });
       camadaLinhas.append(no.linha);
     }
     const destaque = no.profundidade <= 1;
@@ -118,7 +115,7 @@ function desenharMapa(raiz) {
     (destaque ? camadaBrilho : camadaPontos).append(no.ponto);
   });
   areaMapa.replaceChildren(desenho);
-  rotularEmpresas(raiz.filhos || [], camadaRotulos);
+  rotularEmpresas(raiz.filhos || [], todos, camadaRotulos);
 
   const resumo = novoEl('div', 'mapa-resumo');
   resumo.append(novoEl('span', null, `${raiz.trechos.toLocaleString('pt-BR')} trechos · ${folhas.length.toLocaleString('pt-BR')} documentos · `
@@ -132,22 +129,24 @@ function desenharMapa(raiz) {
   });
   desenho.before(resumo);
 
-  const faiscasTrilha = [0, 1, 2].map(() => svg('circle', { r: 3.5, class: 'mapa-faisca', display: 'none' }));
+  const faiscasTrilha = [0].map(() => svg('circle', { r: 3.5, class: 'mapa-faisca', display: 'none' }));
   // a faísca brilha por um traço largo e translúcido (stroke) em volta do núcleo branco
   camadaFaiscas.append(...faiscasTrilha);
-  mapa = { raiz, todos, folhas, desenho, camadaFaiscas, rotulosTrilha, faiscasTrilha, focado: null, inicioFoco: 0,
+  mapa = { raiz, todos, folhas, desenho, camadaFaiscas, camadaTrilha, rotulosTrilha, faiscasTrilha, focado: null, inicioFoco: 0,
     sinapses: [], ultimaSinapse: 0, arrasto: null, quadro: 0 };
   ativarInteracao(desenho, caixa);
   mapa.quadro = requestAnimationFrame(animar);
 }
 
-// Nome de cada empresa do lado de fora da silhueta, junto à sua região (assim não cobre pontos; os demais nomes
-// aparecem no hover); nomes longos quebram em duas linhas e, se dois rótulos se encostam, o de fora se afasta.
-function rotularEmpresas(empresas, camada) {
+// Nome de cada empresa logo acima (hemisfério de cima) ou abaixo (de baixo) dos seus pontos, sem cobri-los (os
+// demais nomes aparecem no hover); nomes longos quebram em duas linhas e, se dois rótulos se encostam, o de fora
+// se afasta.
+function rotularEmpresas(empresas, todos, camada) {
   const caixas = [];
   empresas.forEach((empresa) => {
     const [x, y] = empresa.ancora;
-    const borda = y + empresa.lado * (MEIA_ALTURA * 1.12 + (empresa.lado > 0 ? 24 : 34));
+    const alturas = todos.filter((n) => n.regiao === empresa).map((n) => n.y);
+    const borda = empresa.lado > 0 ? Math.max(y, ...alturas) + 34 : Math.min(y, ...alturas) - 30;
     const rotulo = svg('text', { x: x.toFixed(1), y: borda.toFixed(1),
       class: 'mapa-rotulo nivel-1', fill: empresa.cor });
     const palavras = empresa.nome.split(' ');
@@ -199,13 +198,8 @@ function focar(no, evento) {
     moverDica(evento);
     return;
   }
-  if (mapa.focado) {
-    trilha(mapa.focado).forEach((n) => {
-      n.linha?.classList.remove('ativa');
-      n.ponto.classList.remove('ativo');
-      n.ponto.setAttribute('r', n.raio.toFixed(1));
-    });
-  }
+  if (mapa.focado) trilha(mapa.focado).forEach((n) => { delete n.copiaLinha; delete n.copiaPonto; });
+  mapa.camadaTrilha.replaceChildren();
   mapa.rotulosTrilha.replaceChildren();
   mapa.faiscasTrilha.forEach((f) => f.setAttribute('display', 'none'));
   mapa.focado = no;
@@ -217,10 +211,12 @@ function focar(no, evento) {
   }
   const nos = trilha(no);
   mapa.inicioFoco = performance.now();
+  // A trilha é copiada para uma camada própria, acima das outras, que apagam inteiras (apagar ponto a ponto
+  // deixaria a animação lenta).
   nos.forEach((n) => {
-    n.linha?.classList.add('ativa');
-    n.ponto.classList.add('ativo');
+    if (n.linha) n.copiaLinha = mapa.camadaTrilha.appendChild(n.linha.cloneNode());
   });
+  nos.forEach((n) => { n.copiaPonto = mapa.camadaTrilha.appendChild(n.ponto.cloneNode()); });
   mapa.faiscasTrilha.forEach((f) => f.setAttribute('stroke', no.cor));
   // Rótulos: o ponto sob o mouse e a fonte da trilha, se não ficarem um em cima do outro.
   if (no.profundidade >= 2) rotuloTrilha(no);
@@ -254,32 +250,55 @@ function pontoNaTrilha(linhas, s) {
 function animar(agora) {
   if (!mapa || !mapaAberto) return;
   if (mapa.focado) {
-    // a trilha pulsa da raiz até a ponta e três impulsos correm por ela
+    // a trilha pulsa devagar da raiz até a ponta e um impulso corre por ela
     const nos = trilha(mapa.focado);
     const tempo = agora - mapa.inicioFoco;
-    nos.forEach((n, i) => n.ponto.setAttribute('r', (n.raio + Math.min(n.raio, 5) * (0.6 + 0.5 * Math.sin(tempo / 140 - i))).toFixed(2)));
+    nos.forEach((n, i) => n.copiaPonto?.setAttribute('r', (n.raio + Math.min(n.raio, 5) * (0.6 + 0.5 * Math.sin(tempo / 700 - i * 0.6))).toFixed(2)));
     const linhas = nos.slice(1).map((n) => n.linha);
     if (linhas.length) {
       pontoNaTrilha(linhas, 0);
       const total = linhas.reduce((s, l) => s + l.comprimento, 0);
       mapa.faiscasTrilha.forEach((faisca, j) => {
-        const p = pontoNaTrilha(linhas, (tempo * VELOCIDADE + (j * total) / 3) % total);
+        const p = pontoNaTrilha(linhas, (tempo * VELOCIDADE + j * total) % total);
         faisca.setAttribute('cx', p.x.toFixed(1));
         faisca.setAttribute('cy', p.y.toFixed(1));
         faisca.removeAttribute('display');
       });
     }
   } else {
-    mapa.raiz.ponto.setAttribute('r', (mapa.raiz.raio * (1 + 0.15 * Math.sin(agora / 400))).toFixed(2));
+    mapa.raiz.ponto.setAttribute('r', (mapa.raiz.raio * (1 + 0.12 * Math.sin(agora / 900))).toFixed(2));
   }
+  flutuar(agora);
   animarSinapses(agora);
   mapa.quadro = requestAnimationFrame(animar);
 }
 
+// Flutuação: cada ponto descreve um pequeno laço em volta da sua posição, e as ligações acompanham. Com uma
+// trilha em foco o resto está quase apagado: só a trilha flutua (poupa o redesenho de centenas de pontos).
+function flutuar(agora) {
+  const nos = mapa.focado ? trilha(mapa.focado) : mapa.todos;
+  nos.forEach((no) => {
+    if (!no.amplitude) return;
+    const angulo = agora * no.ritmo + no.fase;
+    no.x = no.baseX + no.amplitude * Math.sin(angulo);
+    no.y = no.baseY + no.amplitude * Math.cos(angulo * 0.8);
+    [no.ponto, no.copiaPonto].forEach((p) => {
+      p?.setAttribute('cx', no.x.toFixed(1));
+      p?.setAttribute('cy', no.y.toFixed(1));
+    });
+  });
+  nos.forEach((no) => {
+    if (!no.linha) return;
+    const d = curva(no);
+    no.linha.setAttribute('d', d);
+    no.copiaLinha?.setAttribute('d', d);
+  });
+}
+
 // Sinapses: de tempos em tempos um impulso corre entre a raiz e um documento qualquer.
 function animarSinapses(agora) {
-  if (!movimentoReduzido.matches && !mapa.focado && mapa.folhas.length && agora - mapa.ultimaSinapse > 350
-      && mapa.sinapses.length < 8) {
+  if (!movimentoReduzido.matches && !mapa.focado && mapa.folhas.length && agora - mapa.ultimaSinapse > INTERVALO_SINAPSE
+      && mapa.sinapses.length < 4) {
     const folha = mapa.folhas[Math.floor(Math.random() * mapa.folhas.length)];
     const linhas = trilha(folha).slice(1).map((n) => n.linha);
     pontoNaTrilha(linhas, 0);
