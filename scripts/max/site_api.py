@@ -95,12 +95,27 @@ def lodge(slug: str) -> dict | None:
         "reveillon": _reais(reveillon.get("ValorDiaria")) or "—"}}
 
 
+MARGEM_SONDAGEM = 40  # números testados além do maior Lodge da listagem
+
+
 def todos() -> tuple[list[dict], list[str]]:
-    """(Lodges lidos, slugs que falharam)."""
+    """(Lodges lidos, slugs da listagem que falharam).
+
+    A listagem da API não traz todos os Lodges publicados (o Lodge 30 tem página no ar e não aparece nela).
+    Por isso, além da listagem, cada número "lodge-N" de 1 até o maior conhecido + MARGEM_SONDAGEM é testado
+    direto na página do Lodge; os que respondem entram também."""
     lista = slugs()
+    numeros = [int(n) for s in lista if (n := re.fullmatch(r"lodge-(\d+)", s) and re.fullmatch(r"lodge-(\d+)", s).group(1))]
+    sondagem = [f"lodge-{n}" for n in range(1, max(numeros, default=0) + MARGEM_SONDAGEM + 1)
+                if f"lodge-{n}" not in lista]
     with ThreadPoolExecutor(SIMULTANEAS) as pool:
         resultados = list(pool.map(_tentar, lista))
-    return [r for r in resultados if r], [s for s, r in zip(lista, resultados) if not r]
+        achados = [r for r in pool.map(_tentar, sondagem) if r]
+    if achados:
+        from comum import log
+        log(f"   site: {len(achados)} Lodge(s) publicados fora da listagem da API: "
+            + ", ".join(a["slug"] for a in achados[:20]))
+    return [r for r in resultados if r] + achados, [s for s, r in zip(lista, resultados) if not r]
 
 
 def _tentar(slug: str) -> dict | None:

@@ -213,12 +213,18 @@ def sincronizar(caminhos: list[str] | None = None, enviar=comum.enviar_ao_cerebr
     except (OSError, ValueError):
         hashes = {}
     mudados = [d for d in documentos if hashes.get(d["fonte_ref"]) != _hash(d["conteudo"])]
+    novos = [d["fonte_ref"] for d in mudados if d["fonte_ref"] not in hashes]
+    if mudados:  # monitoramento: o que entrou e o que mudou desde a última leitura
+        log(f"   site: {len(novos)} página(s) nova(s), {len(mudados) - len(novos)} alterada(s)"
+            + (f" — novas: {', '.join(r.split('/')[-1] for r in novos[:15])}" if novos else ""))
     enviados = len(mudados) if mudados and enviar(mudados) else 0
     if enviados:
         hashes.update({d["fonte_ref"]: _hash(d["conteudo"]) for d in mudados})
     # Enviados antes e que não saem mais (ex.: Lodge despublicado, listagem só com filtros): saem do Cérebro.
     atuais = {d["fonte_ref"] for d in documentos}
     sumidos = [ref for ref in hashes if ref not in atuais]
+    if sumidos:
+        log(f"   site: {len(sumidos)} página(s) saíram do site: {', '.join(r.split('/')[-1] for r in sumidos[:15])}")
     if sumidos and comum.remover_do_cerebro("site", sumidos):
         for ref in sumidos:
             hashes.pop(ref)

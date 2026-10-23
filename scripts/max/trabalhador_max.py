@@ -26,6 +26,7 @@ from urllib.parse import urlparse
 import catalogo_lodges
 import comum
 import planilha_lodges
+import site_casaveraneio
 import sites_empresas
 import trabalhos_max
 from comum import DRIVE, log
@@ -396,6 +397,10 @@ def catalogo_em_segundo_plano() -> None:
             catalogo_lodges.rodar()
             planilha_lodges.rodar()
             sites_empresas.rodar()  # Corporativo e Casa Vero, cada um com a sua etiqueta de empresa
+            try:  # Casa Veraneio: todos os Lodges (listagem da API + sondagem de cada número) a cada 6 h
+                log(f"Site da Casa Veraneio: {site_casaveraneio.resumo_texto(site_casaveraneio.reprocessar())}")
+            except Exception as erro:
+                log(f"Site da Casa Veraneio: não foi possível atualizar ({erro}).")
         finally:
             _catalogo_rodando.release()
 
