@@ -39,101 +39,122 @@
   width: 100%;
   min-height: 0;
   margin-top: 8px;
-  /* cyberpunk: grade fina sobre um centro escuro com halo violeta */
+  /* cyberpunk: grade fina sobre um fundo escuro com halo violeta */
   background:
-    linear-gradient(rgba(0, 229, 255, 0.05) 1px, transparent 1px) 0 0 / 32px 32px,
-    linear-gradient(90deg, rgba(0, 229, 255, 0.05) 1px, transparent 1px) 0 0 / 32px 32px,
-    radial-gradient(circle at center, #1a0f2e 0%, #07080d 72%);
+    linear-gradient(rgba(0, 229, 255, 0.04) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgba(0, 229, 255, 0.04) 1px, transparent 1px) 0 0 / 32px 32px,
+    radial-gradient(ellipse at center, #160b28 0%, #07080d 75%);
   border: 1px solid rgba(0, 229, 255, 0.35);
   box-shadow: 0 0 24px rgba(0, 229, 255, 0.12) inset;
   border-radius: 10px;
   cursor: grab;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .mapa-svg:active {
   cursor: grabbing;
 }
 
-.mapa-anel {
+/* Silhueta do cérebro: hemisférios com dobras (giros) */
+.mapa-hemisferio {
+  fill: url(#mapa-massa);
+  stroke: #d16bff;
+  stroke-width: 2;
+  stroke-opacity: 0.55;
+}
+
+.mapa-halo {
   fill: none;
-  stroke: rgba(209, 107, 255, 0.22);
-  stroke-dasharray: 2 7;
+  stroke: #d16bff;
+  stroke-width: 12;
+  stroke-opacity: 0.12;
+}
+
+.mapa-giro {
+  fill: none;
+  stroke: #d16bff;
+  stroke-opacity: 0.26;
+  stroke-width: 1.8;
+  stroke-linecap: round;
 }
 
 .mapa-linha {
   fill: none;
-  stroke-width: 0.8;
-  opacity: 0.3;
-  transition: opacity 0.15s, stroke-width 0.15s;
+  stroke-width: 0.9;
+  opacity: 0.32;
+  transition: opacity 0.2s;
+}
+
+.mapa-linha.nivel-1 {
+  stroke-width: 2;
+  opacity: 0.45;
+  stroke-dasharray: 3 5;
 }
 
 .mapa-ponto {
-  stroke: none;
-  opacity: 0.95;
-  cursor: pointer;
-  transform-box: fill-box;
-  transform-origin: center;
-  transition: opacity 0.15s, transform 0.2s;
+  stroke-width: 0;
+  opacity: 0.92;
+  transition: opacity 0.2s;
 }
 
-.mapa-ponto:hover {
-  transform: scale(1.8);
-}
-
-.mapa-ponto.nivel-0 {
-  fill: #07080d;
-  stroke: #00e5ff;
+.mapa-ponto.nivel-0,
+.mapa-ponto.nivel-1 {
   stroke-width: 3;
-  animation: mapa-nucleo 3s ease-in-out infinite;
-}
-
-@keyframes mapa-nucleo {
-  50% { stroke: #ff2bd6; }
 }
 
 .mapa-rotulo {
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-  font-size: 13px;
-  letter-spacing: 0.08em;
-  text-anchor: middle;
-  text-transform: uppercase;
+  font-size: 14px;
+  letter-spacing: 0.04em;
   fill: #e0fbff;
+  paint-order: stroke;
+  stroke: #07080d;
+  stroke-width: 4px;
+  stroke-linejoin: round;
   pointer-events: none;
+  user-select: none;
 }
 
 .mapa-rotulo.nivel-1 {
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 700;
-  fill: #ffffff;
+  letter-spacing: 0.14em;
+  text-anchor: middle;
+  text-transform: uppercase;
+  opacity: 0.9;
+  transition: opacity 0.2s;
 }
 
-/* Foco: tudo apaga, menos a trilha da raiz até o ponto sob o mouse */
+/* Foco: tudo apaga, menos a trilha da raiz até o ponto sob o mouse (o movimento é feito no JS) */
 .mapa-focando .mapa-linha,
 .mapa-focando .mapa-ponto {
-  opacity: 0.08;
+  opacity: 0.07;
 }
 
-/* Movimento no hover: a energia corre pela trilha e os pontos pulsam */
+.mapa-focando .mapa-rotulo.nivel-1 {
+  opacity: 0.3;
+}
+
 .mapa-focando .mapa-linha.ativa {
   opacity: 1;
-  stroke-width: 3;
-  stroke-dasharray: 10 6;
-  animation: mapa-fluxo 0.7s linear infinite;
-  filter: url(#neon);
+  stroke-width: 2.6;
 }
 
 .mapa-focando .mapa-ponto.ativo {
   opacity: 1;
-  animation: mapa-pulso 0.9s ease-in-out infinite;
 }
 
-@keyframes mapa-fluxo {
-  to { stroke-dashoffset: -32; }
+.mapa-faisca {
+  fill: #ffffff;
+  stroke-width: 7;
+  stroke-opacity: 0.45;
 }
 
-@keyframes mapa-pulso {
-  50% { transform: scale(1.6); }
+.mapa-sinapse {
+  stroke-width: 6;
+  stroke-opacity: 0.35;
 }
 
 .mapa-dica {
@@ -151,15 +172,4 @@
   border-radius: 4px;
   box-shadow: 0 0 12px rgba(0, 229, 255, 0.45), 0 0 2px #ff2bd6 inset;
   pointer-events: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mapa-linha,
-  .mapa-ponto,
-  .mapa-ponto.nivel-0,
-  .mapa-focando .mapa-linha.ativa,
-  .mapa-focando .mapa-ponto.ativo {
-    transition: none;
-    animation: none;
-  }
 }
