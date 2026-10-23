@@ -60,9 +60,49 @@ def _da_planilha(numero: str) -> str | None:
     trechos = _trechos(f"drive/planilha/info-lodges/lodge-{numero}")
     if not trechos:
         return None
-    texto = "\n".join(l for l in trechos[0]["conteudo"].splitlines()
-                      if l.strip() and not l.lower().startswith(("endereço", "endereco")))
-    return f"- Lodge {numero} (SEM página no site; planilha interna de 2023, conferir antes de usar)\n  {texto[:500]}"
+    texto = "\n".join(t["conteudo"] for t in trechos)
+    fatos = []
+    # Do endereço só saem cidade e condomínio (rua e CEP nunca vão para peça). Antes a linha inteira era cortada e
+    # a cidade sumia junto: o Social Media perguntou a cidade do Lodge 30, que estava na planilha.
+    if (endereco := re.search(r"^Endere[çc]o:\s*(.+)$", texto, re.IGNORECASE | re.MULTILINE)):
+        cidade = re.search(r"([A-ZÀ-Úa-zà-ú' .]+?)\s*-\s*([A-Z]{2})\b", endereco.group(1).split(",")[-2]
+                           if endereco.group(1).count(",") >= 1 else endereco.group(1))
+        if cidade:
+            fatos.append(f"Cidade (planilha 2023): {cidade.group(1).strip()} - {cidade.group(2)}")
+        if (condominio := re.search(r"condom[ií]nio\s+([^,;\n]+)", endereco.group(1), re.IGNORECASE)):
+            fatos.append(f"Condomínio (planilha 2023): {condominio.group(1).strip()}")
+    if (capacidade := re.search(r"(\d+)\s*(?:h[óo]spedes|pessoas)", texto, re.IGNORECASE)):
+        fatos.append(f"Capacidade (planilha 2023): até {capacidade.group(1)} pessoas")
+    if (suites := re.search(r"(\d+)\s*su[íi]tes", texto, re.IGNORECASE)):
+        fatos.append(f"Suítes (planilha 2023): {suites.group(1)}")
+    configuracao = [l.strip() for l in texto.splitlines() if re.match(r"\s*Su[íi]te \d", l)]
+    if configuracao:
+        fatos.append("Configuração: " + " ".join(configuracao))
+    if (pasta := _pasta_do_acervo(numero)):
+        fatos.append(f"Pasta de fotos no acervo: {pasta}")
+        cidade_pasta = pasta.split(" - ", 1)[-1].strip() if " - " in pasta else ""
+        cidade_planilha = next((f.split(": ", 1)[1].split(" - ")[0] for f in fatos if f.startswith("Cidade")), "")
+        if cidade_pasta and cidade_planilha and _sem_acento(cidade_planilha).lower() not in _sem_acento(cidade_pasta).lower():
+            fatos.append(f"ATENÇÃO: fontes divergem sobre o local (planilha: {cidade_planilha}; pasta de fotos: "
+                         f"{cidade_pasta}). Não escolha sozinho: confirme com o usuário SÓ essa divergência.")
+    return (f"- Lodge {numero} (SEM página no site; dados da planilha interna de 2023 e do acervo)\n  "
+            + "\n  ".join(fatos or [texto[:400]]))
+
+
+def _pasta_do_acervo(numero: str) -> str | None:
+    """Nome da pasta do Lodge no acervo de fotos (ex.: "LODGE 30 - JARINU ALMARIAS"), que costuma trazer a cidade."""
+    with base._trava:
+        linha = base.db().execute(
+            "SELECT fonte_ref FROM conhecimento WHERE ativo = 1 AND empresa = 'casa_veraneio' AND fonte_tipo = 'drive' "
+            "AND fonte_ref LIKE 'drive/lodges/%' AND (fonte_ref LIKE ? OR fonte_ref LIKE ?) LIMIT 1",
+            (f"%/LODGE {numero} %", f"%/Lodge {numero}")).fetchone()
+    return " ".join(linha["fonte_ref"].rsplit("/", 1)[-1].split()) if linha else None
+
+
+def _sem_acento(texto: str) -> str:
+    import unicodedata
+
+    return unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
 
 
 def ficha(numero: str, empresa: str = "casa_veraneio") -> str | None:

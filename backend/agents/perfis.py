@@ -154,8 +154,9 @@ ESTILO_CHAT = ("Escreva como numa conversa de chat com um colega de trabalho: to
 FLUXO = ("Quando um pedido passa por outros agentes (Gestor, especialistas, produção), a resposta final volta "
          "sempre ao chat onde o usuário pediu: nunca mande o usuário procurar a resposta na conversa de outro agente.")
 # Pedido claro = entrega direta. Teste real: "ideia de post para o Lodge 20" voltou com 3 opções de Lodge.
-DIRETO = ("Se o pedido for claro (ex.: cita o Lodge pelo número), entregue direto usando os dados do Cérebro "
-          "desse Lodge; só peça confirmação quando faltar algo essencial que não está no pedido nem no Cérebro.")
+DIRETO = ("Se o pedido for claro (ex.: cita o Lodge pelo número), entregue direto usando a ficha e os dados do "
+          "Cérebro desse Lodge; NUNCA pergunte o que já está na ficha (cidade, capacidade, quartos, valores). Só peça "
+          "confirmação do que falta de verdade ou do que a ficha marca como divergente.")
 # Regras de ouro da marca (Thomas, 22/10/2026): também no manual 00 e ensinadas ao Cérebro.
 REGRAS_DE_OURO = ("Regras de ouro: nunca use o WhatsApp como CTA nem escreva o número da Casa Veraneio em publicações; "
                   "o site não aparece em artes, vídeos e stories (no máximo na legenda, com prioridade baixa); "
