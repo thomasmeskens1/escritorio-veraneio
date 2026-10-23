@@ -100,6 +100,7 @@ function iniciarSessao(nova) {
   document.getElementById('app').hidden = false;
   document.getElementById('usuario-logado').textContent = `${sessao.usuario} · ${sessao.role}`;
   configurarModelos(); // ícone "Modelos de IA" só para a diretoria
+  configurarMapa(); // ícone "Mapa do Cérebro" só para a diretoria
   configurarElevador();
   iniciarEscritorio();
   conectar();

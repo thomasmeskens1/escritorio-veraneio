@@ -460,8 +460,15 @@ def estatisticas(inicio_hoje_utc: str) -> dict:
         conexao = db()
         por_fonte = {l["fonte_tipo"]: l["n"] for l in conexao.execute(
             "SELECT fonte_tipo, COUNT(*) n FROM conhecimento WHERE ativo = 1 GROUP BY fonte_tipo")}
+        por_empresa: dict[str, dict] = {}
+        for l in conexao.execute("SELECT empresa, fonte_tipo, COUNT(*) n FROM conhecimento WHERE ativo = 1 "
+                                 "GROUP BY empresa, fonte_tipo"):
+            item = por_empresa.setdefault(l["empresa"], {"total": 0, "por_fonte": {}})
+            item["total"] += l["n"]
+            item["por_fonte"][l["fonte_tipo"]] = l["n"]
         ultima = conexao.execute("SELECT MAX(atualizado_em) FROM conhecimento").fetchone()[0]
         hoje = conexao.execute("SELECT COUNT(*) FROM consultas_cerebro WHERE em >= ?", (inicio_hoje_utc,)).fetchone()[0]
         total = conexao.execute("SELECT COUNT(*) FROM consultas_cerebro").fetchone()[0]
     return {"total": sum(por_fonte.values()), "por_fonte": {f: por_fonte.get(f, 0) for f in PESOS_FONTE},
+            "por_empresa": por_empresa,  # ficha do Cérebro: uma linha por empresa (e o comum às três)
             "ultima_atualizacao": ultima, "consultas_hoje": hoje, "consultas_total": total}

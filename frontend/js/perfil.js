@@ -323,6 +323,7 @@ async function cancelarRotina(andar, agente, id) {
 
 // ---------- Conhecimento do Cérebro ----------
 const FONTES_CONHECIMENTO = { oficial: 'Oficial', ensinado: 'Ensinado', site: 'Site', drive: 'Drive', tarefa: 'Tarefas' };
+const EMPRESAS_CONHECIMENTO = [['casa_veraneio', 'Veraneio'], ['cv_corporativo', 'Corporativo'], ['casa_vero', 'Vero'], ['*', 'Comum']];
 const conhecimento = { dados: null, erro: '', oculto: false }; // estatísticas do RAG central
 
 const ehCerebro = (andar, agente) => dadosAgente(andar, agente).visual === 'cerebro';
@@ -362,12 +363,16 @@ function criarConhecimento() {
   });
   bloco.append(numeros);
 
-  const fontes = d.por_fonte && typeof d.por_fonte === 'object' ? d.por_fonte : {};
-  const maior = Math.max(1, ...Object.keys(FONTES_CONHECIMENTO).map((f) => Number(fontes[f]) || 0));
+  // Uma linha por empresa (os dados nunca se misturam); o detalhe por fonte aparece ao passar o mouse.
+  const porEmpresa = d.por_empresa && typeof d.por_empresa === 'object' ? d.por_empresa : {};
+  const maior = Math.max(1, ...EMPRESAS_CONHECIMENTO.map(([e]) => Number(porEmpresa[e]?.total) || 0));
   const lista = novoEl('ul', 'conhecimento-fontes');
-  Object.entries(FONTES_CONHECIMENTO).forEach(([fonte, rotulo]) => {
-    const n = Number(fontes[fonte]) || 0;
-    const item = novoEl('li', `fonte-${fonte}`);
+  EMPRESAS_CONHECIMENTO.forEach(([empresa, rotulo]) => {
+    const n = Number(porEmpresa[empresa]?.total) || 0;
+    const item = novoEl('li', `empresa-${empresa === '*' ? 'comum' : empresa}`);
+    const detalhe = Object.entries(porEmpresa[empresa]?.por_fonte || {})
+      .map(([fonte, qtd]) => `${FONTES_CONHECIMENTO[fonte] || fonte}: ${numero(qtd)}`).join(' · ');
+    item.title = detalhe || 'Ainda sem conhecimento';
     const barra = novoEl('span', 'fonte-barra');
     const cheio = novoEl('i');
     cheio.style.width = `${Math.round((n / maior) * 100)}%`;

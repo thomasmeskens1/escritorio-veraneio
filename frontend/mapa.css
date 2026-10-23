@@ -1,0 +1,131 @@
+/* ---------- Mapa do Cérebro (diretoria) ---------- */
+.janela-mapa {
+  position: relative;
+  max-width: 1200px;
+  height: min(860px, 100%);
+}
+
+.mapa-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 10px 16px 16px;
+}
+
+.mapa-resumo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  font-size: 0.75rem;
+  color: #adb5bd;
+}
+
+.mapa-legenda {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mapa-legenda i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.mapa-svg {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  margin-top: 8px;
+  background: radial-gradient(circle at center, #1d2128 0%, #14161a 70%);
+  border: 1px solid #2b3035;
+  border-radius: 10px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.mapa-svg:active {
+  cursor: grabbing;
+}
+
+.mapa-anel {
+  fill: none;
+  stroke: #2b3035;
+  stroke-dasharray: 3 6;
+}
+
+.mapa-linha {
+  fill: none;
+  stroke-width: 0.8;
+  opacity: 0.35;
+  transition: opacity 0.15s, stroke-width 0.15s;
+}
+
+.mapa-ponto {
+  stroke: #14161a;
+  stroke-width: 0.8;
+  opacity: 0.9;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.mapa-ponto.nivel-0 {
+  fill: #f8f9fa;
+  stroke: #f4a261;
+  stroke-width: 3;
+}
+
+.mapa-rotulo {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 13px;
+  text-anchor: middle;
+  fill: #ced4da;
+  pointer-events: none;
+}
+
+.mapa-rotulo.nivel-1 {
+  font-size: 16px;
+  font-weight: 600;
+  fill: #f8f9fa;
+}
+
+/* Foco: tudo apaga, menos a trilha da raiz até o ponto sob o mouse */
+.mapa-focando .mapa-linha,
+.mapa-focando .mapa-ponto {
+  opacity: 0.08;
+}
+
+.mapa-focando .mapa-linha.ativa {
+  opacity: 1;
+  stroke-width: 3;
+}
+
+.mapa-focando .mapa-ponto.ativo {
+  opacity: 1;
+  stroke: #f8f9fa;
+  stroke-width: 2;
+}
+
+.mapa-dica {
+  position: absolute;
+  z-index: 2;
+  max-width: 320px;
+  padding: 8px 10px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: pre-line;
+  color: #f8f9fa;
+  background: rgba(20, 22, 26, 0.96);
+  border: 1px solid #495057;
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mapa-linha,
+  .mapa-ponto {
+    transition: none;
+  }
+}
