@@ -3,7 +3,8 @@
 // de documentos (o círculo se deforma conforme a densidade); o raio de cada ponto cresce com o nº de trechos.
 // Passar o mouse num ponto acende a linha da raiz até ele e mostra a trilha. Roda do mouse = zoom; arrastar = mover.
 
-const CORES_EMPRESA = { casa_veraneio: '#f4a261', cv_corporativo: '#4dabf7', casa_vero: '#69db7c', '*': '#adb5bd' };
+// Neon (visual cyberpunk): cada empresa com a sua cor; o brilho vem do filtro #neon do SVG.
+const CORES_EMPRESA = { casa_veraneio: '#ff9f1c', cv_corporativo: '#00e5ff', casa_vero: '#39ff14', '*': '#d16bff' };
 const NS_SVG = 'http://www.w3.org/2000/svg';
 const RAIO_ANEL = 150; // distância entre os anéis (unidades do SVG)
 const janelaMapa = document.getElementById('mapa-cerebro');
@@ -82,9 +83,17 @@ function desenharMapa(raiz) {
   const limite = profundidadeMax * RAIO_ANEL + 60;
   const desenho = svg('svg', { viewBox: `${-limite} ${-limite} ${limite * 2} ${limite * 2}`, class: 'mapa-svg',
     role: 'img', 'aria-label': 'Mapa do conhecimento do Cérebro' });
+  // Brilho neon: o ponto/linha desfocado por baixo do original (filtro reaproveitado por todos).
+  const defs = svg('defs');
+  const filtro = svg('filter', { id: 'neon', x: '-200%', y: '-200%', width: '500%', height: '500%' });
+  filtro.append(svg('feGaussianBlur', { stdDeviation: '3', result: 'desfoque' }));
+  const juntar = svg('feMerge');
+  juntar.append(svg('feMergeNode', { in: 'desfoque' }), svg('feMergeNode', { in: 'desfoque' }), svg('feMergeNode', { in: 'SourceGraphic' }));
+  filtro.append(juntar);
+  defs.append(filtro);
   const camadaLinhas = svg('g');
-  const camadaPontos = svg('g');
-  desenho.append(camadaLinhas, camadaPontos);
+  const camadaPontos = svg('g', { filter: 'url(#neon)' });
+  desenho.append(defs, camadaLinhas, camadaPontos);
 
   // anéis de referência
   for (let p = 1; p <= profundidadeMax; p += 1) {
@@ -103,6 +112,7 @@ function desenharMapa(raiz) {
     }
     const raio = no.profundidade === 0 ? 18 : 2 + 10 * Math.sqrt((no.trechos || 1) / maxTrechos);
     no.ponto = svg('circle', { cx: no.x, cy: no.y, r: raio.toFixed(1), fill: cor, class: `mapa-ponto nivel-${no.profundidade}` });
+    no.ponto.style.setProperty('--cor', cor);
     no.ponto.addEventListener('mouseenter', (e) => destacar(no, e, true));
     no.ponto.addEventListener('mousemove', (e) => moverDica(e));
     no.ponto.addEventListener('mouseleave', () => destacar(no, null, false));
@@ -139,6 +149,8 @@ function destacar(no, evento, ligar) {
     dicaMapa.hidden = true;
     return;
   }
+  // Movimento: a energia corre da raiz até o ponto (cada trecho começa um pouco depois do anterior).
+  trilha(no).forEach((n, i) => { if (n.linha) n.linha.style.animationDelay = `${i * 0.12}s`; });
   const caminho = trilha(no).map((n) => n.nome).join(' › ');
   const filhos = no.filhos?.length ? ` · ${no.filhos.length} ramificação(ões)` : '';
   dicaMapa.textContent = `${caminho}\n${(no.trechos || 0).toLocaleString('pt-BR')} trecho(s)${filhos}`;

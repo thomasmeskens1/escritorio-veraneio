@@ -39,8 +39,13 @@
   width: 100%;
   min-height: 0;
   margin-top: 8px;
-  background: radial-gradient(circle at center, #1d2128 0%, #14161a 70%);
-  border: 1px solid #2b3035;
+  /* cyberpunk: grade fina sobre um centro escuro com halo violeta */
+  background:
+    linear-gradient(rgba(0, 229, 255, 0.05) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgba(0, 229, 255, 0.05) 1px, transparent 1px) 0 0 / 32px 32px,
+    radial-gradient(circle at center, #1a0f2e 0%, #07080d 72%);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  box-shadow: 0 0 24px rgba(0, 229, 255, 0.12) inset;
   border-radius: 10px;
   cursor: grab;
   touch-action: none;
@@ -52,43 +57,55 @@
 
 .mapa-anel {
   fill: none;
-  stroke: #2b3035;
-  stroke-dasharray: 3 6;
+  stroke: rgba(209, 107, 255, 0.22);
+  stroke-dasharray: 2 7;
 }
 
 .mapa-linha {
   fill: none;
   stroke-width: 0.8;
-  opacity: 0.35;
+  opacity: 0.3;
   transition: opacity 0.15s, stroke-width 0.15s;
 }
 
 .mapa-ponto {
-  stroke: #14161a;
-  stroke-width: 0.8;
-  opacity: 0.9;
+  stroke: none;
+  opacity: 0.95;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 0.15s, transform 0.2s;
+}
+
+.mapa-ponto:hover {
+  transform: scale(1.8);
 }
 
 .mapa-ponto.nivel-0 {
-  fill: #f8f9fa;
-  stroke: #f4a261;
+  fill: #07080d;
+  stroke: #00e5ff;
   stroke-width: 3;
+  animation: mapa-nucleo 3s ease-in-out infinite;
+}
+
+@keyframes mapa-nucleo {
+  50% { stroke: #ff2bd6; }
 }
 
 .mapa-rotulo {
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   font-size: 13px;
+  letter-spacing: 0.08em;
   text-anchor: middle;
-  fill: #ced4da;
+  text-transform: uppercase;
+  fill: #e0fbff;
   pointer-events: none;
 }
 
 .mapa-rotulo.nivel-1 {
   font-size: 16px;
-  font-weight: 600;
-  fill: #f8f9fa;
+  font-weight: 700;
+  fill: #ffffff;
 }
 
 /* Foco: tudo apaga, menos a trilha da raiz até o ponto sob o mouse */
@@ -97,15 +114,26 @@
   opacity: 0.08;
 }
 
+/* Movimento no hover: a energia corre pela trilha e os pontos pulsam */
 .mapa-focando .mapa-linha.ativa {
   opacity: 1;
   stroke-width: 3;
+  stroke-dasharray: 10 6;
+  animation: mapa-fluxo 0.7s linear infinite;
+  filter: url(#neon);
 }
 
 .mapa-focando .mapa-ponto.ativo {
   opacity: 1;
-  stroke: #f8f9fa;
-  stroke-width: 2;
+  animation: mapa-pulso 0.9s ease-in-out infinite;
+}
+
+@keyframes mapa-fluxo {
+  to { stroke-dashoffset: -32; }
+}
+
+@keyframes mapa-pulso {
+  50% { transform: scale(1.6); }
 }
 
 .mapa-dica {
@@ -113,19 +141,25 @@
   z-index: 2;
   max-width: 320px;
   padding: 8px 10px;
-  font-size: 0.75rem;
-  line-height: 1.4;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.45;
   white-space: pre-line;
-  color: #f8f9fa;
-  background: rgba(20, 22, 26, 0.96);
-  border: 1px solid #495057;
-  border-radius: 8px;
+  color: #e0fbff;
+  background: rgba(7, 8, 13, 0.94);
+  border: 1px solid #00e5ff;
+  border-radius: 4px;
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.45), 0 0 2px #ff2bd6 inset;
   pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .mapa-linha,
-  .mapa-ponto {
+  .mapa-ponto,
+  .mapa-ponto.nivel-0,
+  .mapa-focando .mapa-linha.ativa,
+  .mapa-focando .mapa-ponto.ativo {
     transition: none;
+    animation: none;
   }
 }
