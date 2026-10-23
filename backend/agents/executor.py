@@ -1,6 +1,7 @@
 """Executa uma tarefa num modelo específico, com tempo limite e medição de tokens e custo."""
 
 import asyncio
+import json
 import re
 import threading
 import time
@@ -28,6 +29,11 @@ from roteamento import Etapa, etapas_contingencia
 crewai.llms.retry._LLM_RATE_LIMIT_MAX_ATTEMPTS = 1
 
 MAX_ITERACOES = 8  # limita voltas de raciocínio (e tokens) por agente
+MAX_ITERACOES_MONDAY = 14  # Social Media com o Monday: consultas + leitura do board + criação + resposta
+# Chamada de ferramenta escrita como texto (alguns modelos gratuitos não usam a chamada nativa), ex.:
+# <tool_call><function=criar_item_monday><parameter=nome>...</parameter>...</function></tool_call>
+CHAMADA_EM_TEXTO = re.compile(r"(?:<tool_call>\s*)?<function=([\w-]+)>(.*?)(?:</function>\s*(?:</tool_call>)?|$)", re.S)
+PARAMETRO_EM_TEXTO = re.compile(r"<parameter=([\w-]+)>\s*(.*?)\s*(?:</parameter>|(?=<parameter=)|$)", re.S)
 MAX_TOKENS_SAIDA_CLAUDE = 2000
 _trava_total = threading.Lock()  # soma de tokens/custo de etapas paralelas
 
@@ -173,8 +179,9 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
     if (extras := diretrizes.para(agente_id, compacto=modelo.startswith(("ollama/", "groq/")),
                                   empresa=cerebro.empresa_da_tarefa(tarefa_id))):
         perfil["backstory"] = f"{perfil['backstory']}\n\n{extras}"
+    monday_ativo = any(f.name.startswith("criar_ite") for f in ferramentas)
     agente = Agent(**perfil, llm=_llm(modelo, limite_s), tools=ferramentas,
-                   max_iter=MAX_ITERACOES, max_retry_limit=0, verbose=False)
+                   max_iter=MAX_ITERACOES_MONDAY if monday_ativo else MAX_ITERACOES, max_retry_limit=0, verbose=False)
     saida = Crew(agents=[agente], tasks=[Task(description=descricao, expected_output=esperado, agent=agente)]).kickoff()
 
     uso = saida.token_usage
@@ -184,7 +191,32 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
         total.tokens_entrada += uso.prompt_tokens
         total.tokens_saida += uso.completion_tokens
         total.custo_usd += custo
-    return saida.raw
+    return _chamadas_em_texto(saida.raw, ferramentas)
+
+
+def _chamadas_em_texto(texto: str, ferramentas: list[BaseTool]) -> str:
+    """Executa as chamadas de ferramenta que o modelo escreveu como texto na resposta (em vez de chamar) e troca
+    cada uma pelo resultado; o usuário nunca vê o código. Teste real: o 6º item do Monday veio como texto."""
+    if "<function=" not in texto:
+        return texto
+    por_nome = {f.name: f for f in ferramentas}
+
+    def executar(achado: re.Match) -> str:
+        ferramenta = por_nome.get(achado.group(1))
+        if not ferramenta:
+            return ""
+        argumentos = {}
+        for nome, valor in PARAMETRO_EM_TEXTO.findall(achado.group(2)):
+            try:  # listas e objetos (ex.: itens do criar_itens_monday) vêm em JSON
+                argumentos[nome] = json.loads(valor) if valor[:1] in "[{" else valor
+            except ValueError:
+                argumentos[nome] = valor
+        try:
+            return f"\n{ferramenta.run(**argumentos)}\n"
+        except Exception as erro:
+            return f"\n(Não foi possível executar {ferramenta.name}: {erro})\n"
+
+    return re.sub(r"</?tool_call>", "", CHAMADA_EM_TEXTO.sub(executar, texto)).strip()
 
 
 def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa, historico: list,
@@ -210,7 +242,23 @@ def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa,
                     if agente_id == "construtor" else "Resposta completa ao pedido.")
         total.texto = _rodar(agente_id, descricao_tarefa(agente_id, texto, historico, tarefa_id), esperado,
                              etapa.modelo, etapa.limite_s, total, tarefa_id)
+    total.texto = _garantir_formulario(total.texto)
     return total
+
+
+# Rede de segurança: o agente pede "responda o formulário" e esquece o bloco (teste real, Social Media,
+# 23/10/2026). Sem o bloco o usuário não tem onde responder: entra um campo aberto de resposta.
+PEDE_FORMULARIO = re.compile(r"\b(?:formul[aá]rio abaixo|responda (?:com |n?o |pelo )?(?:o |ao |um )?formul[aá]rio|"
+                             r"preencha o formul[aá]rio)", re.I)
+FORMULARIO_ABERTO = ('<<FORMULARIO>>{"titulo": "Sua resposta", "campos": [{"nome": "resposta", "rotulo": '
+                     '"Responda aqui o que foi pedido acima", "tipo": "texto_longo", "obrigatorio": true}]}'
+                     '<<FIM DO FORMULARIO>>')
+
+
+def _garantir_formulario(texto: str) -> str:
+    if "<<FORMULARIO>>" in texto or not PEDE_FORMULARIO.search(texto):
+        return texto
+    return f"{texto}\n\n{FORMULARIO_ABERTO}"
 
 
 def _descartar_erro(futuro: asyncio.Future) -> None:

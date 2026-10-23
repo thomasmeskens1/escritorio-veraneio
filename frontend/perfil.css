@@ -1,7 +1,7 @@
-/* ---------- Popup do agente: ficha + conversa ---------- */
+/* ---------- Popup do agente: ficha + conversa (larga, para o chat respirar) ---------- */
 .janela-agente {
-  max-width: 600px;
-  height: min(720px, 100%);
+  max-width: 1040px;
+  height: min(880px, 100%);
 }
 
 .status-construindo {
@@ -421,7 +421,7 @@
 
 /* Cérebro: janela larga, ficha em duas colunas (Conhecimento à direita) */
 .janela-agente.janela-larga {
-  max-width: 980px;
+  max-width: 1240px;
 }
 
 @media (min-width: 900px) {

@@ -464,7 +464,7 @@
 
 /* ---------- Andamento da tarefa ativa (ao lado da conversa) ---------- */
 .janela-agente.com-andamento {
-  max-width: 980px;
+  max-width: 1240px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 290px;
   grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
