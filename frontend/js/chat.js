@@ -49,13 +49,17 @@ function textoNatural(texto) {
     .trim();
 }
 
-function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes }) {
+function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, formulario }) {
   const div = document.createElement('div');
   div.className = `msg msg-${tipo}`;
   const nome = document.createElement('span');
   nome.className = 'msg-autor';
   nome.textContent = autor;
-  div.append(nome, document.createTextNode(tipo === 'agente' ? textoNatural(texto) : texto));
+  // Formulário pedido pelo agente (bloco <<FORMULARIO>>) ou anexado pelo sistema (js/formularios.js).
+  const extraido = tipo === 'agente' ? extrairFormulario(texto) : { texto, formulario: null };
+  div.append(nome, document.createTextNode(tipo === 'agente' ? textoNatural(extraido.texto) : texto));
+  const pedido = formulario || extraido.formulario;
+  if (pedido) div.append(criarFormulario(pedido));
   if (anexos?.length) div.append(criarAnexosDaMensagem(anexos));
   if (tipo === 'agente' && tarefa_id && /^✅ Pedido concluído/.test(texto)) div.append(criarBotaoAjuste(tarefa_id));
   if (opcoes?.length) div.append(criarOpcoes(opcoes));
@@ -190,6 +194,7 @@ function renderizarHistorico(andar, agente) {
 function abrirChat(andar, agente) {
   if (chatAberto) rascunhos[chave(chatAberto.andar, chatAberto.agente)] = modalInput.value;
   chatAberto = { andar, agente };
+  mostrarSeletorEmpresa(andar, agente); // empresa da conversa (Marketing e Cérebro)
   modalInput.value = rascunhos[chave(andar, agente)] || '';
   ajustarAlturaInput();
   avisarAnexo('');
@@ -439,6 +444,7 @@ async function enviarTarefa(evento) {
   // O servidor exige texto: com anexo e sem texto, vai uma frase padrão.
   const texto = modalInput.value.trim() || (escolhidos.length ? 'Veja o anexo.' : '');
   if (!texto) return;
+  if (!garantirEmpresa(andar, agente)) return; // sem empresa escolhida: formulário (js/empresa.js)
 
   let anexos = [];
   if (escolhidos.length) {
@@ -460,6 +466,7 @@ async function enviarTarefa(evento) {
   }
 
   const mensagem = { tipo: 'mensagem', andar, agente, texto };
+  if (empresaDaConversa(andar, agente)) mensagem.empresa = empresaDaConversa(andar, agente);
   if (anexos.length) mensagem.anexos = anexos.map((a) => a.id);
   if (!enviar(mensagem)) {
     avisarAnexo('Sem conexão com o servidor. Tente de novo.');
@@ -502,13 +509,13 @@ function receberAdiada({ andar, agente, texto, tarefa_id }) {
 // no chat dele e toast se o chat não estiver aberto.
 // `liberar`: o pedido não vai gerar resposta neste chat (ex.: encaminhado ao Gestor, rotina agendada).
 // `opcoes`: botões de resposta rápida ([{rotulo, texto}]); o clique envia o texto como mensagem.
-function receberAviso({ andar, agente, texto, titulo, liberar, opcoes }) {
+function receberAviso({ andar, agente, texto, titulo, liberar, opcoes, formulario }) {
   if (!andar || !agente) {
     console.info('Aviso do servidor:', texto);
     return;
   }
   if (liberar) pendentes.delete(chave(andar, agente));
-  adicionarMensagem(andar, agente, { autor: 'sistema', texto, tipo: 'sistema', opcoes });
+  adicionarMensagem(andar, agente, { autor: 'sistema', texto, tipo: 'sistema', opcoes, formulario });
   if (!chatEstaAberto(andar, agente)) mostrarToast(andar, agente, texto, titulo || 'Aviso');
   if (titulo === 'Rotina agendada') atualizarRotinas(andar, agente); // lista do popup do agente
   atualizarChat();

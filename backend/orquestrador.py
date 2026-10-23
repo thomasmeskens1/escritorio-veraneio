@@ -203,7 +203,8 @@ async def _produzir_pecas(linha, consolidado: str) -> bool:
             if (vinculo := monday._vinculo(linha["id"])):  # os criativos voltam para o mesmo item do Monday
                 monday.vincular(producao_id, vinculo["item_id"], vinculo["usuario_monday"], vinculo["origem"] or "botao")
 
-        await producao.enfileirar(linha["usuario"], linha["andar"], agente, briefing, titulo=titulo, ao_criar=vincular)
+        await producao.enfileirar(linha["usuario"], linha["andar"], agente, briefing, titulo=titulo, ao_criar=vincular,
+                                  empresa=linha["empresa"])
         await avisar_na_origem(linha["id"], {"andar": linha["andar"], "agente": "gestor"},
                                f"A peça final foi para o {agente.nome} produzir no Claude Code (Max). "
                                "A entrega chega aqui quando ficar pronta.", "Produção")

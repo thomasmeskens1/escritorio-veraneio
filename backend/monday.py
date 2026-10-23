@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile
 
 import config
+import empresas
 import tarefas
 
 log = logging.getLogger(__name__)
@@ -492,7 +493,8 @@ async def _enviar_ao_gestor_unico(item_id: int, usuario: int | None) -> None:
               f"Na entrega final, inclua a legenda pronta (se a peça tiver legenda) entre as linhas "
               f"{MARCA_LEGENDA[0]} e {MARCA_LEGENDA[1]}.")
     await orquestrador.nova_tarefa(config.DONO_MAX, "marketing", gestor, pedido,
-                                   ao_criar=lambda tarefa_id: vincular(tarefa_id, item_id, usuario))
+                                   ao_criar=lambda tarefa_id: vincular(tarefa_id, item_id, usuario),
+                                   empresa=empresas.da_conta_monday(marca) or empresas.PADRAO)  # Conta = empresa
 
 
 @rotas.post("/criativos/{tarefa_id}")

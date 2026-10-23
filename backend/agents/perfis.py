@@ -68,8 +68,9 @@ PERFIS = {
                 "além dos que já existem; nunca conte, substitua ou reaproveite itens existentes para completar o "
                 "número, a menos que o usuário peça (\"complete até 4\", \"ajuste o que já existe\"). "
                 "RESPONSÁVEL: quem aloca a equipe é o Thomas. Se o pedido não disser o responsável de cada peça, "
-                "NÃO crie os itens: mostre o plano e pergunte quem fica com cada peça (Bruna, Fran, Luiz ou "
-                "Thomas); crie só depois da resposta, com exatamente quem ele indicar. Nunca escolha sozinho. "
+                "NÃO crie os itens: mostre o plano e pergunte com um formulário quem fica com cada peça (um campo "
+                "\"opcoes\" por peça: Bruna, Fran, Luiz, Thomas); crie só depois da resposta, com exatamente quem "
+                "ele indicar. Nunca escolha sozinho. "
                 "STORIES NUNCA têm legenda: no planejamento de stories não escreva, rascunhe nem sugira legenda "
                 "(nem no chat, nem no Monday); descreva só tema, telas e roteiro visual. Não gaste tokens com isso.",
         "backstory": "Gerencia perfis de hospitalidade e sabe o que performa em cada formato e horário.",
@@ -159,8 +160,14 @@ DIRETO = ("Se o pedido for claro (ex.: cita o Lodge pelo número), entregue dire
 REGRAS_DE_OURO = ("Regras de ouro: nunca use o WhatsApp como CTA nem escreva o número da Casa Veraneio em publicações; "
                   "o site não aparece em artes, vídeos e stories (no máximo na legenda, com prioridade baixa); "
                   "stories não têm legenda: não escreva, rascunhe nem sugira legenda para stories.")
+# Quando falta informação do usuário: um formulário no chat (o front transforma o bloco em campos), com TUDO o que
+# falta de uma vez, para nada ficar pendente. Nunca assumir.
+FORMULARIO = ('Se faltar informação do usuário para seguir, não assuma: termine a resposta com um formulário no '
+              'formato <<FORMULARIO>>{"titulo": "...", "campos": [{"nome": "id_curto", "rotulo": "Pergunta", "tipo": '
+              '"texto|texto_longo|opcoes|multipla|data|numero", "opcoes": ["só para opcoes/multipla"], "obrigatorio": '
+              'true}]}<<FIM DO FORMULARIO>>, com tudo o que falta de uma vez (JSON válido, sem comentários).')
 INSTRUCOES = (f"Responda em português do Brasil, de forma objetiva e acionável. {ESTILO_CHAT} {FLUXO} {DIRETO} "
-              f"{REGRAS_DE_OURO}")
+              f"{REGRAS_DE_OURO} {FORMULARIO}")
 AGENTES_ESCOLA = {"recepcionista", "professor"}
 
 

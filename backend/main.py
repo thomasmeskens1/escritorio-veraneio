@@ -18,6 +18,7 @@ import aprendizado
 import atividade
 import config
 import correcoes
+import empresas
 import encaminhamento
 import espera
 import modelos_uso
@@ -36,6 +37,7 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("veraneio")
 
 TAMANHO_MAX_TEXTO = 4000
+EXIGEM_EMPRESA = {"marketing"}  # andares que trabalham para uma empresa (o Cérebro também, ver tratar_mensagem)
 MAX_FALHAS_LOGIN = 5          # senhas erradas seguidas por usuário/IP antes do bloqueio
 MAX_FALHAS_IP = 20            # senhas erradas de um IP (qualquer usuário) antes do bloqueio
 BLOQUEIO_LOGIN_S = 15 * 60
@@ -185,14 +187,15 @@ async def autenticar_ws(ws: WebSocket) -> dict | None:
     return validar_token(str(msg.get("token", "")))
 
 
-async def ensinar_cerebro(ws: WebSocket, usuario: dict, andar: str, agente, texto: str) -> None:
-    """Grava o ensinamento e registra como tarefa concluída (aparece no histórico e no registro)."""
+async def ensinar_cerebro(ws: WebSocket, usuario: dict, andar: str, agente, texto: str, empresa: str) -> None:
+    """Grava o ensinamento (da empresa da conversa, ou comum às três) e registra como tarefa concluída."""
     alvo = {"andar": andar, "agente": agente.id}
     try:
-        resposta = await cerebro.ensinar(usuario["sub"], texto)
+        resposta = await cerebro.ensinar(usuario["sub"], texto, empresa)
     except (PermissionError, ValueError) as e:
         return await gerenciador.enviar(ws, {"tipo": "erro", "texto": str(e), **alvo})
-    tarefa_id = tarefas.criar(usuario["sub"], andar, agente.id, texto, "simples")
+    tarefa_id = tarefas.criar(usuario["sub"], andar, agente.id, texto, "simples",
+                              empresa if empresas.valida(empresa) else empresas.PADRAO)
     tarefas.atualizar(tarefa_id, status="concluida", modelo="cerebro/ensino", resposta=resposta)
     tarefas.registrar_evento(tarefa_id, "concluida", agente.id, "cerebro/ensino", "Conhecimento ensinado pelo dono")
     await orquestrador.entregar(tarefas.obter(tarefa_id))
@@ -226,8 +229,18 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
                           "Fale com ele para solicitar.", **alvo)
     if not texto or len(texto) > TAMANHO_MAX_TEXTO:
         return await erro(f"A tarefa deve ter entre 1 e {TAMANHO_MAX_TEXTO} caracteres.", **alvo)
-    if agente.id == cerebro.ID and cerebro.e_ensino(texto):  # "Aprenda: ..." (só o dono)
-        return await ensinar_cerebro(ws, usuario, andar, agente, texto)
+    # Marketing e Cérebro trabalham sempre para UMA empresa, escolhida no seletor da conversa (nada é assumido).
+    # No Cérebro, "Aprenda:" também aceita "todas" (regra comum às três).
+    empresa = str(msg.get("empresa", ""))
+    ensino = agente.id == cerebro.ID and cerebro.e_ensino(texto)
+    if andar in EXIGEM_EMPRESA or agente.id == cerebro.ID:
+        if not (empresas.valida(empresa) or (ensino and empresa == empresas.COMUM)):
+            return await erro("Escolha a empresa desta conversa (Casa Veraneio, Corporativo ou Casa Vero) no "
+                              "seletor do topo do chat antes de enviar.", **alvo)
+    else:
+        empresa = empresas.PADRAO
+    if ensino:  # "Aprenda: ..." (só o dono)
+        return await ensinar_cerebro(ws, usuario, andar, agente, texto, empresa)
     # "...todos os dias às 8h" vira rotina agendada (vale mesmo com o agente ocupado agora).
     if agendamentos.e_agendamento(texto) and await agendamentos.criar(usuario["sub"], andar, agente.id, texto):
         return
@@ -290,11 +303,11 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
 
     if agente.id in AGENTES_PRODUCAO:  # só chega aqui o dono do plano Max (checado acima)
         # "Ajuste na peça #20: ..." ou "troque o título...": nova versão da peça anterior, na mesma pasta.
-        await producao.enfileirar(usuario["sub"], andar, agente, f"{texto}\n\n{contexto}".strip(),
+        await producao.enfileirar(usuario["sub"], andar, agente, f"{texto}\n\n{contexto}".strip(), empresa=empresa,
                                   anexos=anexos.caminhos(anexos_ids, usuario["sub"]),
                                   base=producao.base_do_ajuste(usuario["sub"], agente.id, texto), ao_criar=ao_criar)
     else:
-        await orquestrador.nova_tarefa(usuario["sub"], andar, agente, texto, anexos_ids, contexto=contexto,
+        await orquestrador.nova_tarefa(usuario["sub"], andar, agente, texto, anexos_ids, contexto=contexto, empresa=empresa,
                                        ao_criar=ao_criar)
 
 

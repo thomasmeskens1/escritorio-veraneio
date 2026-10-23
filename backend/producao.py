@@ -166,12 +166,12 @@ def base_do_ajuste(login: str, agente_id: str, texto: str) -> int | None:
 
 
 async def enfileirar(login: str, andar: str, agente: Agente, texto: str, anexos: list[str] | None = None,
-                     titulo: str = "", base: int | None = None, ao_criar=None) -> int:
+                     titulo: str = "", base: int | None = None, ao_criar=None, empresa: str = "casa_veraneio") -> int:
     """`anexos`: caminhos de anexos.caminhos(). `titulo`: nome da pasta de entrega (padrão: tirado do pedido).
     `base`: produção que está sendo ajustada (mesma pasta, nova versão).
     `ao_criar(tarefa_id)`: vínculos (Monday, chat de origem) gravados ANTES de a tarefa entrar na fila; antes, o
     trabalhador podia pegá-la sem o vínculo e os criativos não voltavam ao item do Monday."""
-    tarefa_id = tarefas.criar(login, andar, agente.id, texto, "complexa")
+    tarefa_id = tarefas.criar(login, andar, agente.id, texto, "complexa", empresa)
     with _db() as db:
         if base:
             titulo = _db().execute("SELECT titulo FROM producao_info WHERE tarefa_id = ?", (base,)).fetchone()["titulo"]

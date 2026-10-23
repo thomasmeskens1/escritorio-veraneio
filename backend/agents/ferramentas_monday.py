@@ -86,8 +86,9 @@ class CriarItemMonday(BaseTool):
                     "(ex.: 'POST | Check-in no Lodge 208').")
         # O Thomas aloca a equipe: sem responsável dito por ele, o item não é criado e o agente pergunta.
         if not _escolher(responsavel, RESPONSAVEIS):
-            return (f"Responsável não informado. NÃO crie os itens ainda: apresente o plano e pergunte ao usuário "
-                    f"quem é o responsável por cada peça ({', '.join(RESPONSAVEIS)}). Crie depois da resposta.")
+            return (f"Responsável não informado. NÃO crie os itens ainda: apresente o plano e pergunte ao usuário, "
+                    f"com um formulário (um campo de opções por peça: {', '.join(RESPONSAVEIS)}), quem é o "
+                    "responsável por cada peça. Crie depois da resposta.")
         mes = _escolher(grupo, MESES)
         if not mes:
             return f"Grupo inválido '{grupo}': use o nome do mês (ex.: {', '.join(MESES[10:])})."
