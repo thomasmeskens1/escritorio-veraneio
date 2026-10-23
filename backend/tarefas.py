@@ -59,7 +59,8 @@ CREATE INDEX IF NOT EXISTS idx_eventos_tipo ON eventos(tipo, em);
 
 # Colunas adicionadas depois da primeira versão do banco (migração simples).
 _COLUNAS_NOVAS = {"tentativas_fila": "INTEGER NOT NULL DEFAULT 0", "proxima_tentativa": "TEXT",
-                  "anexos": "TEXT", "contexto_anexos": "TEXT"}  # anexos: JSON com os ids
+                  "anexos": "TEXT", "contexto_anexos": "TEXT",  # anexos: JSON com os ids
+                  "empresa": "TEXT NOT NULL DEFAULT 'casa_veraneio'"}  # empresas.py: nunca misturar
 
 MAX_TENTATIVAS_FILA = 6
 INTERVALO_REAGENDAMENTO = timedelta(minutes=30)
@@ -129,12 +130,12 @@ def iniciar() -> None:
                    "WHERE status='executando'")
 
 
-def criar(usuario: str, andar: str, agente: str, texto: str, dificuldade: str) -> int:
+def criar(usuario: str, andar: str, agente: str, texto: str, dificuldade: str, empresa: str = "casa_veraneio") -> int:
     with _db() as db:
         cursor = db.execute(
-            "INSERT INTO tarefas (usuario, andar, agente, texto, dificuldade, status, criada_em) "
-            "VALUES (?, ?, ?, ?, ?, 'executando', ?)",
-            (usuario, andar, agente, texto, dificuldade, _agora()),
+            "INSERT INTO tarefas (usuario, andar, agente, texto, dificuldade, status, criada_em, empresa) "
+            "VALUES (?, ?, ?, ?, ?, 'executando', ?, ?)",
+            (usuario, andar, agente, texto, dificuldade, _agora(), empresa),
         )
         return cursor.lastrowid
 
@@ -175,12 +176,14 @@ def reagendar(tarefa_id: int) -> bool:
     return True
 
 
-def historico(usuario: str, andar: str, agente: str, antes_de: int, limite: int = 3) -> list[sqlite3.Row]:
-    """Últimas trocas concluídas com o mesmo agente (contexto para qualquer modelo que assumir)."""
+def historico(usuario: str, andar: str, agente: str, antes_de: int, limite: int = 3,
+              empresa: str | None = None) -> list[sqlite3.Row]:
+    """Últimas trocas concluídas com o mesmo agente e da MESMA empresa (contexto para qualquer modelo)."""
+    filtro, extra = ("AND empresa = ? ", (empresa,)) if empresa else ("", ())
     linhas = _db().execute(
         "SELECT texto, resposta FROM tarefas WHERE usuario = ? AND andar = ? AND agente = ? "
-        "AND status = 'concluida' AND id < ? ORDER BY id DESC LIMIT ?",
-        (usuario, andar, agente, antes_de, limite),
+        f"AND status = 'concluida' AND id < ? {filtro}ORDER BY id DESC LIMIT ?",
+        (usuario, andar, agente, antes_de, *extra, limite),
     ).fetchall()
     return list(reversed(linhas))
 

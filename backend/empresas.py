@@ -1,0 +1,54 @@
+"""As três empresas do grupo e o que separa uma da outra. Os dados de uma NUNCA entram no trabalho de outra.
+
+Cada trecho do Cérebro, ficha, tarefa e produção leva a empresa. O "Lodge 31" do Corporativo e o "Lodge 31" da
+Casa Veraneio são entidades distintas (mesmo que seja a mesma casa física): cada empresa tem a sua ficha. O que é
+comum às três (regras de ouro, formatos, Monday, fluxo do escritório) usa COMUM.
+"""
+
+COMUM = "*"
+PADRAO = "casa_veraneio"  # só para dados antigos, anteriores à separação (todos eram da Casa Veraneio)
+
+EMPRESAS = {
+    "casa_veraneio": {
+        "nome": "Casa Veraneio", "site": "casaveraneio.com", "monday": "Casa Veraneio",
+        "resumo": "aluguel por temporada de casas de alto padrão (os Lodges) para grupos, com os serviços do Hotel "
+                  "Privativo cobrados à parte; foco em Réveillon, Carnaval, feriados e férias.",
+    },
+    "cv_corporativo": {
+        "nome": "Casa Veraneio Corporativo", "site": "corporativo.casaveraneio.com", "monday": "CV Corp",
+        "resumo": "eventos em espaços de alto padrão para empresas e pessoas físicas: de workshop, convenção, "
+                  "off-site e confraternização a aniversário e mini wedding, com produção completa (serviços como "
+                  "decoração, som, gastronomia e staff).",
+    },
+    "casa_vero": {
+        "nome": "Casa Vero Imóveis", "site": "casaveroimoveis.com", "monday": "Casa Vero",
+        "resumo": "imobiliária de casas de veraneio de alto padrão: assessoria exclusiva ao proprietário, que cuida "
+                  "de consultores, clientes e informações para ele vender sem dor de cabeça; catálogo seleto e "
+                  "próprio (imóveis identificados por código \"Vero N\").",
+    },
+}
+
+
+def valida(empresa: str | None) -> bool:
+    return empresa in EMPRESAS
+
+
+def nome(empresa: str) -> str:
+    return EMPRESAS.get(empresa, {}).get("nome", "todas as empresas" if empresa == COMUM else empresa)
+
+
+def da_conta_monday(conta: str) -> str | None:
+    """Coluna Conta do Monday -> empresa (None se não reconhecida)."""
+    return next((e for e, d in EMPRESAS.items() if d["monday"].lower() == (conta or "").strip().lower()), None)
+
+
+def contexto(empresa: str) -> str:
+    """Bloco que abre o contexto de todo agente: de qual empresa é o trabalho e a proibição de misturar."""
+    if not valida(empresa):
+        return ""
+    dados = EMPRESAS[empresa]
+    outras = ", ".join(d["nome"] for e, d in EMPRESAS.items() if e != empresa)
+    return (f"EMPRESA DESTE TRABALHO: {dados['nome']} ({dados['site']}) — {dados['resumo']}\n"
+            f"Use SOMENTE dados da {dados['nome']}. Não use, cite nem misture nada de {outras}: imóveis com o mesmo "
+            "nome em outra empresa são OUTRAS casas. Não assuma nada; se faltar informação, pergunte ao usuário com "
+            "um formulário.")

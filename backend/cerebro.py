@@ -23,6 +23,7 @@ import cerebro_base as base
 import cerebro_embed as embed
 import cerebro_estagiarios as estagiarios
 import config
+import empresas
 import tarefas
 from auth import validar_token
 from estado import AGENTES_PRODUCAO, andar_do_agente, buscar_agente
@@ -54,7 +55,7 @@ def e_ensino(texto: str) -> bool:
     return bool(_ENSINO.match(texto or ""))
 
 
-async def ensinar(login: str, texto: str) -> str:
+async def ensinar(login: str, texto: str, empresa: str = empresas.PADRAO) -> str:
     """Grava o ensinamento (só a conta do dono). PermissionError/ValueError trazem a mensagem ao usuário."""
     if (login or "").strip().lower() != config.DONO_MAX:
         raise PermissionError("Só a conta do Thomas pode ensinar o Cérebro. Você pode fazer perguntas normalmente.")
@@ -63,9 +64,9 @@ async def ensinar(login: str, texto: str) -> str:
         raise ValueError("Escreva o que o Cérebro deve aprender, ex.: \"Aprenda: o check-in é às 14h.\"")
     titulo = conteudo.splitlines()[0][:80]
     ref = f"chat:{base.agora()}:{uuid.uuid4().hex[:8]}"  # único: ensinamentos não são o "mesmo documento"
-    ids, substituidos = await asyncio.to_thread(base.adicionar, "ensinado", ref, titulo, conteudo)
+    ids, substituidos = await asyncio.to_thread(base.adicionar, "ensinado", ref, titulo, conteudo, empresa)
     _acordar.set()  # se o Ollama estava fora, o trabalhador tenta de novo
-    resposta = "Anotado! Guardei isso no conhecimento da Casa Veraneio"
+    resposta = f"Anotado! Guardei isso no conhecimento da {empresas.nome(empresa)}"
     resposta += f" ({len(ids)} trechos)." if len(ids) > 1 else "."
     if substituidos:
         resposta += f" Substituí {substituidos} informação(ões) antiga(s) sobre o mesmo assunto (o histórico fica guardado)."
@@ -85,13 +86,19 @@ def _formatar(trechos: list[dict], limite: int) -> str:
     return "\n\n".join(blocos)[:limite]
 
 
+def empresa_da_tarefa(tarefa_id: int) -> str:
+    """Empresa do trabalho (a busca no Cérebro nunca mistura empresas); sem tarefa: dado antigo, Casa Veraneio."""
+    linha = tarefas.obter(tarefa_id) if tarefa_id else None
+    return linha["empresa"] if linha and linha["empresa"] else empresas.PADRAO
+
+
 def consultar(pergunta: str, agente: str, tarefa_id: int = 0) -> str:
     """Chamado pela ferramenta do agente (em thread). Nunca bloqueia: sem estagiário livre, responde sem visita."""
     estagiario = estagiarios.iniciar_visita(agente) if agente != ID else None
     try:
         if tarefa_id:
             atividade.evento_em_thread(tarefa_id, "consulta_cerebro", agente, detalhe=pergunta)
-        trechos = base.buscar(pergunta)
+        trechos = base.buscar(pergunta, empresa=empresa_da_tarefa(tarefa_id))
         base.registrar_consulta(tarefa_id, agente, pergunta, [t["id"] for t in trechos])
     except Exception:
         log.exception("Cérebro: falha na consulta.")
@@ -111,15 +118,16 @@ def descricao_tarefa(texto: str, historico: list = (), tarefa_id: int = 0) -> st
     from agents.perfis import contexto  # import tardio: perfis depende do estado
 
     try:
-        trechos = base.buscar(texto, k=6)
+        trechos = base.buscar(texto, k=6, empresa=empresa_da_tarefa(tarefa_id))
         base.registrar_consulta(tarefa_id, ID, texto, [t["id"] for t in trechos])
     except Exception:
         log.exception("Cérebro: falha ao recuperar trechos.")
         trechos = []
     conhecimento = (_formatar(trechos, MAX_CARACTERES_CONTEXTO) if trechos
                     else "(nenhum trecho relevante encontrado na base)")
-    return (f"Pergunta do usuário: {texto}\n\n{contexto(ID, historico, texto)}\n\n"
-            f"Conhecimento recuperado da base da Casa Veraneio:\n{conhecimento}\n\n"
+    empresa = empresa_da_tarefa(tarefa_id)
+    return (f"Pergunta do usuário: {texto}\n\n{contexto(ID, historico, texto, empresa)}\n\n"
+            f"Conhecimento recuperado da base da {empresas.nome(empresa)}:\n{conhecimento}\n\n"
             "Responda usando SOMENTE o conhecimento acima. Cite a fonte de cada informação no formato [n] "
             "(título e fonte). Se houver versões conflitantes, use a mais recente e diga isso. Se a resposta não "
             "estiver nos trechos, diga claramente que não sabe e que essa informação ainda não foi registrada "
@@ -153,7 +161,8 @@ def aprender_tarefa(tarefa_id: int) -> int | None:
         resposta = linha["resposta"].strip()
         conteudo = (f"Pedido: {linha['texto'].strip()[:300]}\n\nResposta de {nome}: "
                     f"{resposta[:800]}{'…' if len(resposta) > 800 else ''}")
-        trecho_id = base._inserir("tarefa", f"tarefa:{tarefa_id}", f"{nome}: {linha['texto'].strip()[:70]}", conteudo)
+        trecho_id = base._inserir("tarefa", f"tarefa:{tarefa_id}", f"{nome}: {linha['texto'].strip()[:70]}", conteudo,
+                                  linha["empresa"] or empresas.PADRAO)
         _acordar.set()
         return trecho_id
     except Exception:
@@ -169,7 +178,8 @@ def indexar_oficiais() -> int:
     for arquivo in sorted(PASTA_CONHECIMENTO.glob("*.md")):
         refs.add(arquivo.name)
         titulo = arquivo.stem.replace("_", " ").capitalize()
-        total += base.substituir_ref("oficial", arquivo.name, titulo, arquivo.read_text(encoding="utf-8"))
+        total += base.substituir_ref("oficial", arquivo.name, titulo, arquivo.read_text(encoding="utf-8"),
+                                     base.empresa_do_oficial(arquivo.name))
     with base._trava:  # documento apagado da pasta: seus trechos saem da busca
         sumidos = [l["id"] for l in base.db().execute(
             "SELECT id, fonte_ref FROM conhecimento WHERE fonte_tipo = 'oficial' AND ativo = 1") if l["fonte_ref"] not in refs]
@@ -249,6 +259,7 @@ def estatisticas(authorization: str = Header("")):
 
 class Documento(BaseModel):
     fonte_tipo: Literal["site", "drive", "oficial"]
+    empresa: Literal["casa_veraneio", "cv_corporativo", "casa_vero"] = "casa_veraneio"
     fonte_ref: str = Field(min_length=1, max_length=500)
     titulo: str = Field("", max_length=200)
     conteudo: str = Field(min_length=1, max_length=200_000)
@@ -266,7 +277,7 @@ class Ingestao(BaseModel):
 
 def _ingerir(ingestao: Ingestao) -> tuple[int, int]:
     trechos = sum(base.substituir_ref(d.fonte_tipo, d.fonte_ref.strip(), d.titulo.strip() or d.fonte_ref.strip(),
-                                      d.conteudo) for d in ingestao.documentos)
+                                      d.conteudo, d.empresa) for d in ingestao.documentos)
     removidos = sum(base.remover_ref(r.fonte_tipo, r.fonte_ref.strip()) for r in ingestao.remover)
     return trechos, removidos
 

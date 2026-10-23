@@ -379,7 +379,8 @@ async def proxima(authorization: str = Header("")):
         # Item do Monday: referências (links novos) para baixar e envio dos criativos no fim.
         "monday": bool(monday.item_da_tarefa(linha["id"])),
         "referencias": await asyncio.to_thread(monday.referencias_da_tarefa, linha["id"]),
-        "fichas": await asyncio.to_thread(fichas.fichas_citadas, linha["texto"]),  # dados oficiais dos Lodges citados
+        "fichas": await asyncio.to_thread(fichas.fichas_citadas, linha["texto"], linha["empresa"]),  # da empresa
+        "empresa": linha["empresa"],  # o trabalhador escolhe manuais e acervo da empresa (nunca misturar)
     }, "trabalho": None}
 
 

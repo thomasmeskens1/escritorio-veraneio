@@ -95,11 +95,39 @@ def _ler(caminho: Path, _mtime: float, agente_id: str, compacto: bool) -> str:
     return "\n".join(s for s in secoes if (c := _chave(s)) and c in mapa and _recebe(mapa[c], agente_id))
 
 
-def para(agente_id: str, compacto: bool = False) -> str:
+# Corporativo e Casa Vero: só o que é comum às três (regras de ouro e gerais, formatos, Monday, fluxo) + o documento
+# da própria empresa. Os manuais 01-07 são da Casa Veraneio (marca, tom, assinatura, Lodges) e nunca vão para elas.
+DOC_DA_EMPRESA = {"cv_corporativo": "11", "casa_vero": "12"}
+COMUNS_OUTRAS = {"00": ("ouro", "2"), "08": ("1", "2", "3"), "09": ("1", "2", "3", "4"), "10": ("1", "2", "3", "4")}
+
+
+def _de_outra_empresa(agente_id: str, empresa: str) -> str:
+    partes = []
+    for prefixo in ("00", DOC_DA_EMPRESA[empresa], "08", "09", "10"):
+        caminho = _arquivo(prefixo)
+        if not caminho:
+            continue
+        secoes = _secoes(caminho.read_text(encoding="utf-8").strip())
+        if prefixo in COMUNS_OUTRAS:
+            secoes = [s for s in secoes if _chave(s) in COMUNS_OUTRAS[prefixo]]
+        if secoes:
+            partes.append("\n".join(secoes))
+    cabecalho = (f"DIRETRIZES ({EMPRESAS_NOMES[empresa]}). O documento da empresa diz o que já está confirmado; o que "
+                 "estiver marcado como PENDENTE ou não aparecer, pergunte ao usuário. Nunca use marca, tom, assinatura, "
+                 "imóveis ou dados de outra empresa do grupo.")
+    return f"{cabecalho}\n\n" + "\n\n".join(partes) if partes else ""
+
+
+EMPRESAS_NOMES = {"cv_corporativo": "Casa Veraneio Corporativo", "casa_vero": "Casa Vero Imóveis"}
+
+
+def para(agente_id: str, compacto: bool = False, empresa: str = "casa_veraneio") -> str:
     """Texto das diretrizes do agente ("" se ele não tem documentos ou a pasta não existe)."""
     funcao = DA_FUNCAO.get(agente_id)
     if not funcao:
         return ""
+    if empresa in DOC_DA_EMPRESA:
+        return _de_outra_empresa(agente_id, empresa)
     prefixos = tuple(p for p in ORDEM if p in funcao or p in (ESSENCIAL if compacto else SECOES))
     partes = []
     for prefixo in prefixos:

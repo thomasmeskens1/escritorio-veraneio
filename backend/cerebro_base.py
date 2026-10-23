@@ -16,6 +16,7 @@ import numpy as np
 import cerebro_embed as embed
 import config
 import tarefas
+from empresas import COMUM, PADRAO
 from cerebro_texto import BM25, dividir, mesmo_assunto, termos
 
 log = logging.getLogger(__name__)
@@ -68,6 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_consultas_tarefa ON consultas_cerebro(tarefa_id);
 _trava = threading.RLock()  # a conexão SQLite é compartilhada entre o loop e as threads dos agentes
 _versao = 0                 # muda a cada escrita no conteúdo: o índice em memória é refeito
 _indice = None
+ORLANDO = "orlando"
 REFAZER_INDICE_S = 15  # idade máxima do índice usado nas consultas (ver indice_atual)
 _pronto = False
 
@@ -82,8 +84,36 @@ def db():
     if not _pronto:
         with _trava:
             conexao.executescript(_ESQUEMA)
+            _migrar_empresa(conexao)
             _pronto = True
     return conexao
+
+
+# Manuais oficiais por empresa (prefixo do arquivo); os demais (01-07) são da Casa Veraneio.
+OFICIAIS_COMUNS = ("00", "08", "09", "10")
+OFICIAIS_DA_EMPRESA = {"11": "cv_corporativo", "12": "casa_vero"}
+
+
+def empresa_do_oficial(arquivo: str) -> str:
+    prefixo = arquivo[:2]
+    return COMUM if prefixo in OFICIAIS_COMUNS else OFICIAIS_DA_EMPRESA.get(prefixo, PADRAO)
+
+
+def _migrar_empresa(conexao) -> None:
+    """Coluna empresa (separação das 3 empresas). Na 1ª vez, os dados antigos são da Casa Veraneio, exceto os
+    manuais comuns e as regras de ouro ensinadas, que valem para todas."""
+    colunas = {c["name"] for c in conexao.execute("PRAGMA table_info(conhecimento)")}
+    if "empresa" in colunas:
+        return
+    with conexao:
+        conexao.execute(f"ALTER TABLE conhecimento ADD COLUMN empresa TEXT NOT NULL DEFAULT '{PADRAO}'")
+        conexao.execute("CREATE INDEX IF NOT EXISTS idx_conhecimento_empresa ON conhecimento(empresa)")
+        for prefixo in OFICIAIS_COMUNS:
+            conexao.execute("UPDATE conhecimento SET empresa = ? WHERE fonte_tipo = 'oficial' AND fonte_ref LIKE ?",
+                            (COMUM, f"{prefixo}%"))
+        conexao.execute("UPDATE conhecimento SET empresa = ? WHERE fonte_tipo = 'ensinado' AND "
+                        "(conteudo LIKE 'Regras de ouro%' OR conteudo LIKE 'Regra aprovada pelo Thomas para todos%')",
+                        (COMUM,))
 
 
 def _mudou() -> None:
@@ -93,13 +123,13 @@ def _mudou() -> None:
 
 # --- Escrita ---------------------------------------------------------------------------------
 
-def _inserir(fonte_tipo: str, fonte_ref: str, titulo: str, conteudo: str) -> int:
+def _inserir(fonte_tipo: str, fonte_ref: str, titulo: str, conteudo: str, empresa: str = PADRAO) -> int:
     momento = agora()
     with _trava, db() as conexao:
         cursor = conexao.execute(
-            "INSERT INTO conhecimento (fonte_tipo, fonte_ref, titulo, conteudo, peso_fonte, criado_em, atualizado_em) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (fonte_tipo, fonte_ref, titulo[:200], conteudo, PESOS_FONTE[fonte_tipo], momento, momento))
+            "INSERT INTO conhecimento (fonte_tipo, fonte_ref, titulo, conteudo, peso_fonte, criado_em, atualizado_em, "
+            "empresa) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (fonte_tipo, fonte_ref, titulo[:200], conteudo, PESOS_FONTE[fonte_tipo], momento, momento, empresa))
     _mudou()
     return cursor.lastrowid
 
@@ -113,14 +143,15 @@ def _desativar(ids: list[int], substituido_por: int | None) -> None:
     _mudou()
 
 
-def adicionar(fonte_tipo: str, fonte_ref: str, titulo: str, conteudo: str) -> tuple[list[int], int]:
+def adicionar(fonte_tipo: str, fonte_ref: str, titulo: str, conteudo: str,
+              empresa: str = PADRAO) -> tuple[list[int], int]:
     """Divide em trechos, grava, gera embeddings (se o Ollama responder) e aplica as versões.
     Devolve (ids novos, quantos trechos antigos foram substituídos)."""
-    ids = [_inserir(fonte_tipo, fonte_ref, t, c) for t, c in dividir(titulo, conteudo)]
+    ids = [_inserir(fonte_tipo, fonte_ref, t, c, empresa) for t, c in dividir(titulo, conteudo)]
     return ids, gerar_embeddings(ids)
 
 
-def substituir_ref(fonte_tipo: str, fonte_ref: str, titulo: str, conteudo: str) -> int:
+def substituir_ref(fonte_tipo: str, fonte_ref: str, titulo: str, conteudo: str, empresa: str = PADRAO) -> int:
     """Mesmo fonte_ref: os trechos novos substituem os anteriores daquele ref. Devolve o nº de trechos."""
     novos = dividir(titulo, conteudo)
     with _trava:
@@ -128,7 +159,7 @@ def substituir_ref(fonte_tipo: str, fonte_ref: str, titulo: str, conteudo: str) 
                                "AND ativo = 1 ORDER BY id", (fonte_tipo, fonte_ref)).fetchall()
     if [(l["titulo"], l["conteudo"]) for l in antigos] == [(t[:200], c) for t, c in novos]:
         return len(antigos)  # nada mudou
-    ids = [_inserir(fonte_tipo, fonte_ref, t, c) for t, c in novos]
+    ids = [_inserir(fonte_tipo, fonte_ref, t, c, empresa) for t, c in novos]
     _desativar([l["id"] for l in antigos], ids[0] if ids else None)
     gerar_embeddings(ids)
     return len(ids)
@@ -186,12 +217,14 @@ def _versionar(novo_id: int, vetor: np.ndarray) -> int:
     if not len(indice.ids):
         return 0
     with _trava:
-        novo = db().execute("SELECT fonte_tipo, fonte_ref, conteudo, ativo FROM conhecimento WHERE id = ?", (novo_id,)).fetchone()
+        novo = db().execute("SELECT fonte_tipo, fonte_ref, conteudo, ativo, empresa FROM conhecimento WHERE id = ?",
+                            (novo_id,)).fetchone()
     if not novo or not novo["ativo"]:
         return 0
     similares = indice.matriz @ vetor
     antigos = [indice.ids[i] for i in np.nonzero((similares > LIMIAR_VERSAO) & indice.tem_embedding)[0]
                if indice.ids[i] != novo_id
+               and indice.empresas[i] == novo["empresa"]  # o dado de uma empresa nunca substitui o de outra
                and (indice.fontes[i], indice.refs[i]) != (novo["fonte_tipo"], novo["fonte_ref"])
                and _pode_substituir(novo["fonte_tipo"], indice.fontes[i])
                and not _documentos_distintos(novo["fonte_tipo"], novo["fonte_ref"], indice.fontes[i], indice.refs[i])
@@ -211,6 +244,9 @@ class Indice:
         self.conteudos = [l["conteudo"] for l in linhas]
         self.fontes = [l["fonte_tipo"] for l in linhas]
         self.refs = [l["fonte_ref"] for l in linhas]
+        self.empresas = [l["empresa"] for l in linhas]
+        # Lodges de Orlando: opção raríssima; só entram na busca quando a pergunta cita Orlando.
+        self.orlando = np.array([ORLANDO in f"{l['fonte_ref']} {l['titulo']}".lower() for l in linhas], dtype=bool)
         self.datas = [l["atualizado_em"] for l in linhas]
         self.pesos = np.array([l["peso_fonte"] for l in linhas], dtype=np.float32)
         self._bm25 = None
@@ -248,7 +284,8 @@ def indice_atual(fresco: bool = False) -> Indice:
                                   (not fresco and time.monotonic() - atual.criado < REFAZER_INDICE_S)):
             return atual
         linhas = db().execute("SELECT id, fonte_tipo, fonte_ref, titulo, conteudo, embedding, modelo_embedding, "
-                              "peso_fonte, atualizado_em FROM conhecimento WHERE ativo = 1 ORDER BY id").fetchall()
+                              "peso_fonte, atualizado_em, empresa FROM conhecimento WHERE ativo = 1 ORDER BY id"
+                              ).fetchall()
     novo = Indice(linhas)
     novo.versao, novo.criado = versao, time.monotonic()
     with _trava:
@@ -278,11 +315,15 @@ def _pontuacoes(ids: list[int]) -> dict[int, float]:
     return {l["id"]: l["pontuacao"] for l in linhas}
 
 
-def buscar(pergunta: str, k: int = 5) -> list[dict]:
-    """Os k trechos mais relevantes (já diversificados pelo MMR)."""
+def buscar(pergunta: str, k: int = 5, empresa: str = PADRAO) -> list[dict]:
+    """Os k trechos mais relevantes (já diversificados pelo MMR), SÓ da empresa pedida e do que é comum às três.
+    Lodges de Orlando ficam de fora, a menos que a pergunta cite Orlando."""
     indice = indice_atual()
     if not indice.ids:
         return []
+    permitido = np.array([e in (empresa, COMUM) for e in indice.empresas], dtype=bool)
+    if ORLANDO not in pergunta.lower():
+        permitido &= ~indice.orlando
     termos_pergunta = termos(pergunta)
     bm25 = np.array(indice.bm25.pontuar(termos_pergunta), dtype=np.float32)
     cosseno = np.zeros(len(indice.ids), dtype=np.float32)
@@ -295,8 +336,9 @@ def buscar(pergunta: str, k: int = 5) -> list[dict]:
         relevancia = PESO_COSSENO * np.clip(cosseno, 0, None) + PESO_BM25 * cobertura
     else:  # só lexical (Ollama fora)
         relevancia = bm25 / bm25.max() if bm25.max() > 0 else bm25
+    relevancia = np.where(permitido, relevancia, 0)
     candidatos = [i for i in np.argsort(-relevancia)[:40]
-                  if bm25[i] > 0 or cosseno[i] >= COS_MINIMO]
+                  if permitido[i] and (bm25[i] > 0 or cosseno[i] >= COS_MINIMO)]
     if not candidatos:
         return []
 

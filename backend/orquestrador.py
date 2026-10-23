@@ -41,11 +41,11 @@ def ha_modelo_disponivel() -> bool:
 
 
 async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str, anexos_ids: list[str] = (),
-                      contexto: str = "", ao_criar=None) -> int:
+                      contexto: str = "", ao_criar=None, empresa: str = "casa_veraneio") -> int:
     """`contexto`: dados extras para o agente (ex.: item do Monday citado), fora do texto exibido no chat.
     `ao_criar(tarefa_id)`: roda antes da execução (ex.: vincular a tarefa ao item do Monday)."""
     dificuldade = classificar(agente.id, texto)
-    tarefa_id = tarefas.criar(login, andar, agente.id, texto, dificuldade.value)
+    tarefa_id = tarefas.criar(login, andar, agente.id, texto, dificuldade.value, empresa)
     if anexos_ids:
         tarefas.atualizar(tarefa_id, anexos=json.dumps(list(anexos_ids)))
     if contexto:
@@ -68,7 +68,8 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
     """Uma tentativa num modelo, com o histórico da conversa. Devolve (resultado ou None, erro)."""
     from agents.executor import LocalOcupado, MaxOcupado, executar  # import tardio: CrewAI é pesado
 
-    historico = tarefas.historico(tarefa["usuario"], tarefa["andar"], tarefa["agente"], tarefa["id"])
+    historico = tarefas.historico(tarefa["usuario"], tarefa["andar"], tarefa["agente"], tarefa["id"],
+                                  empresa=tarefa["empresa"])
     inicio = time.monotonic()
     try:
         tarefas.registrar_evento(tarefa["id"], "tentativa", agente.id, etapa.modelo)

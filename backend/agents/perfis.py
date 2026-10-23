@@ -215,14 +215,18 @@ def _resumo_historico(historico: list) -> str:
             "Lodge, produto ou assunto, não misture com os dados desta conversa):\n" + "\n".join(trocas))
 
 
-def contexto(agente_id: str, historico: list = (), pedido: str = "") -> str:
-    """Contexto fixo do agente: conversa recente, instruções e conhecimento específico."""
+def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: str = "casa_veraneio") -> str:
+    """Contexto fixo do agente: empresa do trabalho, conversa recente, instruções e conhecimento específico."""
+    import empresas  # import tardio: evita ciclo com o estado
+
     historico = _historico_relevante(historico, pedido)
-    partes = [_resumo_historico(historico)] if historico else []
-    if pedido:  # Lodge citado: a ficha oficial entra inteira (fichas.py, nível 2 da árvore de conhecimento)
+    partes = [empresas.contexto(empresa)]  # abre com a empresa: nunca misturar dados entre as três
+    if historico:
+        partes.append(_resumo_historico(historico))
+    if pedido:  # imóvel citado: a ficha oficial DA EMPRESA entra inteira (fichas.py, nível 2 da árvore)
         import fichas  # import tardio: o Cérebro carrega o banco
 
-        if (fichas_lodges := fichas.fichas_citadas(pedido)):
+        if (fichas_lodges := fichas.fichas_citadas(pedido, empresa)):
             partes.append(fichas_lodges)
     partes.append(INSTRUCOES)
     import correcoes  # import tardio: usa o banco
@@ -242,4 +246,6 @@ def descricao_tarefa(agente_id: str, texto: str, historico: list = (), tarefa_id
         import cerebro
 
         return cerebro.descricao_tarefa(texto, historico, tarefa_id)
-    return f"Pedido do usuário: {texto}\n\n{contexto(agente_id, historico, texto)}"
+    import cerebro
+
+    return f"Pedido do usuário: {texto}\n\n{contexto(agente_id, historico, texto, cerebro.empresa_da_tarefa(tarefa_id))}"

@@ -122,7 +122,9 @@ def _rodar_no_max(agente_id: str, descricao: str, esperado: str, limite_s: int, 
     etapa = re.search(r"Sua etapa \(\d+\): (.+)", descricao)  # projeto do Gestor: a pergunta é a etapa
     consulta = (etapa.group(1) if etapa else descricao)[:500]
     contexto_cerebro = cerebro.consultar(consulta, agente_id, tarefa_id) if agente_id != cerebro.ID else ""
-    prompt = max_texto.montar_prompt(PERFIS[agente_id], diretrizes.para(agente_id), contexto_cerebro, descricao, esperado)
+    prompt = max_texto.montar_prompt(PERFIS[agente_id],
+                                     diretrizes.para(agente_id, empresa=cerebro.empresa_da_tarefa(tarefa_id)),
+                                     contexto_cerebro, descricao, esperado)
     return max_texto.executar(trabalho, prompt, limite_s)
 
 
@@ -168,7 +170,8 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
         ferramentas += ferramentas_monday.para(agente_id, tarefa_id)
     perfil = dict(PERFIS[agente_id])
     # Diretrizes da Casa Veraneio (regras, marca e manual da função); versão curta no modelo local.
-    if (extras := diretrizes.para(agente_id, compacto=modelo.startswith(("ollama/", "groq/")))):
+    if (extras := diretrizes.para(agente_id, compacto=modelo.startswith(("ollama/", "groq/")),
+                                  empresa=cerebro.empresa_da_tarefa(tarefa_id))):
         perfil["backstory"] = f"{perfil['backstory']}\n\n{extras}"
     agente = Agent(**perfil, llm=_llm(modelo, limite_s), tools=ferramentas,
                    max_iter=MAX_ITERACOES, max_retry_limit=0, verbose=False)
@@ -200,7 +203,7 @@ def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa,
         def avisar(tipo: str, agente: str, detalhe: str) -> None:
             atividade.etapa_em_thread(tarefa_id, tipo, agente, detalhe)
 
-        total.texto = projeto.executar_projeto(tarefa_id, texto, contexto("gestor", historico, texto), executar,
+        total.texto = projeto.executar_projeto(tarefa_id, texto, contexto("gestor", historico, texto, cerebro.empresa_da_tarefa(tarefa_id)), executar,
                                                cancelar, avisar)
     else:
         esperado = ("Confirmação amigável, em texto (sem JSON), do agente criado: nome, andar, setor e função."

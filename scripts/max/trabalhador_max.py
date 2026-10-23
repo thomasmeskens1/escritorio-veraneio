@@ -26,6 +26,7 @@ from urllib.parse import urlparse
 import catalogo_lodges
 import comum
 import planilha_lodges
+import sites_empresas
 import trabalhos_max
 from comum import DRIVE, log
 
@@ -378,6 +379,7 @@ def catalogo_em_segundo_plano() -> None:
         try:
             catalogo_lodges.rodar()
             planilha_lodges.rodar()
+            sites_empresas.rodar()  # Corporativo e Casa Vero, cada um com a sua etiqueta de empresa
         finally:
             _catalogo_rodando.release()
 
