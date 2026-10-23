@@ -52,6 +52,7 @@ async function carregarPerfil(andar, agente) {
   if (ehCerebro(andar, agente)) {
     carregarConhecimento(andar, agente);
     carregarCorrecoes(andar, agente); // correções do Thomas para virar regra (js/correcoes.js)
+    carregarEntrevista(andar, agente); // educação do Corporativo e da Casa Vero (js/entrevista.js)
   }
   try {
     const dados = await buscarAgente(andar, agente);
@@ -90,6 +91,7 @@ function renderizarPerfil() {
   corpo.append(criarFatos(dados));
   if (ehCerebro(chatAberto.andar, chatAberto.agente) && !conhecimento.oculto) corpo.append(criarConhecimento());
   if (ehCerebro(chatAberto.andar, chatAberto.agente) && !correcoes.oculto) corpo.append(criarCorrecoes());
+  if (ehCerebro(chatAberto.andar, chatAberto.agente) && !entrevista.oculto) corpo.append(criarEntrevista());
   if (dados.tipo === 'ia') corpo.append(criarRotinas(chatAberto.andar, chatAberto.agente));
   const ajustes = dados.aprendizado?.ajustes;
   if (Array.isArray(ajustes) && ajustes.length) corpo.append(criarAjustesAgente(ajustes));

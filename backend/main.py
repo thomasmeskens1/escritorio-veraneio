@@ -25,6 +25,7 @@ import modelos_uso
 import monday
 import cerebro
 import cerebro_mapa
+import entrevista
 import historico
 import orquestrador
 import producao
@@ -117,6 +118,7 @@ app.include_router(agentes_dinamicos.rotas)
 app.include_router(agendamentos.rotas)
 app.include_router(cerebro.rotas)
 app.include_router(cerebro_mapa.rotas)
+app.include_router(entrevista.rotas)
 app.include_router(anexos.rotas)
 app.include_router(monday.rotas)
 app.include_router(andamento.rotas)

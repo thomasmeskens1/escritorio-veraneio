@@ -174,14 +174,30 @@ def enviar_criativos(producao: dict, entrega: Path, arquivos: list[str]) -> None
             log(f"   criativo não enviado ao Monday ({nome}): {erro}")
 
 
-def diretrizes(agente: str) -> str:
-    """Manuais da Casa Veraneio para o agente de produção (regras, marca e função)."""
+# Corporativo e Casa Vero: manuais comuns + o documento da própria empresa (nunca a marca da Casa Veraneio).
+DIRETRIZES_OUTRAS = {"cv_corporativo": ("00", "08", "09", "10", "11"), "casa_vero": ("00", "08", "09", "10", "12")}
+NOMES_EMPRESA = {"casa_veraneio": "CASA VERANEIO", "cv_corporativo": "CASA VERANEIO CORPORATIVO",
+                 "casa_vero": "CASA VERO IMÓVEIS"}
+
+
+def diretrizes(agente: str, empresa: str = "casa_veraneio") -> str:
+    """Manuais da empresa da peça para o agente de produção (regras, marca e função)."""
     partes = []
-    for prefixo in DIRETRIZES.get(agente, ()):
+    for prefixo in DIRETRIZES_OUTRAS.get(empresa) or DIRETRIZES.get(agente, ()):
         achados = sorted(PASTA_DIRETRIZES.glob(f"{prefixo}_*.md"))
         if achados:
             partes.append(achados[0].read_text(encoding="utf-8").strip())
-    return ("DIRETRIZES DA CASA VERANEIO (siga à risca):\n\n" + "\n\n".join(partes)) if partes else ""
+    titulo = f"DIRETRIZES DA {NOMES_EMPRESA.get(empresa, 'CASA VERANEIO')} (siga à risca; nunca use dados de outra empresa)"
+    return (f"{titulo}:\n\n" + "\n\n".join(partes)) if partes else ""
+
+
+def regras_fotos(empresa: str) -> str:
+    """Acervo de fotos dos Lodges: só para peças da Casa Veraneio (as outras empresas usam o que vier no pedido)."""
+    if empresa == "casa_veraneio":
+        return regras_acervo()
+    return ("FOTOS: esta peça NÃO é da Casa Veraneio. Não use o acervo de fotos dos Lodges (é da Casa Veraneio). Use só "
+            "os arquivos anexados e as referências do pedido; se não houver foto, entregue o layout com marcadores de "
+            "imagem e avise no resumo.")
 
 
 def regras_acervo() -> str:
@@ -224,8 +240,8 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
         (f"O usuário enviou estes arquivos junto com o pedido (copiados na subpasta {PASTA_ANEXOS}/):\n"
          f"{lista_anexos}\nAbra-os com Read e USE-OS na peça (fotos como imagens do layout, PDFs como fonte "
          "de textos e dados), conforme o pedido. Não altere os originais.") if lista_anexos else "",
-        diretrizes(producao["agente"]),
-        regras_acervo(),
+        diretrizes(producao["agente"], producao.get("empresa") or "casa_veraneio"),
+        regras_fotos(producao.get("empresa") or "casa_veraneio"),
         f"Grave SOMENTE dentro da pasta atual ({pasta}), que é o rascunho desta peça. Arquivos de trabalho (HTML, "
         "fundos, recortes, logos, cópias de fotos, cenas brutas) ficam FORA da subpasta "
         f"{PASTA_FINAL}/. Só o que estiver em {PASTA_FINAL}/ vai para o Drive (não use \"MARKETING > THOMAS\" citado "
