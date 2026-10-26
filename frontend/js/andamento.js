@@ -39,19 +39,21 @@ function mostrarAndamento(ativa) {
     return;
   }
   const lista = novoEl('ol', 'andamento-lista');
-  ativa.etapas.forEach(({ texto, status }) => {
-    const item = novoEl('li', `andamento-etapa etapa-${status}`);
+  ativa.etapas.forEach(({ texto, status, sub }) => {
+    // subitem: slide, página ou cena da peça acima
+    const item = novoEl('li', `andamento-etapa etapa-${status}${sub ? ' andamento-sub' : ''}`);
     item.title = ROTULOS_ETAPA[status] || status;
     item.append(novoEl('span', 'andamento-icone', ICONES_ETAPA[status] || '○'), novoEl('span', 'andamento-texto', texto));
     lista.append(item);
   });
-  const feitas = ativa.etapas.filter((e) => e.status === 'concluida').length;
+  const principais = ativa.etapas.filter((e) => !e.sub);  // a contagem é por etapa/peça; slides são detalhe
+  const feitas = principais.filter((e) => e.status === 'concluida').length;
   const titulo = chatAberto && ativa.agente && ativa.agente !== dadosAgente(chatAberto.andar, chatAberto.agente).nome
     ? `Andamento · ${ativa.agente}` : 'Andamento';  // tarefa nascida aqui rodando em outro agente
   modalAndamento.replaceChildren(...[
     novoEl('h3', null, titulo),
     novoEl('p', 'andamento-pedido', ativa.pedido),
-    novoEl('p', 'andamento-progresso', `${feitas} de ${ativa.etapas.length} etapas`),
+    novoEl('p', 'andamento-progresso', `${feitas} de ${principais.length} etapas`),
     criarEstimativa(ativa.estimativa),
     lista,
   ].filter(Boolean));

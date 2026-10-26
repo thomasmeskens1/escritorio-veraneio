@@ -267,7 +267,10 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
         "Se esta pasta já tiver arquivos de uma tentativa anterior interrompida, reaproveite-os e faça só o que falta.",
         f"PROGRESSO: antes de começar cada peça, acrescente uma linha ao arquivo {comum.ARQUIVO_PROGRESSO} desta "
         "pasta no formato \"k/n | o que está fazendo\" (ex.: \"1/4 | Criando Story 1 — Lodge 239\"; numa peça só: "
-        "\"1/1 | Montando a arte\"). O sistema mostra isso ao usuário enquanto você trabalha.",
+        "\"1/1 | Montando a arte\"). Peça com várias partes (carrossel com slides, vídeo com cenas, apresentação com "
+        "páginas): logo abaixo da linha da peça, ao começar cada parte, acrescente um subitem começando com \"- \" no "
+        "formato \"- k/n | parte\" (ex.: \"- 2/8 | Slide 2 — Vero 90, Jarinu\"). O sistema mostra isso ao usuário "
+        "enquanto você trabalha.",
         "Ao terminar, responda com um resumo curto (até 5 linhas) do que foi entregue.",
     ]))
 

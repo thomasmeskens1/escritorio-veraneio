@@ -548,6 +548,12 @@
   color: #ced4da;
 }
 
+.andamento-sub {
+  padding-left: 22px;
+  font-size: 0.92em;
+  color: #adb5bd;
+}
+
 .andamento-icone {
   flex: none;
   width: 14px;
@@ -555,8 +561,20 @@
   font-weight: 700;
 }
 
-.etapa-concluida .andamento-icone { color: #69db7c; }
-.etapa-andamento .andamento-icone { color: #f4a261; animation: andamento-pulso 1.2s ease-in-out infinite; }
+.etapa-concluida .andamento-sub {
+  padding-left: 22px;
+  font-size: 0.92em;
+  color: #adb5bd;
+}
+
+.andamento-icone { color: #69db7c; }
+.etapa-andamento .andamento-sub {
+  padding-left: 22px;
+  font-size: 0.92em;
+  color: #adb5bd;
+}
+
+.andamento-icone { color: #f4a261; animation: andamento-pulso 1.2s ease-in-out infinite; }
 .etapa-pendente { color: #6c757d; }
 .etapa-falhou .andamento-icone,
 .etapa-falhou { color: #ff8787; }
@@ -566,7 +584,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .etapa-andamento .andamento-icone { animation: none; }
+  .etapa-andamento .andamento-sub {
+  padding-left: 22px;
+  font-size: 0.92em;
+  color: #adb5bd;
+}
+
+.andamento-icone { animation: none; }
 }
 
 /* Tela estreita: o andamento fica acima da conversa, com altura limitada */

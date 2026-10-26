@@ -49,7 +49,9 @@ TIPOS = {
     "STORIES": ("Stories do Instagram: vertical 9:16, 1080×1920, sem legenda. Vídeo predomina, mas também vale "
                 "arte estática, inclusive 2 a 5 telas do mesmo tema em sequência (um carrossel nos stories)"),
     "POST": "Single post estático do feed: UMA imagem 3:4, 1080×1440, com legenda (não é vídeo nem carrossel)",
-    "CARROSSEL": "Carrossel do feed: várias imagens 3:4, 1080×1440 cada, com legenda",
+    "CARROSSEL": ("Carrossel do feed: várias páginas 3:4, 1080×1440 cada, com legenda. Cada página é uma imagem, a menos "
+                  "que o roteiro do item peça vídeo: o Instagram aceita páginas em vídeo (MP4 3:4, até 60 s cada); aí "
+                  "essas páginas saem em vídeo e a equipe inclui o Editor de Vídeo"),
     "REELS": "Reels do Instagram: vídeo vertical 9:16, 1080×1920, com legenda",
     "SHORTS": "YouTube Shorts: vídeo vertical 9:16, 1080×1920, com título e descrição",
 }
@@ -143,7 +145,33 @@ _CAMPOS_ITEM = """id name board { id } group { title } creator { name }
 
 def obter_item(item_id: int) -> dict | None:
     itens = _api(f"query ($ids: [ID!]) {{ items(ids: $ids) {{ {_CAMPOS_ITEM} }} }}", {"ids": [str(item_id)]})["items"]
-    return itens[0] if itens else None
+    return _com_descricao(itens[0]) if itens else None
+
+
+VERSAO_DESCRICAO = "2026-04"  # a descrição do item só existe a partir desta versão da API
+
+
+def _com_descricao(item: dict) -> dict:
+    """Acrescenta item["descricao"]: o texto da descrição do item (onde fica o roteiro da peça)."""
+    try:
+        blocos = _api("query ($i: [ID!]) { items(ids: $i) { description { blocks { type content } } } }",
+                      {"i": [str(item["id"])]}, versao=VERSAO_DESCRICAO)["items"][0].get("description") or {}
+    except Exception as erro:  # sem descrição o briefing segue com as colunas
+        log.warning("Monday: não li a descrição do item %s (%s)", item.get("id"), erro)
+        return item
+    linhas, numero = [], 0
+    for bloco in blocos.get("blocks") or []:
+        try:
+            conteudo = json.loads(bloco["content"]) if isinstance(bloco["content"], str) else bloco["content"]
+        except (TypeError, ValueError):
+            continue
+        texto = "".join(parte.get("insert", "") for parte in conteudo.get("deltaFormat") or []).strip()
+        if not texto:
+            continue
+        numero = numero + 1 if bloco["type"] == "numbered list" else 0
+        linhas.append(f"{numero}. {texto}" if numero else (f"- {texto}" if bloco["type"] == "bulleted list" else texto))
+    item["descricao"] = "\n".join(linhas)
+    return item
 
 
 def buscar_item(nome: str) -> dict | None:
@@ -153,7 +181,8 @@ def buscar_item(nome: str) -> dict | None:
                  f"{{ items {{ {_CAMPOS_ITEM} }} }} }} }}", {"board": [str(BOARD)], "q": regras})
     candidatos = (itens["boards"] or [{}])[0].get("items_page", {}).get("items", [])
     exato = [i for i in candidatos if i["name"].strip().lower() == nome.strip().lower()]
-    return (exato or candidatos or [None])[0]
+    achado = (exato or candidatos or [None])[0]
+    return _com_descricao(achado) if achado else None
 
 
 def _valor(item: dict, coluna: str) -> dict:
@@ -282,6 +311,11 @@ def briefing(item: dict) -> str:
                            ("Data de postagem", "data"), ("Horário", "hora_mkmpv7kt"), ("Status", COL_STATUS)):
         if campos.get(coluna):
             linhas.append(f"- {rotulo}: {campos[coluna]}")
+    # Roteiro da peça (descrição do item): manda nos imóveis, na ordem e no formato de cada página. Teste real
+    # (26/10/2026): sem ele, a equipe escolheu os imóveis sozinha e fez só fotos num carrossel com páginas em vídeo.
+    if item.get("descricao"):
+        linhas.append("- ROTEIRO DA PEÇA (descrição do item; siga à risca os imóveis, a ordem e o formato de cada "
+                      f"página):\n{item['descricao'][:4000]}")
     if campos.get(COL_LEGENDA):
         linhas.append(f"- Legenda já existente:\n{campos[COL_LEGENDA][:1500]}")
     # Criativos já anexados não entram: são resultado de outra versão e confundem o formato pedido.

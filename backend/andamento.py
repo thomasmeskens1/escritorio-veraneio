@@ -91,10 +91,25 @@ def _etapas_da_producao(tarefa_id: int) -> list[dict]:
     linhas = producao.progresso_de(tarefa_id)
     if not linhas:
         return [{"texto": "Produzindo os arquivos no Claude Code (Max)", "status": "andamento"}]
-    etapas = [{"texto": (p[2] if (p := _peca(l)) else l), "status": "concluida"} for l in linhas]
+    # Linha que começa com "-" é subitem da peça acima (slide, página ou cena: "- 2/6 | Slide 2 — Vero 76").
+    etapas, pecas, subs = [], [], []
+    for linha in linhas:
+        sub = linha.lstrip().startswith(("-", "↳"))
+        texto = linha.lstrip(" -↳").strip()
+        peca = _peca(texto)
+        (subs if sub else pecas).append(peca)
+        if not sub:
+            subs = []
+        etapas.append({"texto": peca[2] if peca else texto, "status": "concluida", "sub": sub})
     etapas[-1]["status"] = "andamento"
-    if (ultima := _peca(linhas[-1])) and ultima[1] > ultima[0]:
-        etapas += [{"texto": f"Peça {k} de {ultima[1]}", "status": "pendente"} for k in range(ultima[0] + 1, ultima[1] + 1)]
+    if etapas[-1]["sub"]:  # slide em andamento: a peça dele também está em andamento
+        next(e for e in reversed(etapas) if not e["sub"])["status"] = "andamento"
+        if subs and (ultimo := subs[-1]) and ultimo[1] > ultimo[0]:
+            etapas += [{"texto": f"{k} de {ultimo[1]}", "status": "pendente", "sub": True}
+                       for k in range(ultimo[0] + 1, ultimo[1] + 1)]
+    if pecas and (ultima := pecas[-1]) and ultima[1] > ultima[0]:
+        etapas += [{"texto": f"Peça {k} de {ultima[1]}", "status": "pendente", "sub": False}
+                   for k in range(ultima[0] + 1, ultima[1] + 1)]
     return etapas
 
 
