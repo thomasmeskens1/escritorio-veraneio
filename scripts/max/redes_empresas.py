@@ -26,8 +26,8 @@ from sites_empresas import TELEFONE
 
 CANAL_VERO = "https://www.youtube.com/channel/UClSXjsr4I17PslswQpLqzYQ"
 CACHE = comum.DADOS / "redes" / "youtube"
-PAUSA_S = 8
-MAX_NOVOS_POR_CICLO = 15        # vídeos novos baixados por ciclo (o resto fica para o próximo)
+PAUSA_S = 30  # o YouTube limita downloads seguidos de legenda: devagar, e para no primeiro 429
+MAX_NOVOS_POR_CICLO = 5         # vídeos novos por ciclo de 6 h (o resto fica para os próximos)
 MAX_FALA = 15000                # caracteres da fala por vídeo no Cérebro (tours passam de 60 mil)
 LOTE = 3                        # vídeos por envio ao Cérebro
 
