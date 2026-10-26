@@ -56,7 +56,9 @@ def _r(valor) -> str:
 
 
 def _doc(empresa: str, ref: str, titulo: str, conteudo: str, tipo: str = "dados") -> dict:
-    return {"fonte_tipo": tipo, "empresa": empresa, "fonte_ref": ref, "titulo": f"{titulo} — {NOME_EMPRESA[empresa]}",
+    # A empresa entra na referência: o Cérebro identifica o documento só por (tipo, ref), e o mesmo resumo existe
+    # para as três empresas (sem isso, o envio de uma sobrescrevia o da outra).
+    return {"fonte_tipo": tipo, "empresa": empresa, "fonte_ref": ref.replace("analytics/", f"analytics/{empresa}/", 1), "titulo": f"{titulo} — {NOME_EMPRESA[empresa]}",
             "conteudo": f"Fonte: painel analítico interno (Sistema Casa Veraneio), dados de {date.today():%d/%m/%Y}\n"
                         "USO INTERNO: referência para decidir conteúdo e mídia; nunca publicar estes números (vendas, "
                         "investimento, resultados).\n" + conteudo}
