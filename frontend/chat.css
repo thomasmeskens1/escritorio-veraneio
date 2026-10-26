@@ -554,6 +554,17 @@
   color: #adb5bd;
 }
 
+.andamento-nivel-2 {
+  padding-left: 44px;
+  font-size: 0.88em;
+}
+
+/* nome da fase da peça (Teste do modelo, Montagem dos slides, Geração dos vídeos) */
+.andamento-fase {
+  color: #e9ecef;
+  font-weight: 600;
+}
+
 .andamento-icone {
   flex: none;
   width: 14px;

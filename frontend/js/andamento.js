@@ -39,9 +39,11 @@ function mostrarAndamento(ativa) {
     return;
   }
   const lista = novoEl('ol', 'andamento-lista');
-  ativa.etapas.forEach(({ texto, status, sub }) => {
-    // subitem: slide, página ou cena da peça acima
-    const item = novoEl('li', `andamento-etapa etapa-${status}${sub ? ' andamento-sub' : ''}`);
+  ativa.etapas.forEach(({ texto, status, sub, nivel, fase }) => {
+    // nível 1: fase da peça ("Geração dos vídeos") ou parte direto da peça; nível 2: slide/cena dentro da fase
+    const recuo = nivel ?? (sub ? 1 : 0);
+    const item = novoEl('li', `andamento-etapa etapa-${status}${recuo ? ` andamento-sub andamento-nivel-${recuo}` : ''}`
+      + (fase ? ' andamento-fase' : ''));
     item.title = ROTULOS_ETAPA[status] || status;
     item.append(novoEl('span', 'andamento-icone', ICONES_ETAPA[status] || '○'), novoEl('span', 'andamento-texto', texto));
     lista.append(item);
