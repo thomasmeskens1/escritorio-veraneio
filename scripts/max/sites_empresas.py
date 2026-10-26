@@ -79,17 +79,9 @@ def corporativo() -> list[dict]:
                            "fonte_ref": f"corporativo/espacos/lodge-{int(numero.group())}",
                            "titulo": f"{nome} — {local or 'local pendente'} (Corporativo)", "conteudo": "\n".join(linhas)})
 
-    for tipo, titulo in (("servicos", "Serviços para eventos"), ("eventos", "Tipos de evento atendidos"),
-                         ("cases", "Cases (eventos já realizados)")):
-        itens = []
-        for item in _json(f"{CORP}/wp-json/wp/v2/{tipo}?per_page=100"):
-            nome = html.unescape(item["title"]["rendered"]).strip()
-            descricao = _texto(item.get("content", {}).get("rendered", ""))[:400]
-            itens.append(f"- {nome}" + (f": {descricao}" if descricao else ""))
-        if itens:
-            documentos.append({"fonte_tipo": "site", "empresa": "cv_corporativo", "fonte_ref": f"corporativo/{tipo}",
-                               "titulo": f"{titulo} — Casa Veraneio Corporativo",
-                               "conteudo": f"Fonte: {CORP} (site da Casa Veraneio Corporativo)\n" + "\n".join(itens)})
+    espacos = list(documentos)
+    documentos += _paginas_corporativo()
+    documentos.append(_panorama_corporativo(espacos, [d for d in documentos if d["fonte_ref"].startswith("corporativo/cases/")]))
 
     for pagina in _json(f"{CORP}/wp-json/wp/v2/pages?per_page=50&slug=institucional"):
         if (texto := _texto(pagina["content"]["rendered"])):
@@ -97,6 +89,76 @@ def corporativo() -> list[dict]:
                                "titulo": "Institucional — Casa Veraneio Corporativo",
                                "conteudo": f"Fonte: {pagina['link']}\n{texto[:6000]}"})
     return documentos
+
+
+def _miolo_corporativo(url: str) -> str:
+    """Texto da página renderizada sem o menu (até "Solicite um Orçamento") e sem o rodapé (contatos, CNPJ).
+    O site é montado no Elementor: o conteúdo de cases, eventos e serviços não vem pela API, só na página."""
+    texto = _texto(_baixar(url))
+    botao = "Solicite um Orçamento"
+    inicio = texto.find(botao, texto.find(botao) + 1) if texto.count(botao) > 1 else texto.find(botao)
+    fins = [i for i in (texto.find(" Instagram Facebook Linkedin"), texto.find("Entre em contato")) if i > 0]
+    miolo = texto[inicio + len(botao) if inicio >= 0 else 0:min(fins or [len(texto)])]
+    return re.sub(r"\S+@\S+", "", miolo.replace(" Saiba mais", "")).strip()
+
+
+def _doc_corp(ref: str, titulo: str, url: str, texto: str) -> dict:
+    return {"fonte_tipo": "site", "empresa": "cv_corporativo", "fonte_ref": ref,
+            "titulo": f"{titulo} — Casa Veraneio Corporativo",
+            "conteudo": f"Fonte: {url} (site da Casa Veraneio Corporativo)\n{texto[:6000]}"}
+
+
+def _paginas_corporativo() -> list[dict]:
+    """Um documento por case e por tipo de evento; serviços, orçamento e apresentação com o texto completo."""
+    documentos, cases = [], []
+    for tipo, rotulo in (("cases", "Case"), ("eventos", "Tipo de evento")):
+        for item in _json(f"{CORP}/wp-json/wp/v2/{tipo}?per_page=100&_fields=slug,title,link"):
+            nome = html.unescape(item["title"]["rendered"]).strip()
+            try:
+                texto = _miolo_corporativo(item["link"])
+            except OSError as erro:
+                log(f"   Corporativo: não li {item['link']} ({erro})")
+                continue
+            if tipo == "cases":  # clientes reais, alguns pessoa física: referência interna, não material de post
+                texto += ("\nUso: referência de evento já realizado. Nome de cliente (sobretudo pessoa física) em "
+                          "publicação só com autorização do Thomas.")
+            documentos.append(_doc_corp(f"corporativo/{tipo}/{item['slug']}", f"{rotulo}: {nome}", item["link"], texto))
+            if tipo == "cases":
+                cases.append(f"- {nome}: " + texto[:220])
+    # Índices (mesmas refs dos resumos antigos, que assim são substituídos)
+    documentos.append(_doc_corp("corporativo/cases", "Cases (eventos já realizados)", f"{CORP}/_cases/",
+                                "Eventos já produzidos pela Casa Veraneio Corporativo (um documento por case):\n"
+                                + "\n".join(cases)))
+    for slug, ref, titulo in (("servicoss", "corporativo/servicos", "Serviços (produção 360°)"),
+                              ("eventos-2", "corporativo/eventos", "Eventos que produzimos"),
+                              ("solicite-um-orcamento", "corporativo/orcamento",
+                               "Pedido de orçamento: o que o cliente informa"),
+                              ("home-2", "corporativo/home", "Página inicial")):
+        for pagina in _json(f"{CORP}/wp-json/wp/v2/pages?slug={slug}&_fields=link"):
+            try:
+                documentos.append(_doc_corp(ref, titulo, pagina["link"], _miolo_corporativo(pagina["link"])))
+            except OSError as erro:
+                log(f"   Corporativo: não li {pagina['link']} ({erro})")
+    return documentos
+
+
+def _panorama_corporativo(espacos: list[dict], cases: list[dict]) -> dict:
+    """Visão geral do portfólio: espaços por cidade, com o maior público e os cases realizados em cada um."""
+    por_cidade: dict[str, list[str]] = {}
+    for doc in espacos:
+        local = re.search(r"Local: (.+)", doc["conteudo"])
+        convidados = re.search(r"até (\d+) pessoas", doc["conteudo"])
+        numero = doc["fonte_ref"].rsplit("-", 1)[-1]
+        realizados = [re.sub(r" — Casa Veraneio Corporativo$", "", c["titulo"]).removeprefix("Case: ")
+                      for c in cases if re.search(rf"Espaço:\s*Lodge 0*{numero}\b", c["conteudo"])]
+        por_cidade.setdefault(local.group(1) if local else "local pendente", []).append(
+            f"Lodge {numero}" + (f" (até {convidados.group(1)} convidados)" if convidados else "")
+            + (f" — cases: {', '.join(realizados)}" if realizados else ""))
+    linhas = [f"- {cidade} ({len(itens)} espaço(s)): " + "; ".join(itens) for cidade, itens in
+              sorted(por_cidade.items(), key=lambda par: -len(par[1]))]
+    return _doc_corp("corporativo/panorama", "Panorama dos espaços por cidade", f"{CORP}/espacos/",
+                     f"{len(espacos)} espaços no site, em {len(por_cidade)} cidade(s). A numeração \"Lodge N\" é a do "
+                     "Corporativo (não é a dos Lodges da Casa Veraneio).\n" + "\n".join(linhas))
 
 
 # --- Casa Vero Imóveis -----------------------------------------------------------------------------
@@ -119,10 +181,16 @@ def _imovel_vero(url: str) -> dict | None:
     sobre = re.search(r"Sobre o Imóvel\s*(.*?)\s*Características do Imóvel", texto)
     caracteristicas = re.search(r"Características do Imóvel\s*(.*?)\s*(?:Venda|Locação)\s+R\$", texto)
     valores = re.findall(r"(Venda|Locação|Condomínio|IPTU)\s+(R\$\s*[\d.,]+|Consulte)", texto)
+    # Título comercial do anúncio (ex.: "Casa no Condomínio Terras de São José 1"), entre o código e os números.
+    # (o primeiro "Código:" da página é o do título da aba; o anúncio começa em "Voltar")
+    chamada = re.search(rf"Código:\s*Vero\s*{numero}\s+(.*?)\s+\d+\s*(?:Dormitório|Suíte|Banheiro|Vaga)",
+                        texto[max(texto.find("Voltar"), 0):])
     linhas = [f"Fonte: {url} (site da Casa Vero Imóveis)",
               f"Imóvel Vero {numero} da Casa Vero Imóveis (imobiliária). Não confundir com Lodges da Casa Veraneio "
               "nem com espaços do Corporativo, mesmo com nome ou condomínio parecido.",
               f"Negócio e localização: {cabeca.group(1)} — {cabeca.group(2)}" if cabeca else "Localização: PENDENTE"]
+    if chamada and len(chamada.group(1)) < 160 and chamada.group(1).strip() != f"Vero {numero}":
+        linhas.append(f"Título do anúncio no site: {chamada.group(1)}")
     if resumo or area or terreno:
         linhas.append("Resumo: " + " | ".join(resumo + ([f"{area.group(1)} m² construídos"] if area else [])
                                               + ([f"terreno {terreno.group(1)} m²"] if terreno else [])))
@@ -151,7 +219,56 @@ def casa_vero() -> list[dict]:
         documentos.append({"fonte_tipo": "site", "empresa": "casa_vero", "fonte_ref": "vero/sobre",
                            "titulo": "Sobre a Casa Vero Imóveis",
                            "conteudo": f"Fonte: {VERO}/sobre\n" + sobre[inicio:inicio + 2500].split(" Contato ")[0]})
+    documentos += _paginas_vero()
+    documentos.append(_panorama_vero([d for d in documentos if d["fonte_ref"].startswith("vero/imoveis/")]))
     return documentos
+
+
+def _miolo_vero(url: str) -> str:
+    """Texto da página sem o menu do topo e sem o rodapé (endereço, CRECI, aviso de cookies)."""
+    texto = _texto(_baixar(url))
+    texto = texto.split(" Meu Favoritos ", 1)[-1]
+    return texto.split(" Casa Vero Imóveis Casa Vero Imóveis - ")[0].split(" Usamos cookies")[0].strip()
+
+
+def _paginas_vero() -> list[dict]:
+    documentos = []
+    for caminho, ref, titulo in (("/", "vero/home", "Página inicial: cidades, tipos e condomínios atendidos"),
+                                 ("/anuncie", "vero/anuncie", "Anuncie: o que o proprietário informa para vender")):
+        try:
+            texto = _miolo_vero(f"{VERO}{caminho}")
+        except OSError as erro:
+            log(f"   Casa Vero: não li {caminho} ({erro})")
+            continue
+        documentos.append({"fonte_tipo": "site", "empresa": "casa_vero", "fonte_ref": ref,
+                           "titulo": f"{titulo} — Casa Vero Imóveis",
+                           "conteudo": f"Fonte: {VERO}{caminho} (site da Casa Vero Imóveis)\n{texto[:6000]}"})
+    return documentos
+
+
+def _panorama_vero(imoveis: list[dict]) -> dict:
+    """Visão geral do portfólio (por cidade e por tipo), com o título de cada anúncio. Sem preços: a regra geral
+    da Casa Vero é não publicar valores (cada ficha guarda os seus, para consulta interna)."""
+    por_cidade: dict[str, list[str]] = {}
+    tipos: dict[str, int] = {}
+    for doc in imoveis:
+        local = re.search(r"Negócio e localização: \w+ — (.+)", doc["conteudo"])
+        chamada = re.search(r"Título do anúncio no site: (.+)", doc["conteudo"])
+        resumo = re.search(r"Resumo: (.+)", doc["conteudo"])
+        numero = doc["fonte_ref"].rsplit("-", 1)[-1]
+        tipo = next((t for t in ("Casa em Condomínio", "Fazenda", "Sítio", "Casa") if local and local.group(1).startswith(t)),
+                    "Outro")
+        tipos[tipo] = tipos.get(tipo, 0) + 1
+        cidade = (local.group(1).removeprefix(tipo).strip() if local else "local pendente")
+        por_cidade.setdefault(cidade.split(" Condomínio")[0], []).append(
+            f"Vero {numero}" + (f" \"{chamada.group(1)}\"" if chamada else "")
+            + (f" ({resumo.group(1).split(' | ')[0]})" if resumo else ""))
+    linhas = [f"- {cidade}: " + "; ".join(itens) for cidade, itens in sorted(por_cidade.items(), key=lambda p: -len(p[1]))]
+    return {"fonte_tipo": "site", "empresa": "casa_vero", "fonte_ref": "vero/panorama",
+            "titulo": "Panorama do portfólio — Casa Vero Imóveis",
+            "conteudo": (f"Fonte: {VERO}/imoveis (site da Casa Vero Imóveis)\n{len(imoveis)} imóveis à venda no site. "
+                         "Por tipo: " + ", ".join(f"{t} {n}" for t, n in sorted(tipos.items(), key=lambda p: -p[1]))
+                         + ".\nPor local (título do anúncio e dormitórios):\n" + "\n".join(linhas))}
 
 
 def rodar() -> None:
