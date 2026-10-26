@@ -23,6 +23,7 @@ import traceback
 from pathlib import Path
 from urllib.parse import urlparse
 
+import catalogo_fotos_empresas
 import catalogo_lodges
 import comum
 import planilha_lodges
@@ -193,9 +194,19 @@ def diretrizes(agente: str, empresa: str = "casa_veraneio") -> str:
 
 
 def regras_fotos(empresa: str) -> str:
-    """Acervo de fotos dos Lodges: só para peças da Casa Veraneio (as outras empresas usam o que vier no pedido)."""
+    """Fotos por empresa, todas SOMENTE LEITURA: Casa Veraneio = acervo dos Lodges; Casa Vero e Corporativo = as
+    pastas indicadas pelo Thomas, pelo catálogo (catalogo_fotos_empresas.py). Arquivos do pedido vêm primeiro."""
     if empresa == "casa_veraneio":
         return regras_acervo()
+    indices = {"casa_vero": catalogo_fotos_empresas.INDICE_VERO, "cv_corporativo": catalogo_fotos_empresas.INDICE_CORP}
+    if empresa in indices and indices[empresa].exists():
+        return (f"FOTOS: use primeiro os arquivos anexados e as referências do pedido. Para completar, as fotos desta "
+                f"empresa estão no índice {indices[empresa]} (leia com python): use SÓ a pasta do imóvel/espaço da "
+                "peça, como o índice indica; no Corporativo, o acervo dos Lodges da Casa Veraneio só nos espaços "
+                "marcados \"PODE (mesma casa)\". Tudo SOMENTE LEITURA: COPIE o arquivo com python (shutil.copy2) "
+                f"para a subpasta {PASTA_ACERVO}/ da pasta atual e trabalhe na cópia; nunca grave, mova, renomeie ou "
+                "apague nada nas pastas de fotos. Arquivos grandes: copie um por vez, só os que vai usar. Se a pasta "
+                "do imóvel não existir no índice, entregue o layout com marcadores de imagem e avise no resumo.")
     return ("FOTOS: esta peça NÃO é da Casa Veraneio. Não use o acervo de fotos dos Lodges (é da Casa Veraneio). Use só "
             "os arquivos anexados e as referências do pedido; se não houver foto, entregue o layout com marcadores de "
             "imagem e avise no resumo.")
@@ -264,7 +275,10 @@ def comando_producao() -> list[str]:
     return [comum.claude_exe(), "-p", "--output-format", "json", "--permission-mode", "acceptEdits",
             "--max-turns", "120", "--tools", "Read,Write,Edit,Glob,Bash",  # 4 stories com editáveis passam de 40
             "--allowedTools", "Read,Write,Edit,Glob,Bash(ffmpeg:*),Bash(ffprobe:*),Bash(python:*)",
-            "--add-dir", str(comum.ACERVO), "--add-dir", str(comum.CEREBRO)]
+            "--add-dir", str(comum.ACERVO), "--add-dir", str(comum.CEREBRO),
+            # fotos da Casa Vero e do Corporativo (somente leitura, como o acervo; índices em CÉREBRO)
+            *[a for pasta in [*catalogo_fotos_empresas.PASTAS_VERO, catalogo_fotos_empresas.FOTOS_EVENTOS]
+              for a in ("--add-dir", str(pasta))]]
 
 
 # Conferência técnica depois do render (ideia do OpenMontage): medida e duração de cada arquivo final contra o
@@ -397,6 +411,7 @@ def catalogo_em_segundo_plano() -> None:
             catalogo_lodges.rodar()
             planilha_lodges.rodar()
             sites_empresas.rodar()  # Corporativo e Casa Vero, cada um com a sua etiqueta de empresa
+            catalogo_fotos_empresas.rodar()  # fotos da Casa Vero e do Corporativo (índices em CÉREBRO)
             try:  # Casa Veraneio: todos os Lodges (listagem da API + sondagem de cada número) a cada 6 h
                 log(f"Site da Casa Veraneio: {site_casaveraneio.resumo_texto(site_casaveraneio.reprocessar())}")
             except Exception as erro:
