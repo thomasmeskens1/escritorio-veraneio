@@ -75,6 +75,13 @@ PERFIS = {
                 "peças, se ele não disse, crie sem responsável (ele aloca depois no Monday) — não pergunte. Só numa "
                 "peça avulsa (uma única peça) pergunte o responsável com o formulário (opções: Bruna, Fran, Luiz, "
                 "Thomas) e use criar_item_monday depois da resposta. "
+                "DATAS: nunca invente data, horário nem mês; se o usuário não deu data (ou disse que não há), deixe "
+                "data_postagem, data_entrega e horario vazios — o item vai para o grupo 'Definir Data' e, quando a "
+                "data for definida no Monday, ele vai sozinho para o mês certo, em ordem. ITEM JÁ CRIADO: respostas "
+                "do usuário sobre uma peça que já existe vão para atualizar_item_monday (nunca crie outro item igual); "
+                "crie o item quando tiver o essencial e complete depois. ROTEIRO: sempre preencha o campo roteiro "
+                "com o briefing da peça (capa, cada página/cena com imóvel, local e destaque, formato e duração, CTA), "
+                "para a produção não depender do chat. "
                 "STORIES NUNCA têm legenda: no planejamento de stories não escreva, rascunhe nem sugira legenda "
                 "(nem no chat, nem no Monday); descreva só tema, telas e roteiro visual. Não gaste tokens com isso.",
         "backstory": "Gerencia perfis de hospitalidade e sabe o que performa em cada formato e horário.",
@@ -221,13 +228,31 @@ def _historico_relevante(historico: list, pedido: str) -> list:
             if not (outros := _lodges(f"{h['texto']} {h['resposta'] or ''}")) or outros & citados]
 
 
+BLOCO_FORMULARIO = re.compile(r"<<FORMULARIO>>(.*?)<<FIM DO FORMULARIO>>", re.S)
+TAMANHO_USUARIO, TAMANHO_RESPOSTA = 2500, 700
+
+
+def _sem_formulario(resposta: str) -> str:
+    """O JSON do formulário vira só a lista do que foi perguntado (o JSON gasta tokens e não ajuda)."""
+    def resumir(achado: re.Match) -> str:
+        rotulos = re.findall(r'"rotulo"\s*:\s*"([^"]+)"', achado.group(1))
+        return f"[formulário perguntando: {'; '.join(rotulos)}]"
+    return BLOCO_FORMULARIO.sub(resumir, resposta or "")
+
+
 def _resumo_historico(historico: list) -> str:
-    """Trocas anteriores, encurtadas para não pesar em tokens."""
-    trocas = [f"- Usuário: {h['texto'][:300]}\n  Você: {(h['resposta'] or '')[:600]}" for h in historico]
+    """Trocas anteriores. As mensagens do usuário vêm (quase) inteiras: são o briefing e as respostas dos
+    formulários. Teste real (26/10/2026): cortadas em 300 caracteres, o agente perdeu a lista dos imóveis e as
+    respostas e voltou a perguntar tudo. As respostas do agente vêm resumidas."""
+    trocas = [f"- Usuário: {h['texto'][:TAMANHO_USUARIO]}\n  Você: {_sem_formulario(h['resposta'])[:TAMANHO_RESPOSTA]}"
+              for h in historico]
     return ("Conversa recente com este usuário (só contexto: o PEDIDO ATUAL prevalece; se ele falar de outro "
             "Lodge, produto ou assunto, não misture com os dados desta conversa; se o pedido atual é um pedido novo "
             "e não a resposta a uma pergunta sua, não retome pendências antigas; dados da ficha oficial valem mais "
-            "que o que foi dito na conversa):\n" + "\n".join(trocas))
+            "que o que foi dito na conversa). Se o pedido atual continua o mesmo trabalho, o briefing que o usuário "
+            "deu continua valendo inteiro, e o que ele já respondeu é DEFINITIVO: nunca pergunte de novo; \"não "
+            "informado\", \"não possui\" ou \"não usaremos\" encerram a pergunta (siga sem esse dado):\n"
+            + "\n".join(trocas))
 
 
 def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: str = "casa_veraneio") -> str:
@@ -241,7 +266,9 @@ def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: st
     if pedido:  # imóvel citado: a ficha oficial DA EMPRESA entra inteira (fichas.py, nível 2 da árvore)
         import fichas  # import tardio: o Cérebro carrega o banco
 
-        if (fichas_lodges := fichas.fichas_citadas(pedido, empresa)):
+        # Imóveis citados no pedido e no briefing da conversa (a resposta a um formulário não repete a lista).
+        citados = "\n".join([pedido, *(h["texto"] for h in historico)])
+        if (fichas_lodges := fichas.fichas_citadas(citados, empresa)):
             partes.append(fichas_lodges)
     partes.append(INSTRUCOES)
     import correcoes  # import tardio: usa o banco

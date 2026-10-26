@@ -68,8 +68,8 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
     """Uma tentativa num modelo, com o histórico da conversa. Devolve (resultado ou None, erro)."""
     from agents.executor import LocalOcupado, MaxOcupado, executar  # import tardio: CrewAI é pesado
 
-    historico = tarefas.historico(tarefa["usuario"], tarefa["andar"], tarefa["agente"], tarefa["id"],
-                                  empresa=tarefa["empresa"])
+    historico = tarefas.historico(tarefa["usuario"], tarefa["andar"], tarefa["agente"], tarefa["id"], limite=4,
+                                  empresa=tarefa["empresa"])  # 4 trocas: o briefing sobrevive a 3 rodadas de formulário
     inicio = time.monotonic()
     try:
         tarefas.registrar_evento(tarefa["id"], "tentativa", agente.id, etapa.modelo)

@@ -8,16 +8,26 @@ Stress test: o Designer marcou a capacidade do Lodge 20 como "pendente" porque a
 número (os dados ficam espalhados entre site, planilha e acervo). Com a ficha, o essencial chega sempre junto.
 """
 
+import json
 import re
 
 import cerebro_base as base
+import config
 
 LODGE_CITADO = re.compile(r"\blodges?\s*(?:n[ºo°.]*\s*)?#?0*(\d{1,3})\b", re.IGNORECASE)
 VERO_CITADO = re.compile(r"\bvero\s*#?0*(\d{1,4})\b", re.IGNORECASE)  # imóveis da Casa Vero: "Vero 87"
 # Onde está a ficha de cada empresa (ingestão do site de cada uma; nunca procurar na base de outra).
 REF_FICHA = {"casa_veraneio": "site/lodges/lodge-{n}", "cv_corporativo": "corporativo/espacos/lodge-{n}",
              "casa_vero": "vero/imoveis/vero-{n}"}
-MAX_FICHAS = 3
+MAX_FICHAS = 8  # um carrossel pode citar vários imóveis; acima de 3, cada ficha vem mais curta
+TAMANHO_FICHA, TAMANHO_FICHA_CURTA = 1800, 900
+# Link do site no pedido: a ficha vem pelo próprio link (o agente não abre páginas; teste real: "Lodge 76" com o link
+# da Casa Vero ficou sem ficha porque o texto não dizia "Vero 76").
+LINK_SITE = re.compile(r"https?://(?:www\.)?(?:casaveroimoveis\.com|corporativo\.casaveraneio\.com|casaveraneio\.com)"
+                       r"/[^\s)\]>\"']+", re.IGNORECASE)
+# Apelidos provisórios entre empresas, definidos pelo Thomas (ex.: o Vero 90 ainda não está no site da Casa Vero e
+# usa os dados do Lodge 90 da Casa Veraneio): {"casa_vero": {"90": {"empresa": "casa_veraneio", "numero": "90"}}}
+ARQUIVO_APELIDOS = config.DADOS_DIR / "apelidos_imoveis.json"
 CABECALHO = ("FICHAS OFICIAIS DOS IMÓVEIS CITADOS, DESTA EMPRESA (dados do site; valem sobre a conversa anterior e "
              "sobre trechos soltos do Cérebro; reconfira preços antes de publicar):")
 
@@ -28,14 +38,18 @@ def _trechos(ref: str, empresa: str = "casa_veraneio") -> list:
                                  "AND empresa = ? ORDER BY id", (ref, empresa)).fetchall()
 
 
-def _da_empresa(numero: str, empresa: str) -> str | None:
+def _da_empresa(numero: str, empresa: str, limite: int = TAMANHO_FICHA) -> str | None:
     """Corporativo e Casa Vero: o documento do site inteiro (já é curto e estruturado)."""
-    trechos = _trechos(REF_FICHA[empresa].format(n=numero), empresa)
+    return _do_documento(REF_FICHA[empresa].format(n=numero), empresa, limite)
+
+
+def _do_documento(ref: str, empresa: str, limite: int = TAMANHO_FICHA) -> str | None:
+    trechos = _trechos(ref, empresa)
     if not trechos:
         return None
     titulo = trechos[0]["titulo"].split(" › ")[0]
     corpo = "\n".join(t["conteudo"] for t in trechos)
-    return f"- {titulo}\n  " + "\n  ".join(l.strip() for l in corpo.splitlines() if l.strip())[:1800]
+    return f"- {titulo}\n  " + "\n  ".join(l.strip() for l in corpo.splitlines() if l.strip())[:limite]
 
 
 def _do_site(numero: str) -> str | None:
@@ -105,25 +119,84 @@ def _sem_acento(texto: str) -> str:
     return unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
 
 
-def ficha(numero: str, empresa: str = "casa_veraneio") -> str | None:
+def _apelido(numero: str, empresa: str) -> dict | None:
+    try:
+        return json.loads(ARQUIVO_APELIDOS.read_text(encoding="utf-8")).get(empresa, {}).get(numero)
+    except (OSError, ValueError):
+        return None
+
+
+def ficha(numero: str, empresa: str = "casa_veraneio", limite: int = TAMANHO_FICHA) -> str | None:
     numero = str(int(numero))
     if empresa != "casa_veraneio":
-        return _da_empresa(numero, empresa)
-    return _do_site(numero) or _da_planilha(numero)
+        achada = _da_empresa(numero, empresa, limite)
+        if achada or not (apelido := _apelido(numero, empresa)):
+            return achada
+        # Apelido definido pelo Thomas: o mesmo imóvel cadastrado em outra empresa, até entrar no site desta.
+        origem = ficha(apelido["numero"], apelido["empresa"], limite)
+        # Sem diárias, temporadas e taxas de hospedagem: não valem para a outra empresa.
+        origem = origem and "\n".join(l for l in origem.splitlines()
+                                      if not re.search(r"di[aá]ria|temporada|taxa de ativa|estadia", l, re.I))
+        rotulo = "Vero" if empresa == "casa_vero" else "Lodge"
+        return origem and (f"- {rotulo} {numero} (cadastro provisório definido pelo Thomas: os dados abaixo são do "
+                           f"Lodge {apelido['numero']} da empresa {apelido['empresa']}; use descrição, localização "
+                           f"e características; NUNCA diárias, temporadas ou regras de hospedagem)\n  {origem[2:]}")
+    texto = _do_site(numero) or _da_planilha(numero)
+    return texto and texto[:limite]
+
+
+def _ref_do_link(link: str) -> tuple[str, str] | None:
+    """(fonte_ref, empresa) do documento do site cuja linha "Fonte:" traz este link."""
+    caminho = re.sub(r"^https?://(?:www\.)?", "", link.strip().rstrip("/.,;")).split("?")[0]
+    with base._trava:
+        linha = base.db().execute("SELECT fonte_ref, empresa FROM conhecimento WHERE ativo = 1 AND conteudo LIKE ? "
+                                  "ORDER BY id LIMIT 1", (f"%Fonte: %{caminho}%",)).fetchone()
+    return (linha["fonte_ref"], linha["empresa"]) if linha else None
+
+
+def _numero_da_ref(ref: str) -> str:
+    return ref.rsplit("-", 1)[-1]
 
 
 def fichas_citadas(texto: str, empresa: str = "casa_veraneio") -> str:
-    """Fichas dos imóveis citados no pedido, SÓ da empresa do trabalho (até MAX_FICHAS); "" se nenhum.
-    Citado e sem ficha nessa empresa: o agente é avisado para não usar dado de outra empresa nem inventar."""
-    padrao = VERO_CITADO if empresa == "casa_vero" else LODGE_CITADO
-    numeros = list(dict.fromkeys(str(int(n)) for n in padrao.findall(texto or "")))[:MAX_FICHAS]
-    if not numeros:
+    """Fichas dos imóveis citados (pelo número ou pelo link do site) da empresa do trabalho; "" se nenhum.
+    Link de OUTRA empresa mandado pelo usuário: a ficha entra marcada como exceção autorizada por ele.
+    Citado pelo número e sem ficha nessa empresa: o agente é avisado para não usar dado de outra empresa nem inventar."""
+    texto = texto or ""
+    links = list(dict.fromkeys(LINK_SITE.findall(texto)))[:MAX_FICHAS]
+    # Na Casa Vero, "Lodge 76" é o Vero 76 (mesma numeração do grupo).
+    padroes = [VERO_CITADO, LODGE_CITADO] if empresa == "casa_vero" else [LODGE_CITADO]
+    sem_links = LINK_SITE.sub(" ", texto)
+    numeros = list(dict.fromkeys(str(int(n)) for p in padroes for n in p.findall(sem_links)))[:MAX_FICHAS]
+    if not numeros and not links:
         return ""
-    achadas = {n: ficha(n, empresa) for n in numeros}
-    linhas = [f for f in achadas.values() if f]
+    limite = TAMANHO_FICHA if len(numeros) <= 3 else TAMANHO_FICHA_CURTA
+    linhas, cobertos, outras = [], set(), []
+    for link in links:
+        if not (achado := _ref_do_link(link)):
+            continue
+        ref, dona = achado
+        if dona == empresa:
+            cobertos.add(_numero_da_ref(ref))
+            linhas.append(ficha(_numero_da_ref(ref), dona, limite) if dona == "casa_veraneio"
+                          else _do_documento(ref, dona, limite))
+        else:
+            outras.append((link, ref, dona))
+    achadas = {n: ficha(n, empresa, limite) for n in numeros if n not in cobertos}
+    linhas += [f for f in achadas.values() if f]
     faltando = [n for n, f in achadas.items() if not f]
+    for link, ref, dona in outras:
+        numero = _numero_da_ref(ref)
+        if achadas.get(numero) and _apelido(numero, empresa):  # já veio pelo cadastro provisório (ex.: Vero 90)
+            continue
+        dados = (ficha(numero, dona, limite) if dona == "casa_veraneio" else _do_documento(ref, dona, limite)) or ""
+        linhas.append(f"- EXCEÇÃO AUTORIZADA PELO USUÁRIO: ele mandou o link {link}, que é de OUTRA empresa ({dona}), "
+                      "para usar neste trabalho. Use só descrição, localização e características; nunca preços, "
+                      f"diárias ou condições da outra empresa.\n  {dados[2:]}")
+        faltando = [n for n in faltando if n != numero]
     if faltando:
         rotulo = "Vero" if empresa == "casa_vero" else "Lodge"
         linhas.append(f"- SEM FICHA nesta empresa: {', '.join(f'{rotulo} {n}' for n in faltando)}. Não use dados de "
                       "outra empresa com o mesmo nome nem invente: pergunte ao usuário com um formulário.")
-    return f"{CABECALHO}\n" + "\n".join(linhas)
+    linhas = [l for l in linhas if l]
+    return f"{CABECALHO}\n" + "\n".join(linhas) if linhas else ""

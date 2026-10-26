@@ -23,6 +23,7 @@ from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile
 
 import config
 import empresas
+import monday_datas
 import tarefas
 
 log = logging.getLogger(__name__)
@@ -123,10 +124,10 @@ def segredo_webhook() -> str:
 
 # ---------- API (bloqueante: chamar com asyncio.to_thread) ----------
 
-def _api(consulta: str, variaveis: dict | None = None) -> dict:
+def _api(consulta: str, variaveis: dict | None = None, versao: str = VERSAO_API) -> dict:
     corpo = json.dumps({"query": consulta, "variables": variaveis or {}}).encode()
     requisicao = urllib.request.Request(API, data=corpo, headers={
-        "Authorization": TOKEN, "Content-Type": "application/json", "API-Version": VERSAO_API})
+        "Authorization": TOKEN, "Content-Type": "application/json", "API-Version": versao})
     with urllib.request.urlopen(requisicao, timeout=60) as resposta:
         dados = json.load(resposta)
     if dados.get("errors"):
@@ -224,7 +225,7 @@ def grupo_por_nome(nome: str, criar: bool = False) -> dict | None:
     if achado or not criar:
         return achado
     return _api("mutation ($b: ID!, $n: String!) { create_group(board_id: $b, group_name: $n) { id title } }",
-                {"b": str(BOARD), "n": nome.strip().capitalize()})["create_group"]
+                {"b": str(BOARD), "n": nome.strip()[:1].upper() + nome.strip()[1:]})["create_group"]  # "Definir Data" intacto
 
 
 def itens_do_grupo(grupo_id: str) -> list[dict]:
@@ -421,7 +422,12 @@ async def webhook(segredo: str, request: Request):
     if "challenge" in corpo:  # verificação do Monday ao criar o webhook
         return {"challenge": corpo["challenge"]}
     evento = corpo.get("event") or {}
-    if int(evento.get("boardId") or 0) != BOARD or evento.get("columnId") != COL_BOTAO or not evento.get("pulseId"):
+    if int(evento.get("boardId") or 0) != BOARD or not evento.get("pulseId"):
+        return {"ok": True, "ignorado": True}
+    if evento.get("columnId") == monday_datas.COL_DATA:  # data definida/alterada: grupo do mês, em ordem de data
+        _em_segundo_plano(asyncio.to_thread(monday_datas.reposicionar_seguro, int(evento["pulseId"])))
+        return {"ok": True}
+    if evento.get("columnId") != COL_BOTAO:
         return {"ok": True, "ignorado": True}
     gatilho = str(evento.get("triggerUuid") or f"{evento['pulseId']}-{evento.get('triggerTime')}")
     with _db() as db:  # o Monday pode reenviar: um clique = uma tarefa
