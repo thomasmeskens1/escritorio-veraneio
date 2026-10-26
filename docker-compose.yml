@@ -12,6 +12,7 @@ services:
       FRONTEND_DIR: /frontend
       ARQUIVO_BANCO: /var/lib/escritorio/escritorio.db # banco no volume (rápido); o resto de dados/ segue no PC
       CREWAI_TELEMETRY_OPT_OUT: "true"
+      PAINEL_DIR: /painel
       OTEL_SDK_DISABLED: "true"
     extra_hosts:
       - "host.docker.internal:host-gateway" # acesso ao Ollama rodando no host
@@ -19,6 +20,8 @@ services:
       - ./backend:/app
       - ./frontend:/frontend:ro
       - banco:/var/lib/escritorio
+      # painel analítico (Sistema Casa Veraneio), só leitura: chave do Brevo para os rascunhos do E-mail Marketing
+      - ${LOCALAPPDATA:-./backend/dados}/SocialAnalytics:/painel:ro
     # Um processo só (estado dos agentes e WebSockets em memória). Atrás do túnel, o IP real do visitante
     # vem nos cabeçalhos X-Forwarded-* (bloqueio de login por IP).
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips "*"

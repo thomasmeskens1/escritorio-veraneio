@@ -103,6 +103,11 @@ ANDARES: dict[str, dict[str, Agente]] = {
                descricao="Organiza o calendário editorial, formatos, horários e a rotina de publicação.",
                exemplo="Monte o calendário de posts da próxima semana.",
                aparencia=_ap("#ffdbac", "coque", "#d4a373", "moletom", "#ff006e", "#3a0ca3", "fone")),
+        Agente(id="email_marketing", nome="E-mail Marketing", funcao="Campanhas de e-mail (Brevo)", setor="conteudo",
+               descricao="Escreve as campanhas de e-mail (assunto, pré-header, blocos e botões) no padrão dos e-mails "
+                         "que já funcionaram e deixa o rascunho pronto no Brevo para revisão.",
+               exemplo="Escreva o e-mail do feriado de 15/11 com 3 Lodges no litoral.",
+               aparencia=_ap("#e0ac69", "longo", "#3b2f2f", "camisa", "#f4a261", "#2b2d42", "oculos")),
         Agente(id="moviemaker", nome="Moviemaker", funcao="Roteiro e storyboard de vídeos", setor="video",
                descricao="Cria roteiros, storyboards e o plano de captação dos vídeos.",
                exemplo="Escreva o roteiro de um reels de 30 s sobre a piscina.",

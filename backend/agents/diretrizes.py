@@ -16,10 +16,10 @@ from pathlib import Path
 import config
 
 TODOS = "*"
-MARKETING = ("gestor", "designer", "criador_imagens", "copywriter", "social_media", "moviemaker", "editor_video",
-             "gestor_trafego", "analista_metricas")
+MARKETING = ("gestor", "designer", "criador_imagens", "copywriter", "social_media", "email_marketing", "moviemaker",
+             "editor_video", "gestor_trafego", "analista_metricas")
 VISUAL = ("gestor", "designer", "criador_imagens", "moviemaker", "editor_video")
-TEXTO = ("gestor", "copywriter", "social_media", "moviemaker", "gestor_trafego")
+TEXTO = ("gestor", "copywriter", "social_media", "email_marketing", "moviemaker", "gestor_trafego")
 PRODUZEM = ("gestor", "designer", "criador_imagens", "copywriter", "moviemaker", "editor_video")
 ESTRATEGIA = ("gestor", "social_media", "gestor_trafego", "analista_metricas")
 
@@ -43,12 +43,12 @@ SECOES = {
            "4": ("gestor", "social_media")},
     "10": {"1": TODOS, "2": TODOS, "3": TODOS, "4": ("gestor", "social_media")},
 }
-ORDEM = ("00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10")
+ORDEM = ("00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "13")
 # Agente -> documentos da função, que vão inteiros (exceto o 05, recortado pelo mapa para o Editor).
 DA_FUNCAO = {
     "social_media": ("02",), "gestor_trafego": ("02",), "analista_metricas": ("02",), "gestor": ("02",),
     "designer": ("03",), "criador_imagens": ("04",), "moviemaker": ("05",), "editor_video": ("06", "05"),
-    "copywriter": ("07",),
+    "copywriter": ("07",), "email_marketing": ("07", "13"),
 }
 # Versão essencial (Groq gratuito e modelo local, contexto curto): estas seções + o documento da função.
 ESSENCIAL = {"00": ("ouro", "2", "8"), "01": ("5",), "08": ("2",)}
@@ -98,12 +98,15 @@ def _ler(caminho: Path, _mtime: float, agente_id: str, compacto: bool) -> str:
 # Corporativo e Casa Vero: só o que é comum às três (regras de ouro e gerais, formatos, Monday, fluxo) + o documento
 # da própria empresa. Os manuais 01-07 são da Casa Veraneio (marca, tom, assinatura, Lodges) e nunca vão para elas.
 DOC_DA_EMPRESA = {"cv_corporativo": "11", "casa_vero": "12"}
+FUNCAO_TODAS_EMPRESAS = ("13",)  # e-mail marketing: um manual para as três
 COMUNS_OUTRAS = {"00": ("ouro", "2"), "08": ("1", "2", "3"), "09": ("1", "2", "3", "4"), "10": ("1", "2", "3", "4")}
 
 
 def _de_outra_empresa(agente_id: str, empresa: str) -> str:
     partes = []
-    for prefixo in ("00", DOC_DA_EMPRESA[empresa], "08", "09", "10"):
+    # Documentos da função que valem para as 3 empresas (o de e-mail traz as regras de cada uma).
+    da_funcao = tuple(p for p in DA_FUNCAO.get(agente_id, ()) if p in FUNCAO_TODAS_EMPRESAS)
+    for prefixo in ("00", DOC_DA_EMPRESA[empresa], "08", "09", "10", *da_funcao):
         caminho = _arquivo(prefixo)
         if not caminho:
             continue

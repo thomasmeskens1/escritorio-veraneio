@@ -21,6 +21,7 @@ ESCOPO = {
     "moviemaker": r"roteiros?|storyboard|ritmo|cenas?",
     "editor_video": r"edi[cç][aã]o|editar|mp4|render|cortes?",
     "social_media": r"calend[aá]rio|planejamento|pautas?|cronograma|hashtags?",
+    "email_marketing": r"e-?mails?|newsletter|brevo|pr[eé]-?header|disparos?|campanha de e-?mail",
     "gestor_trafego": r"campanhas?|an[uú]ncios?|tr[aá]fego|segmenta[cç][aã]o|p[uú]blicos?",
     "analista_metricas": r"m[eé]tricas?|relat[oó]rios?|indicadores?|kpis?|resultados?",
 }
