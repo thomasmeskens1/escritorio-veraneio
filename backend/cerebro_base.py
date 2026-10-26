@@ -21,7 +21,7 @@ from cerebro_texto import BM25, dividir, mesmo_assunto, termos
 
 log = logging.getLogger(__name__)
 
-PESOS_FONTE = {"ensinado": 1.3, "oficial": 1.2, "site": 1.1, "drive": 1.0, "rede": 0.85, "tarefa": 0.6}  # rede: YouTube/Instagram (fala e legenda valem menos que a ficha)
+PESOS_FONTE = {"ensinado": 1.3, "oficial": 1.2, "site": 1.1, "drive": 1.0, "dados": 1.0, "rede": 0.85, "tarefa": 0.6}  # rede: YouTube/Instagram (fala e legenda valem menos que a ficha)
 LIMIAR_VERSAO = 0.90       # novo trecho parecido com um antigo do mesmo assunto: o novo vence
 LIMIAR_DUPLICADO = 0.97    # consolidação: quase idênticos
 COS_MINIMO = 0.40          # sem termo em comum, só entra se o significado for bem próximo

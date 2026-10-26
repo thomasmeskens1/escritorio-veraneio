@@ -324,7 +324,7 @@ async function cancelarRotina(andar, agente, id) {
 }
 
 // ---------- Conhecimento do Cérebro ----------
-const FONTES_CONHECIMENTO = { oficial: 'Oficial', ensinado: 'Ensinado', site: 'Site', drive: 'Drive', rede: 'Redes', tarefa: 'Tarefas' };
+const FONTES_CONHECIMENTO = { oficial: 'Oficial', ensinado: 'Ensinado', site: 'Site', drive: 'Drive', rede: 'Redes', dados: 'Painel', tarefa: 'Tarefas' };
 const EMPRESAS_CONHECIMENTO = [['casa_veraneio', 'Veraneio'], ['cv_corporativo', 'Corporativo'], ['casa_vero', 'Vero'], ['*', 'Comum']];
 const conhecimento = { dados: null, erro: '', oculto: false }; // estatísticas do RAG central
 

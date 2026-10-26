@@ -1,12 +1,12 @@
-"""Redes sociais da Casa Vero e do Corporativo para o Cérebro (leitura liberada pelo Thomas em 26/10/2026).
+"""YouTube da Casa Vero para o Cérebro (leitura liberada pelo Thomas em 26/10/2026).
 
 - YouTube da Casa Vero (@CasaVeroImóveis): cada vídeo (tours de imóveis e shorts) vira um documento com título, data,
   descrição e a fala do vídeo (legenda automática do YouTube, em português). A fala é transcrição automática: pode
   ter erros e não substitui a ficha do site (fonte "rede", peso abaixo de "site").
   Cada vídeo é baixado UMA vez (cache em backend/dados/redes/youtube/); com pausa entre vídeos e, se o YouTube
   limitar (HTTP 429), para e continua no próximo ciclo.
-- Instagram (@casaveroimoveis, @casaveraneiocorp): a leitura pública sem login costuma ser bloqueada pelo
-  Instagram; quando passa, as legendas recentes entram no Cérebro. Quando bloqueia, só registra no log.
+- Instagram: as publicações das 3 contas vêm do painel analítico, pela API oficial da Meta (painel_analitico.py);
+  a leitura pública sem login é bloqueada pelo Instagram.
 Telefones e WhatsApp saem do texto (regra de ouro). Somente leitura; nada é publicado.
 
 Uso: python scripts/max/redes_empresas.py (também roda no ciclo de 6 h do trabalhador).
@@ -18,7 +18,6 @@ import re
 import subprocess
 import sys
 import time
-import urllib.request
 from pathlib import Path
 
 import comum
@@ -26,14 +25,11 @@ from comum import log
 from sites_empresas import TELEFONE
 
 CANAL_VERO = "https://www.youtube.com/channel/UClSXjsr4I17PslswQpLqzYQ"
-INSTAGRAM = {"casa_vero": "casaveroimoveis", "cv_corporativo": "casaveraneiocorp"}
 CACHE = comum.DADOS / "redes" / "youtube"
 PAUSA_S = 8
 MAX_NOVOS_POR_CICLO = 15        # vídeos novos baixados por ciclo (o resto fica para o próximo)
 MAX_FALA = 15000                # caracteres da fala por vídeo no Cérebro (tours passam de 60 mil)
 LOTE = 3                        # vídeos por envio ao Cérebro
-NAVEGADOR = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 "
-             "Safari/537.36")
 
 
 def _yt_dlp(*argumentos: str, timeout: int = 300) -> subprocess.CompletedProcess:
@@ -122,37 +118,12 @@ def youtube_vero() -> list[dict]:
     return documentos
 
 
-def instagram(empresa: str, usuario: str) -> list[dict]:
-    requisicao = urllib.request.Request(f"https://www.instagram.com/api/v1/users/web_profile_info/?username={usuario}",
-                                        headers={"User-Agent": NAVEGADOR, "x-ig-app-id": "936619743392459"})
-    try:
-        with urllib.request.urlopen(requisicao, timeout=30) as resposta:
-            perfil = json.load(resposta)["data"]["user"]
-    except Exception as erro:
-        log(f"   Instagram @{usuario}: leitura sem login bloqueada pelo Instagram ({str(erro)[:60]}).")
-        return []
-    documentos = []
-    for aresta in perfil["edge_owner_to_timeline_media"]["edges"]:
-        post = aresta["node"]
-        legenda = "".join(e["node"]["text"] for e in post["edge_media_to_caption"]["edges"])
-        if not legenda.strip():
-            continue
-        data = time.strftime("%d/%m/%Y", time.localtime(post.get("taken_at_timestamp", 0)))
-        documentos.append({"fonte_tipo": "rede", "empresa": empresa, "fonte_ref": f"instagram/{usuario}/{post['shortcode']}",
-                           "titulo": f"Instagram @{usuario}: post de {data}",
-                           "conteudo": f"Fonte: https://www.instagram.com/p/{post['shortcode']}/ (Instagram @{usuario}, "
-                                       f"{data})\nLegenda publicada: {TELEFONE.sub('', legenda)[:4000]}"})
-    return documentos
-
-
 def rodar() -> None:
     documentos = []
     try:
         documentos += youtube_vero()
     except Exception as erro:  # rede fora do ar não derruba o trabalhador
         log(f"YouTube da Casa Vero: não foi possível ler ({erro}).")
-    for empresa, usuario in INSTAGRAM.items():
-        documentos += instagram(empresa, usuario)
     if documentos:
         # Lotes pequenos: a fala de um tour gera muitos trechos e o Cérebro calcula os embeddings na hora (lote de
         # 10 vídeos passou dos 5 min de espera). Documento sem mudança é ignorado pelo Cérebro, sem custo.
