@@ -38,7 +38,8 @@ MAX_CARACTERES_FERRAMENTA = 3000  # resposta da ferramenta (tokens dos agentes)
 MAX_CARACTERES_CONTEXTO = 6000    # trechos na tarefa do próprio Cérebro
 INTERVALO_REVISAO = 600           # o trabalhador de embeddings revisa os pendentes a cada 10 min
 ROTULOS_FONTE = {"oficial": "documento oficial", "ensinado": "ensinado pela diretoria", "site": "site",
-                 "drive": "Drive", "tarefa": "trabalho anterior da equipe"}
+                 "drive": "Drive", "rede": "redes sociais (YouTube/Instagram)",
+                 "tarefa": "trabalho anterior da equipe"}
 
 _ENSINO = re.compile(r"^\s*(aprenda|anote|memorize|lembre(?:-se)?|ensinar|registre)\b\s*(?:-\s*se\b)?\s*:?\s*",
                      re.IGNORECASE)
@@ -79,7 +80,7 @@ def _formatar(trechos: list[dict], limite: int) -> str:
     por_trecho = max(300, limite // max(len(trechos), 1) - 120)
     blocos = []
     for n, t in enumerate(trechos, 1):
-        ref = f" ({t['fonte_ref']})" if t["fonte_ref"] and t["fonte_tipo"] in ("oficial", "site", "drive") else ""
+        ref = f" ({t['fonte_ref']})" if t["fonte_ref"] and t["fonte_tipo"] in ("oficial", "site", "drive", "rede") else ""
         conteudo = t["conteudo"] if len(t["conteudo"]) <= por_trecho else t["conteudo"][:por_trecho].rstrip() + "…"
         blocos.append(f"[{n}] {t['titulo']} — fonte: {ROTULOS_FONTE.get(t['fonte_tipo'], t['fonte_tipo'])}{ref}, "
                       f"{t['data']}\n{conteudo}")
@@ -258,7 +259,7 @@ def estatisticas(authorization: str = Header("")):
 
 
 class Documento(BaseModel):
-    fonte_tipo: Literal["site", "drive", "oficial"]
+    fonte_tipo: Literal["site", "drive", "oficial", "rede"]
     empresa: Literal["casa_veraneio", "cv_corporativo", "casa_vero"] = "casa_veraneio"
     fonte_ref: str = Field(min_length=1, max_length=500)
     titulo: str = Field("", max_length=200)
@@ -266,7 +267,7 @@ class Documento(BaseModel):
 
 
 class Remocao(BaseModel):
-    fonte_tipo: Literal["site", "drive", "oficial"]
+    fonte_tipo: Literal["site", "drive", "oficial", "rede"]
     fonte_ref: str = Field(min_length=1, max_length=500)
 
 

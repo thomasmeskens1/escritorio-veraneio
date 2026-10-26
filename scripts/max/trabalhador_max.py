@@ -27,6 +27,7 @@ import catalogo_fotos_empresas
 import catalogo_lodges
 import comum
 import planilha_lodges
+import redes_empresas
 import site_casaveraneio
 import sites_empresas
 import trabalhos_max
@@ -412,6 +413,7 @@ def catalogo_em_segundo_plano() -> None:
             planilha_lodges.rodar()
             sites_empresas.rodar()  # Corporativo e Casa Vero, cada um com a sua etiqueta de empresa
             catalogo_fotos_empresas.rodar()  # fotos da Casa Vero e do Corporativo (índices em CÉREBRO)
+            redes_empresas.rodar()  # YouTube da Casa Vero (falas dos tours) e Instagram, quando o Instagram deixa
             try:  # Casa Veraneio: todos os Lodges (listagem da API + sondagem de cada número) a cada 6 h
                 log(f"Site da Casa Veraneio: {site_casaveraneio.resumo_texto(site_casaveraneio.reprocessar())}")
             except Exception as erro:
