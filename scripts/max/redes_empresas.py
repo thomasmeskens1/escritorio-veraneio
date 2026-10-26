@@ -22,6 +22,7 @@ from pathlib import Path
 
 import comum
 from comum import log
+import youtube_legendas
 from sites_empresas import TELEFONE
 
 CANAL_VERO = "https://www.youtube.com/channel/UClSXjsr4I17PslswQpLqzYQ"
@@ -80,8 +81,36 @@ def _baixar_video(video_id: str, pasta: Path) -> dict | None:
             "fala": fala}
 
 
+def _pela_api() -> int:
+    """Vídeos novos pela API oficial (login do Escritório, youtube_legendas.py). Devolve quantos leu; -1 se não há
+    login válido (aí o leitor usa o caminho antigo)."""
+    try:
+        token = youtube_legendas._token()
+        novos = 0
+        for video_id in youtube_legendas.ids_do_canal(token):
+            destino = CACHE / f"{video_id}.json"
+            if destino.exists():
+                continue
+            dados = youtube_legendas.video(video_id, token)
+            dados["fala"] = _fala(dados.pop("vtt", ""))
+            dados["descricao"] = TELEFONE.sub("", dados.get("descricao", ""))
+            destino.write_text(json.dumps(dados, ensure_ascii=False), encoding="utf-8")
+            novos += 1
+        return novos
+    except youtube_legendas.SemLogin as erro:
+        log(f"   YouTube: {erro}.")
+        return -1
+    except youtube_legendas.CotaEsgotada as erro:
+        log(f"   YouTube: {erro}.")
+        return 0
+
+
 def youtube_vero() -> list[dict]:
     CACHE.mkdir(parents=True, exist_ok=True)
+    if youtube_legendas.tem_login() and (lidos := _pela_api()) >= 0:
+        if lidos:
+            log(f"   YouTube da Casa Vero (API oficial): {lidos} vídeo(s) novo(s) lido(s).")
+        return _documentos_youtube()
     novos = 0
     for video_id in _ids_do_canal():
         destino = CACHE / f"{video_id}.json"
@@ -96,6 +125,10 @@ def youtube_vero() -> list[dict]:
         time.sleep(PAUSA_S)
     if novos:
         log(f"   YouTube da Casa Vero: {novos} vídeo(s) novo(s) lido(s).")
+    return _documentos_youtube()
+
+
+def _documentos_youtube() -> list[dict]:
     documentos = []
     for arquivo in sorted(CACHE.glob("*.json")):
         video = json.loads(arquivo.read_text(encoding="utf-8"))
