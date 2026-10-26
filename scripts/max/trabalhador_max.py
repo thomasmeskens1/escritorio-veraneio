@@ -26,6 +26,7 @@ from urllib.parse import urlparse
 import catalogo_fotos_empresas
 import catalogo_lodges
 import comum
+import emails_brevo
 import painel_analitico
 import planilha_lodges
 import redes_empresas
@@ -85,10 +86,24 @@ def ffmpeg_dir() -> str | None:
     return str(achados[-1].parent) if achados else None
 
 
+# Pasta no Drive: "EMPRESA ｜ TIPO - NOME" (Thomas, 26/10/2026), ex.: "VERO ｜ CARROSSEL - IMÓVEIS EXCLUSIVOS".
+# O Windows não aceita "|" em nome de pasta: vai a barra larga "｜" (U+FF5C), que no Drive fica igual.
+SIGLA_EMPRESA = {"casa_veraneio": "VERANEIO", "cv_corporativo": "CORP", "casa_vero": "VERO"}
+TIPOS_PECA = ("CARROSSEL", "STORIES", "REELS", "SHORTS", "POST", "VÍDEO", "E-MAIL")
+TIPO_NO_PEDIDO = [("CARROSSEL", r"carross[eé]is|carrossel"), ("STORIES", r"stories|story"), ("REELS", r"\breels?\b"),
+                  ("SHORTS", r"\bshorts?\b"), ("POST", r"\bposts?\b|single post"), ("E-MAIL", r"e-?mail")]
+TIPO_DO_AGENTE = {"criador_imagens": "ARTE", "editor_video": "VÍDEO"}
+
+
 def nome_pasta(producao: dict) -> str:
-    """Título do projeto/pedido, ex.: "Post Réveillon Lodge 1"."""
-    titulo = re.sub(r'[<>:"/\\|?*\n\r\t]', " ", producao.get("titulo") or producao["texto"])
-    return re.sub(r"\s+", " ", titulo).strip(" .")[:60] or f"Produção {producao['tarefa_id']}"
+    """"EMPRESA ｜ TIPO - NOME": tipo pelo item/pedido (ou pelo agente), nome = título do projeto sem o tipo."""
+    titulo = re.sub(r'[<>:"/\\|?*\n\r\t｜]', " ", producao.get("titulo") or producao["texto"])
+    titulo = re.sub(r"\s+", " ", titulo).strip(" .") or f"Produção {producao['tarefa_id']}"
+    tipo = next((t for t, padrao in TIPO_NO_PEDIDO if re.search(padrao, f"{titulo} {producao['texto'][:600]}", re.I)),
+                TIPO_DO_AGENTE.get(producao.get("agente"), "PEÇA"))
+    nome = re.sub(rf"^\s*(?:{'|'.join(TIPOS_PECA + ('ARTE', 'PEÇA', 'REEL', 'STORY'))})\b[\s:-]*", "", titulo.upper()).strip(" -") or titulo.upper()
+    sigla = SIGLA_EMPRESA.get(producao.get("empresa") or "casa_veraneio", "VERANEIO")
+    return f"{sigla} ｜ {tipo} - {nome}"[:90]
 
 
 def pasta_de_entrega(producao: dict) -> Path:
@@ -419,6 +434,7 @@ def catalogo_em_segundo_plano() -> None:
             catalogo_fotos_empresas.rodar()  # fotos da Casa Vero e do Corporativo (índices em CÉREBRO)
             redes_empresas.rodar()  # YouTube da Casa Vero (falas dos tours)
             painel_analitico.rodar()  # painel analítico: Instagram (API oficial), mídia paga, CRM e e-mail
+            emails_brevo.rodar()  # e-mails marketing já enviados (Brevo): modelo de como os escrevemos
             try:  # Casa Veraneio: todos os Lodges (listagem da API + sondagem de cada número) a cada 6 h
                 log(f"Site da Casa Veraneio: {site_casaveraneio.resumo_texto(site_casaveraneio.reprocessar())}")
             except Exception as erro:
