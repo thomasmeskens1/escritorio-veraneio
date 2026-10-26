@@ -20,7 +20,7 @@ import cerebro
 import max_texto
 import saude
 import tarefas
-from agents import diretrizes, ferramentas_brevo, ferramentas_monday, projeto
+from agents import diretrizes, ferramentas_brevo, ferramentas_monday, ferramentas_painel, projeto
 from agents.perfis import PERFIS, contexto, descricao_tarefa
 from roteamento import Etapa, etapas_contingencia
 
@@ -175,12 +175,16 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
     if "Sua etapa (" not in descricao and tarefa and tarefa["usuario"] == config.DONO_MAX:
         ferramentas += ferramentas_monday.para(agente_id, tarefa_id)
         ferramentas += ferramentas_brevo.para(agente_id, cerebro.empresa_da_tarefa(tarefa_id), tarefa_id)
+        ferramentas += ferramentas_painel.para(agente_id, tarefa_id)  # Analista: números do painel analítico
     perfil = dict(PERFIS[agente_id])
     # Diretrizes da Casa Veraneio (regras, marca e manual da função); versão curta no modelo local.
     if (extras := diretrizes.para(agente_id, compacto=modelo.startswith(("ollama/", "groq/")),
                                   empresa=cerebro.empresa_da_tarefa(tarefa_id))):
         perfil["backstory"] = f"{perfil['backstory']}\n\n{extras}"
-    monday_ativo = any(f.name.startswith("criar_ite") for f in ferramentas)
+    if any(f.name.startswith("analisar_") for f in ferramentas):  # regras de leitura dos números do painel
+        perfil["backstory"] = f"{perfil['backstory']}\n\n{ferramentas_painel.instrucoes()}"
+    # Monday (criar itens) e painel analítico (várias consultas por análise) pedem mais voltas.
+    monday_ativo = any(f.name.startswith(("criar_ite", "analisar_", "comparar_")) for f in ferramentas)
     agente = Agent(**perfil, llm=_llm(modelo, limite_s), tools=ferramentas,
                    max_iter=MAX_ITERACOES_MONDAY if monday_ativo else MAX_ITERACOES, max_retry_limit=0, verbose=False)
     saida = Crew(agents=[agente], tasks=[Task(description=descricao, expected_output=esperado, agent=agente)]).kickoff()
