@@ -5,7 +5,7 @@
 - Entrega: resumo do Gestor em comentário; legenda na coluna Legenda (ou em comentário, se já houver);
   artes da produção anexadas em Criativos. Referências do item vão para o rascunho da produção no Max.
 - Item citado no chat ('... o item "FEED | ..."'): os dados do item entram no pedido do agente.
-Só este board; só a marca Casa Veraneio por enquanto (as outras ainda não foram educadas).
+Só este board. As três empresas (Conta = Casa Veraneio, CV Corp ou Casa Vero) são produzidas, cada uma com a sua base.
 """
 
 import asyncio
@@ -37,7 +37,7 @@ USUARIOS_AUTORIZADOS = os.getenv("MONDAY_USUARIOS_AUTORIZADOS", "").strip()
 BOARD = 18436414505
 COL_BOTAO, COL_STATUS, COL_CONTA = "button_mm8bdsnh", "status", "color_mks99tq4"
 COL_LEGENDA, COL_REFERENCIAS, COL_CRIATIVOS = "texto_longo_1_mkmf3wmy", "file_mm8bmmxv", "arquivos_mkmd1v3v"
-MARCAS_PRONTAS = {"Casa Veraneio"}
+MARCAS_PRONTAS = {d["monday"] for d in empresas.EMPRESAS.values()}  # as três educadas (Thomas, 26/10/2026)
 EM_PRODUCAO, NA_FILA, REVISAO, AGUARDANDO, FALHA = "Em produção", "Na fila", "Revisão", "Aguardando", "Falha"
 SEM_CONTA = {"", "Sem definição"}
 MARCA_LEGENDA = ("<<LEGENDA>>", "<<FIM DA LEGENDA>>")
