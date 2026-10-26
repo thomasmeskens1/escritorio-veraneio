@@ -5,7 +5,7 @@ criar_itens_monday: TODAS as peças de um planejamento numa chamada só (item a 
 cortava o mês no 5º item). criar_item_monday: uma peça avulsa (exige o responsável).
 atualizar_item_monday: completa ou corrige um item que já existe (as respostas do usuário chegam ao Monday).
 Com Data Postagem, o item vai para o grupo do mês, em ordem de data; sem data, para "Definir Data" (monday_datas).
-O roteiro da peça (capa, páginas, CTA...) vai como comentário no item, para a produção ter o briefing completo.
+O roteiro da peça (capa, páginas, CTA...) vai para a DESCRIÇÃO do item (se a API recusar, vira comentário).
 """
 
 import json
@@ -52,7 +52,7 @@ class _NovoItem(BaseModel):
     legenda: str = Field("", description="Rascunho da legenda, só para POST, CARROSSEL, REELS e SHORTS. Para STORIES "
                                          "deixe VAZIO e não escreva nenhuma legenda (stories não têm legenda).")
     roteiro: str = Field("", description="Briefing da peça para a produção: capa, cada página/cena com o imóvel, "
-                                         "local e destaque, formato (foto/vídeo e duração) e CTA. Vira comentário.")
+                                         "local e destaque, formato (foto/vídeo e duração) e CTA. Vai para a descrição do item.")
 
 
 class _NovosItens(BaseModel):
@@ -68,7 +68,7 @@ class _Atualizacao(BaseModel):
     responsavel: str = Field("", description=f"Um de: {', '.join(RESPONSAVEIS)} (o que o usuário disse); vazio = não mexe")
     conta: str = Field("", description=f"Marca: {', '.join(CONTAS)}; vazio = não mexe")
     legenda: str = Field("", description="Nova legenda completa (substitui a atual); vazio = não mexe")
-    roteiro: str = Field("", description="Briefing atualizado da peça; vira um novo comentário; vazio = não mexe")
+    roteiro: str = Field("", description="Briefing completo da peça; substitui a descrição do item; vazio = não mexe")
 
 
 def _valores(data_postagem: str = "", data_entrega: str = "", horario: str = "", objetivo: str = "",
@@ -100,8 +100,17 @@ def _valores(data_postagem: str = "", data_entrega: str = "", horario: str = "",
     return valores
 
 
-def _comentar_roteiro(item_id: int, roteiro: str) -> None:
-    if roteiro.strip():
+VERSAO_DESCRICAO = "2026-04"  # set_item_description_content só existe a partir desta versão da API
+
+
+def _descrever_roteiro(item_id: int, roteiro: str) -> None:
+    """Roteiro na descrição do item (substitui a anterior); se a API recusar, vai como comentário."""
+    if not roteiro.strip():
+        return
+    try:
+        monday._api("mutation ($i: ID!, $m: String!) { set_item_description_content(item_id: $i, markdown: $m) "
+                    "{ __typename } }", {"i": str(item_id), "m": roteiro.strip()[:20000]}, versao=VERSAO_DESCRICAO)
+    except Exception:
         monday.comentar(item_id, f"Roteiro da peça:\n{roteiro.strip()[:5000]}")
 
 
@@ -163,7 +172,7 @@ def _criar(contador: _Contador, tarefa_id: int, nome: str, grupo: str = "", data
     if data_postagem:
         monday_datas.reposicionar_seguro(int(item["id"]))  # em ordem de data dentro do mês
     try:
-        _comentar_roteiro(int(item["id"]), roteiro)
+        _descrever_roteiro(int(item["id"]), roteiro)
     except Exception:
         pass  # o item já existe; o roteiro pode ir depois por atualizar_item_monday
     if tarefa_id:
@@ -226,7 +235,7 @@ class AtualizarItemMonday(BaseTool):
                 monday._api("mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, "
                             "item_id: $i, column_values: $v) { id } }",
                             {"b": str(monday.BOARD), "i": str(achado["id"]), "v": json.dumps(valores)})
-            _comentar_roteiro(int(achado["id"]), roteiro)
+            _descrever_roteiro(int(achado["id"]), roteiro)
         except Exception as erro:
             return f"Não foi possível atualizar '{achado['name']}': {erro}"
         if monday_datas.COL_DATA in valores:  # data nova ou apagada: grupo do mês (ou Definir Data), em ordem
