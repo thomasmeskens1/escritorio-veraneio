@@ -248,6 +248,9 @@ LOGOS = {
                       "peça monocromática clara; simbolo_*.png (sem texto) para ícone, selo ou grafismo. Não há "
                       "logo completo em Verde: em fundo claro, simbolo_verde.png + nome em texto. Nunca use o logo "
                       "do Corporativo (\"CORP.\")"),
+    "casa_vero": ("CASA_VERO", "logo_vero_verde_caramelo.png sobre fundo claro (Creme, branco, bege); "
+                  "logo_vero_caramelo_creme.png sobre fundo escuro ou foto escura. Nunca use o logo da Casa Veraneio "
+                  "nem do Corporativo"),
     "cv_corporativo": ("CORPORATIVO", "logo_corp_verde.png sobre fundo claro; logo_corp_branca.png sobre fundo "
                        "escuro ou foto; logo_corp_caramelo_texto_branco.png sobre fundo escuro quando pedir cor. "
                        "Nunca use o logo da Casa Veraneio (Lodges)"),
