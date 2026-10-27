@@ -102,6 +102,9 @@ def nome_pasta(producao: dict) -> str:
     tipo = next((t for t, padrao in TIPO_NO_PEDIDO if re.search(padrao, f"{titulo} {producao['texto'][:600]}", re.I)),
                 TIPO_DO_AGENTE.get(producao.get("agente"), "PEÇA"))
     nome = re.sub(rf"^\s*(?:{'|'.join(TIPOS_PECA + ('ARTE', 'PEÇA', 'REEL', 'STORY'))})\b[\s:-]*", "", titulo.upper()).strip(" -") or titulo.upper()
+    # A empresa já abre o nome: tira do título "CASA VERO", "CASA VERANEIO CORPORATIVO", "CORP" etc.
+    nome = re.sub(r"\s*[-–—]?\s*\b(?:CASA VERANEIO CORPORATIVO|CASA VERANEIO CORP|CASA VERANEIO|CASA VERO IMÓVEIS|"
+                  r"CASA VERO|CV CORP)\b\s*", " ", nome).strip(" -") or nome
     sigla = SIGLA_EMPRESA.get(producao.get("empresa") or "casa_veraneio", "VERANEIO")
     return f"{sigla} ｜ {tipo} - {nome}"[:90]
 
