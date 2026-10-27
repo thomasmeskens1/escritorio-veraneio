@@ -61,18 +61,21 @@ PASTA_DIRETRIZES = comum.DADOS / "conhecimento"   # manuais da Casa Veraneio (fo
 DIRETRIZES = {"criador_imagens": ("00", "01", "08", "09", "10", "04", "03"),
               "editor_video": ("00", "01", "08", "09", "10", "06", "05")}
 
+# Ritmo dos vídeos (Thomas, 27/10/2026): explorar a casa com calma.
+RITMO_VIDEO = (" VÍDEOS: clipes na velocidade natural (1x); nada de acelerar, a menos que o pedido diga. Página de vídeo "
+               "num carrossel: pelo menos 3 cenas diferentes da casa, ~4 s cada, salvo pedido diferente.")
 INSTRUCOES = {
     "criador_imagens": (
         "Você é o Criador de Imagens. Entregue as artes em PNG. Monte cada arte como um arquivo .html "
         "(layout, tipografia, cores, imagens locais) e renderize com:\n"
         f'  python "{RENDERIZADOR}" arte.html arte.png 1080x1350\n'
         "Use 1080x1440 (3:4) para feed e 1080x1920 para stories/reels, salvo pedido diferente; respeite as zonas "
-        "mortas do manual 08."
+        "mortas do manual 08." + RITMO_VIDEO
     ),
     "editor_video": (
         "Você é o Editor de Vídeo. Entregue o vídeo final em MP4 (H.264 + AAC), vertical 1080x1920 "
         "salvo pedido diferente, usando ffmpeg/ffprobe (já disponíveis no PATH). Para telas de texto, "
-        f'monte PNGs com: python "{RENDERIZADOR}" tela.html tela.png 1080x1920 e use-os no ffmpeg.'
+        f'monte PNGs com: python "{RENDERIZADOR}" tela.html tela.png 1080x1920 e use-os no ffmpeg.' + RITMO_VIDEO
     ),
 }
 

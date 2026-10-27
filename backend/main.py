@@ -239,9 +239,9 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     ensino = agente.id == cerebro.ID and cerebro.e_ensino(texto)
     # Ajuste de uma peça já produzida: a empresa é a da peça, nunca a do seletor (nem é preciso escolher).
     # Teste real (27/10/2026): "Ajuste na peça #63" pedia a empresa, que já está na peça.
-    if agente.id in AGENTES_PRODUCAO and (base := producao.base_do_ajuste(usuario["sub"], agente.id, texto)):
-        if (peca := tarefas.obter(base)) and empresas.valida(peca["empresa"]):
-            empresa = peca["empresa"]
+    base_ajuste = producao.base_do_ajuste(usuario["sub"], agente.id, texto) if agente.id in AGENTES_PRODUCAO else None
+    if base_ajuste and (peca := tarefas.obter(base_ajuste)) and empresas.valida(peca["empresa"]):
+        empresa = peca["empresa"]
     if andar in EXIGEM_EMPRESA or agente.id == cerebro.ID:
         if not (empresas.valida(empresa) or (ensino and empresa == empresas.COMUM)):
             return await erro("Escolha a empresa desta conversa (Casa Veraneio, Corporativo ou Casa Vero) no "
@@ -268,6 +268,11 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         origem_id, agente = agente.id, buscar_agente(andar, produtor) or agente
         aviso = {"titulo": "Ajuste enviado",
                  "texto": f"Mandei o ajuste para o {agente.nome}. A nova versão chega aqui quando ficar pronta."}
+    # Ajuste de uma peça deste mesmo agente de produção: vai direto para a produção (nova versão da peça), sem
+    # perguntar "planejamento ou peça final" e sem passar pelo Gestor. Teste real (27/10/2026): "Ajuste na peça #63:
+    # ajuste todos os slides..." foi tratado como peça nova.
+    elif base_ajuste:
+        pass
     # Peça pedida sem dizer se quer o planejamento ou o arquivo pronto: pergunta antes (botões no chat).
     elif encaminhamento.precisa_escolher(andar, agente.id, texto):
         return await gerenciador.enviar(ws, {
