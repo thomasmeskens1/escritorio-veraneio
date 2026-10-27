@@ -48,7 +48,7 @@ ORDEM = ("00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "13")
 DA_FUNCAO = {
     "social_media": ("02",), "gestor_trafego": ("02",), "analista_metricas": ("02",), "gestor": ("02",),
     "designer": ("03",), "criador_imagens": ("04",), "moviemaker": ("05",), "editor_video": ("06", "05"),
-    "copywriter": ("07",), "email_marketing": ("07", "13"),
+    "copywriter": ("07",), "email_marketing": ("07", "13"), "prospectador": ("14",),
 }
 # Versão essencial (Groq gratuito e modelo local, contexto curto): estas seções + o documento da função.
 ESSENCIAL = {"00": ("ouro", "2", "8"), "01": ("5",), "08": ("2",)}
@@ -99,13 +99,15 @@ def _ler(caminho: Path, _mtime: float, agente_id: str, compacto: bool) -> str:
 # da própria empresa. Os manuais 01-07 são da Casa Veraneio (marca, tom, assinatura, Lodges) e nunca vão para elas.
 DOC_DA_EMPRESA = {"cv_corporativo": "11", "casa_vero": "12"}
 FUNCAO_TODAS_EMPRESAS = ("13",)  # e-mail marketing: um manual para as três
+FUNCAO_DA_EMPRESA = {"cv_corporativo": ("14",)}  # persona do cliente corporativo (Prospectador)
 COMUNS_OUTRAS = {"00": ("ouro", "2"), "08": ("1", "2", "3"), "09": ("1", "2", "3", "4"), "10": ("1", "2", "3", "4")}
 
 
 def _de_outra_empresa(agente_id: str, empresa: str) -> str:
     partes = []
     # Documentos da função que valem para as 3 empresas (o de e-mail traz as regras de cada uma).
-    da_funcao = tuple(p for p in DA_FUNCAO.get(agente_id, ()) if p in FUNCAO_TODAS_EMPRESAS)
+    da_funcao = tuple(p for p in DA_FUNCAO.get(agente_id, ())
+                      if p in FUNCAO_TODAS_EMPRESAS or p in FUNCAO_DA_EMPRESA.get(empresa, ()))
     for prefixo in ("00", DOC_DA_EMPRESA[empresa], "08", "09", "10", *da_funcao):
         caminho = _arquivo(prefixo)
         if not caminho:

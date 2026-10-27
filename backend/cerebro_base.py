@@ -91,7 +91,7 @@ def db():
 
 # Manuais oficiais por empresa (prefixo do arquivo); os demais (01-07) são da Casa Veraneio.
 OFICIAIS_COMUNS = ("00", "08", "09", "10", "13")
-OFICIAIS_DA_EMPRESA = {"11": "cv_corporativo", "12": "casa_vero"}
+OFICIAIS_DA_EMPRESA = {"11": "cv_corporativo", "12": "casa_vero", "14": "cv_corporativo"}
 
 
 def empresa_do_oficial(arquivo: str) -> str:

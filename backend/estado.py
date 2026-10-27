@@ -125,6 +125,16 @@ ANDARES: dict[str, dict[str, Agente]] = {
                exemplo="Quais métricas devo acompanhar na campanha de verão?",
                aparencia=_ap("#e0ac69", "curto", "#6f4e37", "camisa", "#90be6d", "#22333b", "cracha")),
     ),
+    # Comercial: Hospedagem (Casa Veraneio; começa só com a mesa vaga) e Corporativo (Casa Veraneio Corporativo).
+    "comercial": _andar(
+        Agente(id="prospectador", nome="Prospectador", funcao="Prospecção ativa de empresas (Corporativo)",
+               setor="corporativo",
+               descricao="Conhece os clientes corporativos do CRM, mantém a persona do cliente ideal e prospecta "
+                         "empresas na web: coleta nome, e-mail e telefone da empresa e cria o lead no grupo "
+                         "[Corp] Prospecção Ativa do Monday.",
+               exemplo="Prospecte 10 indústrias da região de Campinas com mais de 300 funcionários.",
+               aparencia=_ap("#c68642", "curto", "#2b1d0e", "blazer", "#7f5347", "#1b263b", "cracha")),
+    ),
     "cobertura": _andar(
         Agente(id="cerebro", nome="Cérebro", funcao="Conhecimento central da Casa Veraneio", setor="laboratorio",
                visual="cerebro",

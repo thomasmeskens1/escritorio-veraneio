@@ -1,7 +1,7 @@
 // Tela "Equipe": clicar num contador do topo mostra os agentes de cada andar com função, descrição e status.
 // Função/descrição vêm de /api/equipe (uma vez por sessão); o status é o do WebSocket, ao vivo.
 
-const ORDEM_ANDARES = ['marketing', 'cobertura', 'terreo', 'porao']; // Marketing primeiro: onde mais se trabalha
+const ORDEM_ANDARES = ['marketing', 'comercial', 'cobertura', 'terreo', 'porao']; // Marketing primeiro: onde mais se trabalha
 const FILTROS_EQUIPE = [['todos', 'Todos'], ['disponivel', 'Disponíveis'], ['trabalhando', 'Trabalhando'],
   ['construindo', 'Em construção'], ['dormindo', 'Pausados']];
 const janelaEquipe = document.getElementById('equipe');

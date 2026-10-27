@@ -18,7 +18,7 @@ from agents.perfis import ESTILO_CHAT
 MODELO = "claude-code/max"
 LIMITE_S = 15 * 60
 ONLINE_S = 90            # o trabalhador pede a fila a cada ~10 s quando está livre
-AGENTES_COM_FERRAMENTAS = {"construtor", "social_media"}
+AGENTES_COM_FERRAMENTAS = {"construtor", "social_media", "prospectador"}
 
 ARQUIVO_CONTATO = config.DADOS_DIR / "max.contato"  # a data de modificação = último contato
 _trava = threading.Lock()

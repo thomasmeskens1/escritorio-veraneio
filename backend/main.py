@@ -26,6 +26,7 @@ import modelos_uso
 import monday
 import cerebro
 import cerebro_mapa
+import comercial
 import entrevista
 import historico
 import orquestrador
@@ -43,6 +44,7 @@ TAMANHO_MAX_TEXTO = 4000
 # Comandos reservados do dono, pelo hash (sha256) do texto: nenhum nome no código público nem na interface.
 COMANDOS_RESERVADOS = {"ddf7839cb8fca09abdd9e9b0b2f498885f382f5bf9fec65d95db793bd0f11832": "chat",
                        "7416b21e82400f2b73863b1c65dafc0581d462baae82802358ea2c84fd389f7f": "todos"}
+EMPRESA_DO_AGENTE = {"prospectador": "cv_corporativo"}  # agentes de uma empresa só (Comercial)
 EXIGEM_EMPRESA = {"marketing"}  # andares que trabalham para uma empresa (o Cérebro também, ver tratar_mensagem)
 MAX_FALHAS_LOGIN = 5          # senhas erradas seguidas por usuário/IP antes do bloqueio
 MAX_FALHAS_IP = 20            # senhas erradas de um IP (qualquer usuário) antes do bloqueio
@@ -257,6 +259,8 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         if not (empresas.valida(empresa) or (ensino and empresa == empresas.COMUM)):
             return await erro("Escolha a empresa desta conversa (Casa Veraneio, Corporativo ou Casa Vero) no "
                               "seletor do topo do chat antes de enviar.", **alvo)
+    elif agente.id in EMPRESA_DO_AGENTE:  # Comercial: o setor já diz a empresa (sem seletor)
+        empresa = EMPRESA_DO_AGENTE[agente.id]
     else:
         empresa = empresas.PADRAO
     if ensino:  # "Aprenda: ..." (só o dono)
@@ -342,6 +346,16 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         if item_citado:
             monday.vincular(tarefa_id, item_citado, origem="chat")
 
+    # Prospecção (pesquisa na web pelo Max + leads no Monday) ou persona: só a conta do Thomas; o resto é conversa.
+    if agente.id == comercial.AGENTE and comercial.e_pedido_de_trabalho(texto):
+        if usuario["sub"] != config.DONO_MAX:
+            return await erro("A prospecção (pesquisa na web e leads no Monday) é exclusiva da conta do Thomas. "
+                              "Aqui você pode tirar dúvidas sobre a persona e a estratégia.", **alvo)
+        await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "liberar": True, "titulo": "Prospecção iniciada",
+                                      "texto": "Vou pesquisar as empresas na web e criar os leads no grupo [Corp] "
+                                               "Prospecção Ativa. Leva alguns minutos; a resposta chega aqui."})
+        await comercial.iniciar(usuario["sub"], agente, texto)
+        return
     if agente.id in AGENTES_PRODUCAO:  # só chega aqui o dono do plano Max (checado acima)
         # "Ajuste na peça #20: ..." ou "troque o título...": nova versão da peça anterior, na mesma pasta.
         await producao.enfileirar(usuario["sub"], andar, agente, f"{texto}\n\n{contexto}".strip(), empresa=empresa,

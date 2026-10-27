@@ -31,10 +31,12 @@ log = logging.getLogger(__name__)
 SETORES = {
     "porao": {"oficina": 4, "operacoes": 4},
     "marketing": {"gestao": 4, "criacao": 6, "conteudo": 6, "video": 6, "performance": 6},
+    "comercial": {"hospedagem": 4, "corporativo": 4},
 }
-NOMES_ANDARES = {"porao": "Porão", "marketing": "Marketing", "cobertura": "Cobertura"}
+NOMES_ANDARES = {"porao": "Porão", "marketing": "Marketing", "comercial": "Comercial", "cobertura": "Cobertura"}
 NOMES_SETORES = {"oficina": "Oficina", "operacoes": "Operações", "gestao": "Gestão", "criacao": "Criação",
-                 "conteudo": "Conteúdo", "video": "Vídeo", "performance": "Performance", "diretoria": "Diretoria"}
+                 "conteudo": "Conteúdo", "video": "Vídeo", "performance": "Performance", "hospedagem": "Hospedagem", "corporativo": "Corporativo",
+                 "diretoria": "Diretoria"}
 
 TONS_PELE = ["#ffdbac", "#f1c27d", "#e0ac69", "#c68642", "#a0522d", "#8d5524", "#6b4226", "#3b2219"]
 ESTILOS_CABELO = ["curto", "longo", "coque", "careca", "cacheado", "moicano"]

@@ -34,6 +34,13 @@ const ANDARES = {
       { id: 'analista_metricas', nome: 'Analista de Métricas', setor: 'performance', estacao: 'metricas' },
     ],
   },
+  // Comercial: Hospedagem (Casa Veraneio, por enquanto só a mesa vaga) e Corporativo (Casa Veraneio Corporativo).
+  comercial: {
+    nome: '2º Andar – Comercial',
+    agentes: [
+      { id: 'prospectador', nome: 'Prospectador', setor: 'corporativo', estacao: 'executiva' },
+    ],
+  },
   // Cérebro (RAG central) e os estagiários que levam o conhecimento aos outros andares.
   cobertura: {
     nome: 'Cobertura',

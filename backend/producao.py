@@ -37,10 +37,10 @@ log = logging.getLogger("veraneio.producao")
 
 ARQUIVO_TOKEN = config.DADOS_DIR / "operador.token"
 MODELO_MAX = "claude-code/max"
-TIPOS_TRABALHO = {"anexo", "site"}
+TIPOS_TRABALHO = {"anexo", "site", "prospeccao"}  # prospeccao: pesquisa na web do Prospectador (comercial.py)
 
 # Pasta de cada andar dentro de "ESCRITÓRIO VERANEIO" no Drive.
-PASTAS_ANDAR = {"marketing": "MARKETING", "porao": "PORÃO", "terreo": "TÉRREO", "cobertura": "COBERTURA"}
+PASTAS_ANDAR = {"marketing": "MARKETING", "comercial": "COMERCIAL", "porao": "PORÃO", "terreo": "TÉRREO", "cobertura": "COBERTURA"}
 
 rotas = APIRouter(prefix="/api/producao")
 

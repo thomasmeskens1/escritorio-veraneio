@@ -1,4 +1,4 @@
-// Cenários dos andares divididos em setores (Porão, Marketing e Cobertura).
+// Cenários dos andares divididos em setores (Porão, Marketing, Comercial e Cobertura).
 // As áreas e mesas de cada setor ficam em setores.js; aqui só piso, paredes e móveis de decoração.
 
 // Infraestrutura: oficina do Construtor, operações, servidores e depósito.
@@ -75,6 +75,37 @@ CENARIOS.marketing = {
     { tipo: 'planta', x: 13, y: 8 },
     // Performance
     { tipo: 'planta', x: 13, y: 13 },
+  ],
+};
+
+// Comercial: Hospedagem e Corporativo, sala de reunião com clientes e lounge.
+CENARIOS.comercial = {
+  grade: 12,
+  chao: { estilo: 'madeira', cor: 0x6b5a48 },
+  parede: { cor: 0x1f3b36, acabamento: 'liso' },
+  paredes: [
+    { tipo: 'quadro', lado: 'esq', t0: 1.0, t1: 3.4, z0: 50, z1: 90, fundo: 0xf0dbc3, cores: [0x00361b, 0xd9a15b, 0x2a9d8f] },
+    { tipo: 'janela', lado: 'esq', t0: 4.6, t1: 8.4, z0: 42, z1: 102 },
+    { tipo: 'relogio', lado: 'esq', t: 9.6, z: 92 },
+    { tipo: 'tv', lado: 'dir', t0: 1.0, t1: 4.0, z0: 44, z1: 92 },
+    { tipo: 'prateleira', lado: 'dir', t0: 5.0, t1: 8.6, z: 74, itens: [0xd9a15b, 0xf0dbc3, 0x2a9d8f] },
+    { tipo: 'arandela', lado: 'dir', t: 9.4, z: 90 },
+    { tipo: 'elevador', lado: 'dir', t0: 10.2, t1: 11.4, letra: '2' },
+  ],
+  moveis: [
+    { tipo: 'tapete', x: 10.2, y: 0.12, w: 1.2, d: 0.6, cores: [0x00361b, 0xd9a15b] },
+    { tipo: 'planta', x: 0, y: 0, alta: true },
+    { tipo: 'planta', x: 5, y: 0 },
+    // Reunião
+    { tipo: 'mesaReuniao', x: 1.5, y: 7.5 },
+    { tipo: 'cadeirasFrente', x: 1.5, y: 8.9 },
+    { tipo: 'planta', x: 5, y: 11 },
+    // Lounge
+    { tipo: 'cafeteira', x: 8, y: 6 },
+    { tipo: 'sofa', x: 8, y: 8, cor: 0x00361b },
+    { tipo: 'mesinha', x: 8.5, y: 9.1 },
+    { tipo: 'poltrona', x: 11, y: 9, cor: 0xd9a15b },
+    { tipo: 'planta', x: 11, y: 11, alta: true },
   ],
 };
 

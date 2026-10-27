@@ -20,6 +20,12 @@ const SETORES = {
     { id: 'video', nome: 'Vídeo', area: [0, 10, 7, 4], cor: 0xff6b6b, estacao: 'video', mesas: [[1, 11], [3, 11], [5, 11]] },
     { id: 'performance', nome: 'Performance', area: [7, 10, 7, 4], cor: 0x2a9d8f, estacao: 'graficos', mesas: [[8, 11], [10, 11], [12, 11]] },
   ],
+  comercial: [
+    { id: 'hospedagem', nome: 'Hospedagem', area: [0, 0, 6, 5], cor: 0xe9c46a, estacao: 'mesa', vaga: 'vaga', mesas: [[1, 1], [3, 1], [1, 3]] },
+    { id: 'corporativo', nome: 'Corporativo', area: [6, 0, 4, 5], cor: 0x2a9d8f, estacao: 'executiva', vaga: 'vagaExecutiva', mesas: [[7, 1], [9, 1], [7, 3]] },
+    { id: 'reuniao', nome: 'Reunião', area: [0, 6, 6, 6], cor: 0x8ecae6 },
+    { id: 'lounge', nome: 'Lounge', area: [7, 6, 5, 6], cor: 0xd4af37 },
+  ],
   cobertura: [
     // Os estagiários dividem a mesa de reunião (lugares nas cadeiras do fundo, sem estação própria).
     { id: 'reuniao', nome: 'Reunião', area: [1, 1, 8, 4], cor: 0x8ecae6, estacao: 'nenhuma', mesas: [[2.2, 1.45], [4.2, 1.45], [5.2, 1.45], [7.2, 1.45]], semVagas: true },
