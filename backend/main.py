@@ -237,6 +237,11 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     # No Cérebro, "Aprenda:" também aceita "todas" (regra comum às três).
     empresa = str(msg.get("empresa", ""))
     ensino = agente.id == cerebro.ID and cerebro.e_ensino(texto)
+    # Ajuste de uma peça já produzida: a empresa é a da peça, nunca a do seletor (nem é preciso escolher).
+    # Teste real (27/10/2026): "Ajuste na peça #63" pedia a empresa, que já está na peça.
+    if agente.id in AGENTES_PRODUCAO and (base := producao.base_do_ajuste(usuario["sub"], agente.id, texto)):
+        if (peca := tarefas.obter(base)) and empresas.valida(peca["empresa"]):
+            empresa = peca["empresa"]
     if andar in EXIGEM_EMPRESA or agente.id == cerebro.ID:
         if not (empresas.valida(empresa) or (ensino and empresa == empresas.COMUM)):
             return await erro("Escolha a empresa desta conversa (Casa Veraneio, Corporativo ou Casa Vero) no "
