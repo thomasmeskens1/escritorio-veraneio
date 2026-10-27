@@ -228,7 +228,7 @@ def regras_fotos(empresa: str) -> str:
                                   if vero.exists() else "")
     indices = {"casa_vero": catalogo_fotos_empresas.INDICE_VERO, "cv_corporativo": catalogo_fotos_empresas.INDICE_CORP}
     if empresa in indices and indices[empresa].exists():
-        return (f"FOTOS: use primeiro os arquivos anexados e as referências do pedido. Para completar, as fotos desta "
+        return regras_logo(empresa) + (f"FOTOS: use primeiro os arquivos anexados e as referências do pedido. Para completar, as fotos desta "
                 f"empresa estão no índice {indices[empresa]} (leia com python): use SÓ a pasta do imóvel/espaço da "
                 "peça, como o índice indica; no Corporativo, o acervo dos Lodges da Casa Veraneio só nos espaços "
                 "marcados \"PODE (mesma casa)\". Tudo SOMENTE LEITURA: COPIE o arquivo com python (shutil.copy2) "
@@ -238,6 +238,20 @@ def regras_fotos(empresa: str) -> str:
     return ("FOTOS: esta peça NÃO é da Casa Veraneio. Não use o acervo de fotos dos Lodges (é da Casa Veraneio). Use só "
             "os arquivos anexados e as referências do pedido; se não houver foto, entregue o layout com marcadores de "
             "imagem e avise no resumo.")
+
+
+PASTA_MARCAS = comum.CEREBRO / "MARCAS"
+LOGOS = {"cv_corporativo": "CORPORATIVO"}  # logos enviados pelo Thomas (27/10/2026); usos no manual da empresa
+
+
+def regras_logo(empresa: str) -> str:
+    pasta = PASTA_MARCAS / LOGOS.get(empresa, "-")
+    if not pasta.is_dir():
+        return ""
+    return (f"LOGO: use SÓ os logos oficiais desta empresa, PNG transparentes em {pasta} (somente leitura; copie "
+            "com python para a pasta atual): *_verde.png sobre fundo claro, *_branca.png sobre fundo escuro ou "
+            "foto, *_caramelo_texto_branco.png sobre fundo escuro quando pedir cor. Nunca use o logo da Casa "
+            "Veraneio (Lodges) nem redesenhe o logo. ")
 
 
 def regras_acervo() -> str:
