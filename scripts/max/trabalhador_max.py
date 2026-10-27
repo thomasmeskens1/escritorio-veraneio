@@ -222,7 +222,7 @@ def regras_fotos(empresa: str) -> str:
     if empresa == "casa_veraneio":
         # Lodges que também são imóveis da Casa Vero (mesma casa): os tours e fotos da Vero também valem.
         vero = catalogo_fotos_empresas.INDICE_VERO
-        return regras_acervo() + (f" Se o Lodge da peça também é um imóvel da Casa Vero (lista \"Mesma casa nas duas "
+        return regras_logo(empresa) + regras_acervo() + (f" Se o Lodge da peça também é um imóvel da Casa Vero (lista \"Mesma casa nas duas "
                                   f"empresas\" no índice {vero}), as pastas desse Vero no índice também podem ser usadas "
                                   "(costumam ter tours em vídeo), com as mesmas regras de só leitura."
                                   if vero.exists() else "")
@@ -241,17 +241,25 @@ def regras_fotos(empresa: str) -> str:
 
 
 PASTA_MARCAS = comum.CEREBRO / "MARCAS"
-LOGOS = {"cv_corporativo": "CORPORATIVO"}  # logos enviados pelo Thomas (27/10/2026); usos no manual da empresa
+# Logos enviados pelo Thomas (27/10/2026): pasta em CÉREBRO/MARCAS e qual arquivo usar em cada fundo.
+LOGOS = {
+    "casa_veraneio": ("CASA_VERANEIO", "logo_branca.png sobre foto ou fundo escuro (padrão); "
+                      "logo_caramelo_texto_creme.png sobre Verde ou escuro quando pedir cor; logo_preta.png só em "
+                      "peça monocromática clara; simbolo_*.png (sem texto) para ícone, selo ou grafismo. Não há "
+                      "logo completo em Verde: em fundo claro, simbolo_verde.png + nome em texto. Nunca use o logo "
+                      "do Corporativo (\"CORP.\")"),
+    "cv_corporativo": ("CORPORATIVO", "logo_corp_verde.png sobre fundo claro; logo_corp_branca.png sobre fundo "
+                       "escuro ou foto; logo_corp_caramelo_texto_branco.png sobre fundo escuro quando pedir cor. "
+                       "Nunca use o logo da Casa Veraneio (Lodges)"),
+}
 
 
 def regras_logo(empresa: str) -> str:
-    pasta = PASTA_MARCAS / LOGOS.get(empresa, "-")
-    if not pasta.is_dir():
+    pasta, uso = LOGOS.get(empresa, ("-", ""))
+    if not (PASTA_MARCAS / pasta).is_dir():
         return ""
-    return (f"LOGO: use SÓ os logos oficiais desta empresa, PNG transparentes em {pasta} (somente leitura; copie "
-            "com python para a pasta atual): *_verde.png sobre fundo claro, *_branca.png sobre fundo escuro ou "
-            "foto, *_caramelo_texto_branco.png sobre fundo escuro quando pedir cor. Nunca use o logo da Casa "
-            "Veraneio (Lodges) nem redesenhe o logo. ")
+    return (f"LOGO: use SÓ os logos oficiais desta empresa, PNG transparentes em {PASTA_MARCAS / pasta} (somente "
+            f"leitura; copie com python para a pasta atual): {uso}. Nunca redesenhe o logo. ")
 
 
 def regras_acervo() -> str:
