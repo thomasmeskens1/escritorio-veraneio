@@ -258,12 +258,25 @@ LOGOS = {
 }
 
 
+def regras_fontes() -> str:
+    """Tipografia do manual da marca (27/10/2026), igual nas três empresas; detalhes no manual 08, seção 5."""
+    fontes = PASTA_MARCAS / "FONTES"
+    if not fontes.is_dir():
+        return ""
+    return (f"FONTES: use os arquivos de {fontes} (somente leitura; copie para a pasta atual): título primário em "
+            "Playfair Display Extrabold 800 (PlayfairDisplay-Variavel.ttf; no Pillow set_variation_by_name"
+            "(\"ExtraBold\"); em HTML @font-face com font-weight 400 900, pois o Google Fonts com só ital@0;1 não traz "
+            "o 800), título secundário em Playfair Regular itálico (PlayfairDisplay-Italico-Variavel.ttf) e corpo em "
+            "Muli Regular (Muli-Variavel.ttf; no PPTX, nome da fonte \"Muli\"). Localização como \"Cidade / UF\". "
+            "Leitura sobre foto: degradê Verde ou caixa de texto reta Verde #00361B ou Caramelo #D9A15B, nunca preta. ")
+
+
 def regras_logo(empresa: str) -> str:
     pasta, uso = LOGOS.get(empresa, ("-", ""))
     if not (PASTA_MARCAS / pasta).is_dir():
-        return ""
-    return (f"LOGO: use SÓ os logos oficiais desta empresa, PNG transparentes em {PASTA_MARCAS / pasta} (somente "
-            f"leitura; copie com python para a pasta atual): {uso}. Nunca redesenhe o logo. ")
+        return regras_fontes()
+    return regras_fontes() + (f"LOGO: use SÓ os logos oficiais desta empresa, PNG transparentes em {PASTA_MARCAS / pasta} "
+                              f"(somente leitura; copie com python para a pasta atual): {uso}. Nunca redesenhe o logo. ")
 
 
 def regras_acervo() -> str:
