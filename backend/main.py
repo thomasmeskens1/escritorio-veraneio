@@ -294,6 +294,22 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         # Teste real: "4 stories" foi respondido depois como REELS.
         if (formato := monday.linha_de_formato(texto)):
             texto = f"{texto}\n\n{formato}"
+    # Produção: quem produz é o especialista do formato (vídeo = Editor de Vídeo; imagem = Criador de Imagens), mesmo
+    # que o pedido tenha sido feito ao outro. No ajuste, conta também o que a peça original era (#63: carrossel em
+    # vídeo feito pelo Criador de Imagens). A entrega volta ao chat onde o usuário pediu.
+    base_producao = None
+    if agente.id in AGENTES_PRODUCAO:
+        base_producao = base_ajuste or producao.base_do_ajuste(usuario["sub"], agente.id, texto)
+        peca_base = tarefas.obter(base_producao) if base_producao else None
+        original = peca_base["texto"] if peca_base else ""
+        alvo_produtor = producao.produtor_da_peca(f"{texto}\n{original}")
+        if alvo_produtor != agente.id and (especialista := buscar_agente(andar, alvo_produtor)):
+            origem_id = origem_id or agente.id
+            aviso = {"titulo": "Com o especialista",
+                     "texto": f"{'Este ajuste' if base_producao else 'Esta peça'} é de "
+                              f"{'vídeo' if alvo_produtor == 'editor_video' else 'imagem'}, então quem produz é o "
+                              f"{especialista.nome}. A entrega chega aqui quando ficar pronta."}
+            agente = especialista
     # Erros e avisos imediatos ficam no chat onde o usuário escreveu (alvo não muda).
     # Produção (Criador de Imagens, Editor de Vídeo) tem fila: ocupado não impede pedir outra peça ou ajuste.
     if agente.status == Status.trabalhando and agente.id not in AGENTES_PRODUCAO:
@@ -319,7 +335,7 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         # "Ajuste na peça #20: ..." ou "troque o título...": nova versão da peça anterior, na mesma pasta.
         await producao.enfileirar(usuario["sub"], andar, agente, f"{texto}\n\n{contexto}".strip(), empresa=empresa,
                                   anexos=anexos.caminhos(anexos_ids, usuario["sub"]),
-                                  base=producao.base_do_ajuste(usuario["sub"], agente.id, texto), ao_criar=ao_criar)
+                                  base=base_producao, ao_criar=ao_criar)
     else:
         await orquestrador.nova_tarefa(usuario["sub"], andar, agente, texto, anexos_ids, contexto=contexto, empresa=empresa,
                                        ao_criar=ao_criar)

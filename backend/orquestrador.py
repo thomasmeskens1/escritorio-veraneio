@@ -189,7 +189,10 @@ async def _produzir_pecas(linha, consolidado: str) -> bool:
     # Pasta de entrega com o nome do projeto (ex.: "Post Réveillon Lodge 1"), não com o briefing.
     titulo = titulo_do_projeto(linha["id"]) or producao.titulo_curto(linha["texto"])
     produziu = False
-    for agente_id in agentes_de_producao(linha["id"]):
+    # Uma peça, um produtor: o especialista do formato (vídeo = Editor de Vídeo), mesmo que o plano cite os dois.
+    # Teste real (26/10/2026): o plano com Criador e Editor gerou duas produções da mesma peça (#63 e #64).
+    produtores = [producao.produtor_da_peca(f"{linha['texto']}\n{consolidado}")] if agentes_de_producao(linha["id"]) else []
+    for agente_id in produtores:
         agente = buscar_agente(linha["andar"], agente_id)
         if not agente:
             continue

@@ -139,12 +139,25 @@ def titulo_curto(texto: str) -> str:
 
 def ultima_concluida(login: str, agente_id: str, tarefa_id: int | None = None) -> int | None:
     """Produção concluída a ajustar: a citada (#id) ou a mais recente deste usuário com este agente."""
-    filtro, valores = ("AND t.id = ?", (tarefa_id,)) if tarefa_id else ("", ())
+    # Peça citada (#id): vale mesmo que outro agente de produção a tenha feito (o ajuste pode ir ao especialista do
+    # formato: peça de vídeo feita pelo Criador de Imagens é ajustada pelo Editor de Vídeo).
+    filtro, valores = ("AND t.id = ?", (tarefa_id,)) if tarefa_id else ("AND t.agente = ?", (agente_id,))
     linha = _db().execute(
-        "SELECT t.id FROM tarefas t JOIN producao_info p ON p.tarefa_id = t.id WHERE t.usuario = ? AND t.agente = ? "
+        "SELECT t.id FROM tarefas t JOIN producao_info p ON p.tarefa_id = t.id WHERE t.usuario = ? "
         f"AND t.status = 'concluida' AND p.pasta IS NOT NULL {filtro} ORDER BY t.id DESC LIMIT 1",
-        (login, agente_id, *valores)).fetchone()
+        (login, *valores)).fetchone()
     return linha["id"] if linha else None
+
+
+# Quem produz é o especialista do formato, não quem recebeu o pedido (Thomas, 27/10/2026): vídeo (reels, shorts, MP4,
+# cenas, páginas em vídeo) = Editor de Vídeo; imagem estática = Criador de Imagens. Uma peça, um produtor.
+E_VIDEO = re.compile(r"\b(reels?|shorts?|v[ií]deos?|mp4|cenas?|anima[cç][aã]o|motion|clipes?|em\s+v[ií]deo)\b",
+                     re.IGNORECASE)
+
+
+def produtor_da_peca(texto: str) -> str:
+    """"editor_video" se a peça é (ou tem partes em) vídeo; senão "criador_imagens"."""
+    return "editor_video" if E_VIDEO.search(texto or "") else "criador_imagens"
 
 
 def agente_da_peca(login: str, texto: str) -> str | None:
