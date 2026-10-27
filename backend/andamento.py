@@ -7,6 +7,7 @@ Status de cada etapa: concluida | andamento | pendente | falhou.
 
 import json
 import re
+from collections import Counter
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Header, HTTPException
@@ -73,7 +74,24 @@ def _etapas_por_eventos(linha, eventos: list) -> list[dict]:
     elif linha["status"] == "produzindo":
         etapas += _etapas_da_producao(linha["id"])
     etapas.append({"texto": "Entregar a resposta no chat", "status": "pendente"})
-    return etapas
+    return _sem_repeticao(etapas)
+
+
+def _sem_repeticao(etapas: list[dict]) -> list[dict]:
+    """Mesma etapa principal mais de uma vez (o modelo tentado de novo, a mesma consulta ao Cérebro): fica uma linha
+    só, na posição da última vez e com o status dela, e a contagem no texto (auditoria de todos os agentes,
+    27/10/2026). As partes da produção (sub) já chegam sem repetição de _etapas_da_producao."""
+    vezes = Counter(e["texto"] for e in etapas if not e.get("sub"))
+    vistas, saida = Counter(), []
+    for etapa in etapas:
+        texto = etapa["texto"]
+        if not etapa.get("sub") and vezes[texto] > 1:
+            vistas[texto] += 1
+            if vistas[texto] < vezes[texto]:
+                continue
+            etapa = {**etapa, "texto": f"{texto} ({vezes[texto]} vezes)"}
+        saida.append(etapa)
+    return saida
 
 
 PECA = re.compile(r"^\s*(\d+)\s*/\s*(\d+)\s*\|\s*(.+)$")
