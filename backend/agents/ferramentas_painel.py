@@ -10,6 +10,7 @@ Só na conta do Thomas: há vendas, receita e investimento (executor.py).
 import os
 import re
 import sys
+import types
 from pathlib import Path
 
 from crewai.tools import BaseTool
@@ -71,6 +72,13 @@ def disponivel() -> bool:
 def _db():
     if str(SISTEMA) not in sys.path:
         sys.path.insert(0, str(SISTEMA))
+    # As análises de anúncios fazem "from coleta import config" (contas de anúncio por marca). O __init__ do pacote
+    # coleta carrega o motor de coleta inteiro (Google, Meta, Monday...), que não é preciso aqui: registra o pacote
+    # sem o __init__, e só o config.py é carregado.
+    if "coleta" not in sys.modules:
+        pacote = types.ModuleType("coleta")
+        pacote.__path__ = [str(SISTEMA / "coleta")]
+        sys.modules["coleta"] = pacote
     import db_manager  # código do painel (só leitura); o banco vem de SOCIAL_ANALYTICS_DADOS
 
     return db_manager
@@ -90,7 +98,8 @@ def _ferramenta(nome: str, descricao: str, parametros: dict, chamada, tarefa_id:
         return resposta[:MAX_SAIDA] + ("\n[… resposta cortada: peça um período menor ou uma campanha específica]"
                                        if len(resposta) > MAX_SAIDA else "")
 
-    classe = type(f"Ferramenta_{nome}", (BaseTool,), {"__annotations__": {"name": str, "description": str,
+    classe = type(f"Ferramenta_{nome}", (BaseTool,), {"__module__": __name__,
+                                                      "__annotations__": {"name": str, "description": str,
                                                                            "args_schema": type[BaseModel]},
                                                       "name": nome, "description": f"Painel analítico: {descricao}",
                                                       "args_schema": esquema, "_run": _run})
