@@ -12,12 +12,13 @@ Grava CÉREBRO/catalogo_fotos_casa_vero.md e CÉREBRO/catalogo_fotos_corporativo
 Uso avulso: python scripts/max/catalogo_fotos_empresas.py
 """
 
+import json
 import re
 import sqlite3
 from pathlib import Path
 
 import comum
-from catalogo_lodges import FOTOS, IGNORAR, VIDEOS
+from catalogo_lodges import FOTOS, IGNORAR, PADRAO_NUMERO, VIDEOS, pastas_de_faixa
 from comum import log
 
 MARKETING = comum.DRIVE.parent / "MARKETING"
@@ -26,6 +27,7 @@ FOTOS_EVENTOS = comum.DRIVE.parent / "CORPORATIVO" / "FOTOS EVENTOS"
 INDICE_VERO = comum.CEREBRO / "catalogo_fotos_casa_vero.md"
 INDICE_CORP = comum.CEREBRO / "catalogo_fotos_corporativo.md"
 BANCO_COPIA = comum.DADOS / "escritorio.copia.db"
+MESMA_CASA_VERO = comum.DADOS / "mesma_casa_vero.json"  # Vero N = Lodge N (confirmados pelo Thomas/conferência)
 VERO_NA_PASTA = re.compile(r"^\s*vero\s*0*(\d{1,4})\b", re.IGNORECASE)
 LODGE_NA_PASTA = re.compile(r"lodges?\s*0*(\d{1,3})((?:\s*[+e&,]\s*0*\d{1,3})*)", re.IGNORECASE)
 CIDADE = re.compile(r"Lodge 0*(\d+)\s+—\s+([^\n(›]+?)\s*(?:\(|›|$)", re.MULTILINE)
@@ -57,15 +59,47 @@ def catalogo_vero() -> str:
                 por_numero.setdefault(int(achado.group(1)), []).append(_linha(pasta, base))
             else:
                 outras.append(_linha(pasta, base))
+    # Mesma casa nas duas empresas (Vero N = Lodge N da Casa Veraneio): o acervo dos Lodges também serve à Vero.
+    mesma_casa = _mesma_casa_vero()
+    pastas_lodge = _pastas_do_acervo(mesma_casa)
+    for numero, pasta in pastas_lodge.items():
+        por_numero.setdefault(numero, []).append(
+            _linha(pasta, comum.ACERVO) + f" — acervo da Casa Veraneio (Lodge {numero} = mesma casa)")
     partes = ["# Fotos e vídeos da Casa Vero Imóveis (somente leitura)", "",
-              f"Pastas: {', '.join(str(p) for p in PASTAS_VERO)}.",
+              f"Pastas: {', '.join(str(p) for p in PASTAS_VERO)}; e, para os imóveis que são a mesma casa de um "
+              f"Lodge da Casa Veraneio, a pasta do Lodge no acervo ({comum.ACERVO}).",
               "Use só a pasta do Vero citado na peça. Copie o arquivo para a pasta de trabalho antes de usar; nunca "
-              "grave, mova, renomeie ou apague nada nestas pastas.", "", "## Por imóvel"]
+              "grave, mova, renomeie ou apague nada nestas pastas.", "",
+              f"Mesma casa nas duas empresas (Vero N = Lodge N): {', '.join(map(str, sorted(mesma_casa))) or 'nenhuma'}. "
+              "Num trabalho da Casa Veraneio sobre esses Lodges, as pastas da Vero abaixo também valem (tours em vídeo).",
+              "", "## Por imóvel"]
     for numero in sorted(por_numero):
-        partes += [f"### Vero {numero}", *por_numero[numero]]
+        partes += [f"### Vero {numero}" + (" (= Lodge da Casa Veraneio)" if numero in mesma_casa else ""),
+                   *por_numero[numero]]
     partes += ["", "## Pastas sem número de Vero (NÃO são o Vero de mesmo número; só use se o pedido citar a pasta)",
                *outras]
     return "\n".join(partes) + "\n"
+
+
+def _mesma_casa_vero() -> set[int]:
+    """Vero N que são a mesma casa do Lodge N (backend/dados/mesma_casa_vero.json, lista "confirmados")."""
+    try:
+        return set(json.loads(MESMA_CASA_VERO.read_text(encoding="utf-8")).get("confirmados", []))
+    except (OSError, ValueError):
+        return set()
+
+
+def _pastas_do_acervo(numeros: set[int]) -> dict[int, Path]:
+    """Pasta de cada Lodge no acervo ("Lodges N-M" > "Lodge N ..."), só pelos nomes (sem abrir arquivos)."""
+    pastas = {}
+    for faixa, inicio, fim in pastas_de_faixa(comum.ACERVO) if comum.ACERVO.exists() else []:
+        if not any(inicio <= n <= fim for n in numeros):
+            continue
+        for pasta in faixa.iterdir():
+            achado = PADRAO_NUMERO.search(pasta.name)
+            if pasta.is_dir() and achado and int(achado.group(1)) in numeros:
+                pastas.setdefault(int(achado.group(1)), pasta)
+    return pastas
 
 
 def _cidades(prefixo: str) -> dict[int, str]:

@@ -217,7 +217,12 @@ def regras_fotos(empresa: str) -> str:
     """Fotos por empresa, todas SOMENTE LEITURA: Casa Veraneio = acervo dos Lodges; Casa Vero e Corporativo = as
     pastas indicadas pelo Thomas, pelo catálogo (catalogo_fotos_empresas.py). Arquivos do pedido vêm primeiro."""
     if empresa == "casa_veraneio":
-        return regras_acervo()
+        # Lodges que também são imóveis da Casa Vero (mesma casa): os tours e fotos da Vero também valem.
+        vero = catalogo_fotos_empresas.INDICE_VERO
+        return regras_acervo() + (f" Se o Lodge da peça também é um imóvel da Casa Vero (lista \"Mesma casa nas duas "
+                                  f"empresas\" no índice {vero}), as pastas desse Vero no índice também podem ser usadas "
+                                  "(costumam ter tours em vídeo), com as mesmas regras de só leitura."
+                                  if vero.exists() else "")
     indices = {"casa_vero": catalogo_fotos_empresas.INDICE_VERO, "cv_corporativo": catalogo_fotos_empresas.INDICE_CORP}
     if empresa in indices and indices[empresa].exists():
         return (f"FOTOS: use primeiro os arquivos anexados e as referências do pedido. Para completar, as fotos desta "
