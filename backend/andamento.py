@@ -115,7 +115,9 @@ def _etapas_da_producao(tarefa_id: int) -> list[dict]:
     etapas[-1]["status"] = "andamento"
     if etapas[-1]["nivel"]:  # parte ou fase em andamento: quem está acima dela também está
         for nivel in range(etapas[-1]["nivel"] - 1, -1, -1):
-            next(e for e in reversed(etapas) if e["nivel"] == nivel)["status"] = "andamento"
+            # A produção pode começar direto por uma fase, sem a linha da peça (teste real: "> Ajuste v3: ...").
+            if (acima := next((e for e in reversed(etapas) if e["nivel"] == nivel), None)):
+                acima["status"] = "andamento"
         if subs and (ultimo := subs[-1]) and ultimo[1] > ultimo[0]:
             nivel = etapas[-1]["nivel"]
             etapas += [{"texto": f"{k} de {ultimo[1]}", "status": "pendente", "sub": True, "nivel": nivel,

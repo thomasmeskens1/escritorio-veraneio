@@ -40,6 +40,9 @@ function tratarMensagem(msg) {
     case 'erro':
       receberErro(msg);
       break;
+    case 'limpar_chat':
+      limparConversas(msg);
+      break;
   }
 }
 

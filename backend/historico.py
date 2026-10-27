@@ -60,6 +60,32 @@ def _mensagens_da_tarefa(linha, encaminhada: bool | None = None) -> list[dict]:
     return mensagens
 
 
+# Limpeza VISUAL do chat (recurso reservado do dono): a conversa passa a ser mostrada só a partir de certa tarefa.
+# Não apaga nada: as tarefas e a memória dos agentes (tarefas.historico) continuam intactas.
+_ESQUEMA_LIMPEZA = ("CREATE TABLE IF NOT EXISTS chat_limpo (usuario TEXT NOT NULL, chave TEXT NOT NULL, "
+                    "ate_id INTEGER NOT NULL, PRIMARY KEY (usuario, chave))")
+TODOS = "*"
+
+
+def limpar(usuario: str, andar: str = "", agente_id: str = "") -> None:
+    """Esconde da tela do usuário as tarefas já terminadas: deste chat, ou de todos (sem andar/agente)."""
+    banco = tarefas._db()
+    with banco:
+        banco.execute(_ESQUEMA_LIMPEZA)
+        ate = banco.execute("SELECT COALESCE(MAX(id), 0) FROM tarefas WHERE usuario = ? AND status IN "
+                            "('concluida', 'falhou')", (usuario,)).fetchone()[0]
+        banco.execute("INSERT OR REPLACE INTO chat_limpo (usuario, chave, ate_id) VALUES (?, ?, ?)",
+                      (usuario, f"{andar}/{agente_id}" if andar else TODOS, ate))
+
+
+def _limpo_ate(usuario: str, andar: str, agente_id: str) -> int:
+    banco = tarefas._db()
+    banco.execute(_ESQUEMA_LIMPEZA)
+    linha = banco.execute("SELECT MAX(ate_id) FROM chat_limpo WHERE usuario = ? AND chave IN (?, ?)",
+                          (usuario, f"{andar}/{agente_id}", TODOS)).fetchone()
+    return linha[0] or 0
+
+
 @rotas.get("/historico/{andar}/{agente_id}")
 def historico_do_chat(andar: str, agente_id: str, limite: int = 30, authorization: str = Header("")):
     """Últimas `limite` tarefas do próprio usuário com o agente, em ordem cronológica."""
@@ -75,8 +101,8 @@ def historico_do_chat(andar: str, agente_id: str, limite: int = 30, authorizatio
     marcadores = ",".join("?" * len(vindas)) or "NULL"
     linhas = tarefas._db().execute(
         f"SELECT * FROM tarefas WHERE usuario = ? AND ((andar = ? AND agente = ?) OR id IN ({marcadores})) "
-        "ORDER BY id DESC LIMIT ?",
-        (usuario["sub"], andar, agente_id, *vindas, limite),
+        "AND id > ? ORDER BY id DESC LIMIT ?",
+        (usuario["sub"], andar, agente_id, *vindas, _limpo_ate(usuario["sub"], andar, agente_id), limite),
     ).fetchall()
 
     mensagens, pendentes = [], []

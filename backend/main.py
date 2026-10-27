@@ -1,6 +1,7 @@
 """API do Escritório Veraneio: login, WebSocket em tempo real, painel de tarefas e frontend estático."""
 
 import asyncio
+import hashlib
 import json
 import logging
 import time
@@ -39,6 +40,9 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("veraneio")
 
 TAMANHO_MAX_TEXTO = 4000
+# Comandos reservados do dono, pelo hash (sha256) do texto: nenhum nome no código público nem na interface.
+COMANDOS_RESERVADOS = {"ddf7839cb8fca09abdd9e9b0b2f498885f382f5bf9fec65d95db793bd0f11832": "chat",
+                       "7416b21e82400f2b73863b1c65dafc0581d462baae82802358ea2c84fd389f7f": "todos"}
 EXIGEM_EMPRESA = {"marketing"}  # andares que trabalham para uma empresa (o Cérebro também, ver tratar_mensagem)
 MAX_FALHAS_LOGIN = 5          # senhas erradas seguidas por usuário/IP antes do bloqueio
 MAX_FALHAS_IP = 20            # senhas erradas de um IP (qualquer usuário) antes do bloqueio
@@ -218,6 +222,13 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
 
     andar, agente_id = str(msg.get("andar", "")), str(msg.get("agente", ""))
     texto = str(msg.get("texto", "")).strip()
+    # Comandos reservados do dono (limpeza visual do chat). Sem nome no código (o repositório é público): compara o
+    # hash do texto. Para qualquer outra conta, ou texto que não seja comando, segue como mensagem comum.
+    if usuario["sub"] == config.DONO_MAX and (comando := COMANDOS_RESERVADOS.get(
+            hashlib.sha256(texto.lower().encode()).hexdigest())):
+        historico.limpar(usuario["sub"], *((andar, agente_id) if comando == "chat" else ()))
+        return await gerenciador.enviar(ws, {"tipo": "limpar_chat", "andar": andar, "agente": agente_id,
+                                             "todos": comando == "todos"})
     anexos_ids = [str(i) for i in msg.get("anexos") or [] if isinstance(i, str)][:4]
     alvo = {"andar": andar, "agente": agente_id}
 

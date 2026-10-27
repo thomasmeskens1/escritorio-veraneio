@@ -444,6 +444,15 @@ async function enviarTarefa(evento) {
   // O servidor exige texto: com anexo e sem texto, vai uma frase padrão.
   const texto = modalInput.value.trim() || (escolhidos.length ? 'Veja o anexo.' : '');
   if (!texto) return;
+  // "/palavra": quem decide o que é o servidor; não pede empresa nem aparece como mensagem na conversa.
+  if (/^\/\S+$/.test(texto) && !escolhidos.length) {
+    if (enviar({ tipo: 'mensagem', andar, agente, texto })) {
+      modalInput.value = '';
+      rascunhos[k] = '';
+      ajustarAlturaInput();
+    }
+    return;
+  }
   if (!garantirEmpresa(andar, agente)) return; // sem empresa escolhida: formulário (js/empresa.js)
 
   let anexos = [];
@@ -482,6 +491,18 @@ async function enviarTarefa(evento) {
   renderizarSelecao();
   pendentes.add(k);
   adicionarMensagem(andar, agente, { autor: 'Você', texto, tipo: 'voce', anexos });
+  atualizarChat();
+}
+
+// Limpeza só da tela (o servidor guardou a partir de onde mostrar; a memória dos agentes não muda).
+function limparConversas({ andar, agente, todos }) {
+  const chaves = todos ? Object.keys(historicos) : [chave(andar, agente)];
+  chaves.forEach((k) => {
+    historicos[k] = [];
+    historicoCarregado.add(k);
+    pendentes.delete(k);
+  });
+  if (chatAberto && (todos || chatEstaAberto(andar, agente))) renderizarHistorico(chatAberto.andar, chatAberto.agente);
   atualizarChat();
 }
 
