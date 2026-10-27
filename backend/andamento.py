@@ -94,33 +94,46 @@ def _etapas_da_producao(tarefa_id: int) -> list[dict]:
     # Níveis: peça ("1/1 | Carrossel"), fase da peça ("> Geração dos vídeos") e parte ("- 2/8 | Slide 2 — Vero 90").
     # A fase dá nome a cada rodada pelos slides (teste, montagem, vídeos): sem ela, os slides se repetiam sem
     # explicação (teste real, 26/10/2026). As pendências são da fase atual.
+    # Parte repetida no mesmo bloco (o Claude Code voltou aos slides sem anotar uma fase nova): a mesma linha é
+    # reaproveitada com a contagem de passadas, em vez de repetir "Slide 1, Slide 8, Slide 1..." (teste real, #68).
     etapas, pecas, subs = [], [], []
-    tem_fase = False
+    tem_fase, atual, vistas = False, None, {}
     for linha in linhas:
         limpa = linha.lstrip()
         fase = limpa.startswith(">")
         sub = limpa.startswith(("-", "↳"))
         texto = limpa.lstrip(">-↳ ").strip()
         peca = _peca(texto)
+        nome = peca[2] if peca else texto
         if fase:
-            tem_fase, subs = True, []
+            tem_fase, subs, vistas = True, [], {}
         elif sub:
             subs.append(peca)
+            if (repetida := vistas.get(nome)):
+                repetida["passadas"] += 1
+                repetida["texto"] = f"{nome} · {repetida['passadas']}ª passada"
+                atual = repetida
+                continue
         else:
             pecas.append(peca)
-            tem_fase, subs = False, []
+            tem_fase, subs, vistas = False, [], {}
         nivel = 1 if fase else (2 if sub and tem_fase else 1 if sub else 0)
-        etapas.append({"texto": peca[2] if peca else texto, "status": "concluida", "sub": nivel > 0,
-                       "nivel": nivel, "fase": fase})
-    etapas[-1]["status"] = "andamento"
-    if etapas[-1]["nivel"]:  # parte ou fase em andamento: quem está acima dela também está
-        for nivel in range(etapas[-1]["nivel"] - 1, -1, -1):
+        atual = {"texto": nome, "status": "concluida", "sub": nivel > 0, "nivel": nivel, "fase": fase, "passadas": 1}
+        etapas.append(atual)
+        if sub:
+            vistas[nome] = atual
+    repetiu = any(e["passadas"] > 1 for e in vistas.values())  # nova passada: não há "próximas" partes a prever
+    for etapa in etapas:
+        etapa.pop("passadas")
+    atual["status"] = "andamento"
+    if atual["nivel"]:  # parte ou fase em andamento: quem está acima dela também está
+        posicao = etapas.index(atual)
+        for nivel in range(atual["nivel"] - 1, -1, -1):
             # A produção pode começar direto por uma fase, sem a linha da peça (teste real: "> Ajuste v3: ...").
-            if (acima := next((e for e in reversed(etapas) if e["nivel"] == nivel), None)):
+            if (acima := next((e for e in reversed(etapas[:posicao]) if e["nivel"] == nivel), None)):
                 acima["status"] = "andamento"
-        if subs and (ultimo := subs[-1]) and ultimo[1] > ultimo[0]:
-            nivel = etapas[-1]["nivel"]
-            etapas += [{"texto": f"{k} de {ultimo[1]}", "status": "pendente", "sub": True, "nivel": nivel,
+        if subs and (ultimo := subs[-1]) and ultimo[1] > ultimo[0] and not repetiu:
+            etapas += [{"texto": f"{k} de {ultimo[1]}", "status": "pendente", "sub": True, "nivel": atual["nivel"],
                         "fase": False} for k in range(ultimo[0] + 1, ultimo[1] + 1)]
     if pecas and (ultima := pecas[-1]) and ultima[1] > ultima[0]:
         etapas += [{"texto": f"Peça {k} de {ultima[1]}", "status": "pendente", "sub": False, "nivel": 0, "fase": False}

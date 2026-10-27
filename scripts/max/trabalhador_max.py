@@ -323,7 +323,10 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
         "páginas): a cada rodada pelas partes, anote primeiro a FASE numa linha começando com \"> \" (ex.: \"> Teste "
         "do modelo\", \"> Montagem dos slides\", \"> Geração dos vídeos\", \"> Revisão final\") e, ao começar cada "
         "parte dentro dela, um subitem começando com \"- \" no formato \"- k/n | parte\" (ex.: \"- 2/8 | Slide 2 — "
-        "Vero 90, Jarinu\"). Assim o usuário entende por que um slide aparece de novo. O sistema mostra isso ao "
+        "Vero 90, Jarinu\"). Assim o usuário entende por que um slide aparece de novo. Voltou às mesmas partes "
+        "(conferir, corrigir, renderizar de novo)? Anote ANTES uma fase nova com o motivo (ex.: \"> Correção do "
+        "contraste do logo\"); nunca repita os subitens sem ela. Em \"k/n\", n é o total de partes desta fase e k vai "
+        "de 1 a n (ajuste nos slides 1 e 8 = \"- 1/2 | Slide 1\", \"- 2/2 | Slide 8\"). O sistema mostra isso ao "
         "usuário enquanto você trabalha.",
         "Ao terminar, responda com um resumo curto (até 5 linhas) do que foi entregue.",
     ]))
