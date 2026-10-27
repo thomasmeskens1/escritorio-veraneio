@@ -125,7 +125,8 @@ def pasta_de_entrega(producao: dict) -> Path:
 
 def pasta_de_rascunho(producao: dict) -> Path:
     """Rascunho local da peça (HTML, cópias de fotos, cenas), fora do Drive; o ajuste reaproveita o da peça base."""
-    base = (producao.get("base") or {}).get("tarefa_id") or producao["tarefa_id"]
+    base = producao.get("base") or {}
+    base = base.get("raiz") or base.get("tarefa_id") or producao["tarefa_id"]  # raiz: ajuste de ajuste
     pasta = RASCUNHOS / str(base)
     pasta.mkdir(parents=True, exist_ok=True)
     return pasta

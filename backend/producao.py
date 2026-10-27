@@ -169,6 +169,19 @@ def agente_da_peca(login: str, texto: str) -> str | None:
     return linha["agente"] if linha else None
 
 
+def _producao_raiz(tarefa_id: int) -> int:
+    """Primeira produção da cadeia de ajustes (#67 ajusta #66, que ajustou #63 -> 63): é onde fica o rascunho local.
+    Antes, o ajuste de um ajuste abria um rascunho vazio e terminava sem arquivos (teste real, #67, 27/10/2026)."""
+    vistos = set()
+    while tarefa_id not in vistos:
+        vistos.add(tarefa_id)
+        linha = _db().execute("SELECT base_tarefa_id FROM producao_info WHERE tarefa_id = ?", (tarefa_id,)).fetchone()
+        if not linha or not linha["base_tarefa_id"]:
+            break
+        tarefa_id = linha["base_tarefa_id"]
+    return tarefa_id
+
+
 def base_do_ajuste(login: str, agente_id: str, texto: str) -> int | None:
     """Pedido de ajuste ("Ajuste na peça #20: ...", "troque o título...") -> produção a ajustar; None = peça nova."""
     citada = re.search(r"#(\d+)", texto)
@@ -383,7 +396,7 @@ async def proxima(authorization: str = Header("")):
         "pasta_andar": PASTAS_ANDAR.get(linha["andar"], linha["andar"].upper()),
         "titulo": info["titulo"] if info else titulo_curto(linha["texto"]),
         # Ajuste: mesma pasta e mesmo rascunho local da produção ajustada.
-        "base": {"tarefa_id": base, "pasta": pasta_base["pasta"]} if pasta_base else None,
+        "base": {"tarefa_id": base, "pasta": pasta_base["pasta"], "raiz": _producao_raiz(base)} if pasta_base else None,
         "texto": linha["texto"], "criada_em": linha["criada_em"],
         # Sem conversas sobre outros Lodges (mesmo filtro do chat: perfis._historico_relevante).
         "historico": [dict(h) for h in _historico_relevante(
