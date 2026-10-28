@@ -96,13 +96,62 @@ def _extrair_plano(texto: str) -> tuple[list[dict], str]:
     return plano[:MAX_ETAPAS], (titulo.group(1).strip() if titulo else "")
 
 
+# Pedido longo (o Gestor aceita até 30 mil caracteres): antes do plano, o Gestor transforma o pedido numa FICHA DE
+# REQUISITOS fiel (R1, R2... verificáveis, com os dados copiados literalmente). A ficha guia as etapas no lugar do
+# texto gigante (cada especialista não se perde nele), ancora o objetivo no fim de cada etapa e vira o checklist da
+# consolidação. Pedido do Thomas (28/10/2026): o Gestor não pode se perder num pedido desse tamanho.
+LIMITE_PEDIDO_CURTO = 6000
+CHECAGEM = re.compile(r"<<CHECAGEM>>(.*?)<<FIM>>", re.S)
+
+
+def _ficha(pasta: Path, pedido: str, contexto: str, executar: "Executar") -> str:
+    """Ficha de requisitos do pedido longo ("" se o pedido é curto ou a ficha não saiu)."""
+    if len(pedido) <= LIMITE_PEDIDO_CURTO:
+        return ""
+    arquivo = pasta / "requisitos.md"
+    if arquivo.exists():
+        return arquivo.read_text(encoding="utf-8")
+    descricao = (
+        f"{contexto}\n\nPedido do usuário ({len(pedido)} caracteres):\n{pedido}\n\n"
+        "O pedido acima é longo. Antes de planejar, transforme-o numa FICHA DE REQUISITOS fiel, que vai guiar toda a "
+        "equipe no lugar do texto original. Não resuma dados: copie literalmente números, nomes, datas, cores, "
+        "medidas, textos obrigatórios (entre aspas) e a estrutura pedida, na ordem. Não acrescente nada que não "
+        "esteja no pedido. Responda SOMENTE neste formato:\n"
+        "OBJETIVO: <uma frase>\n"
+        "ENTREGÁVEIS: <formato, quantidade e medidas de cada entrega>\n"
+        "REQUISITOS:\nR1. <um requisito verificável>\nR2. ...\n"
+        "DADOS FORNECIDOS: <fatos que o pedido dá (local, datas, serviços...)>\n"
+        "TOM E RESTRIÇÕES: <tom, o que evitar>\n"
+        "A CONFIRMAR: <dados que o próprio pedido manda confirmar, conflitos com as regras de ouro, ou 'nada'>")
+    for _ in range(2):  # uma nova tentativa se o modelo fugir do formato
+        ficha = executar("gestor", descricao, "Ficha de requisitos no formato pedido.", "gestor").strip()
+        if "OBJETIVO:" in ficha and re.search(r"^\s*R1[.)]", ficha, re.M):
+            _gravar(arquivo, ficha)
+            return ficha
+    return ""
+
+
+def _objetivo(ficha: str) -> str:
+    return (m.group(1).strip() if (m := re.search(r"OBJETIVO:\s*(.+)", ficha)) else "")
+
+
+def _entregaveis(ficha: str) -> str:
+    return (m.group(1).strip() if (m := re.search(r"ENTREGÁVEIS:\s*(.+)", ficha)) else "")
+
+
+def entregaveis_do_projeto(tarefa_id: int) -> str:
+    """Entregáveis da ficha do pedido longo (decide o produtor sem varrer o texto gigante); "" se não houver."""
+    arquivo = PASTA_PROJETOS / str(tarefa_id) / "requisitos.md"
+    return _entregaveis(arquivo.read_text(encoding="utf-8")) if arquivo.exists() else ""
+
+
 def titulo_do_projeto(tarefa_id: int) -> str:
     """Título curto que o Gestor deu ao projeto (nome da pasta de entrega); "" se não houver."""
     arquivo = PASTA_PROJETOS / str(tarefa_id) / "titulo.txt"
     return arquivo.read_text(encoding="utf-8").strip() if arquivo.exists() else ""
 
 
-def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar) -> list[dict]:
+def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar, ficha: str = "") -> list[dict]:
     from estado import AGENTES_PRODUCAO
 
     arquivo = pasta / "plano.json"
@@ -114,8 +163,12 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar) -> list[
         equipe_txt = ", ".join(f"{i} ({nome})" for i, nome in time.items())
         modo = ("ATENÇÃO: o usuário pediu IDEIAS/PLANO, não a peça pronta. Acione só quem pensa e escreve "
                 "(ex.: Social Media e Copywriter); ninguém produz arte, imagem ou vídeo. " if ideacao else "")
+        guia = (f"FICHA DE REQUISITOS (feita por você a partir do pedido; é a referência da equipe):\n{ficha}\n\n"
+                "Cada requisito R# precisa de uma etapa responsável: cite os R# na instrução de cada etapa e copie "
+                "nela os dados e textos obrigatórios que o especialista vai precisar (ele recebe a ficha, não o "
+                "pedido original). " if ficha else "")
         descricao = (
-            f"{contexto}\n\nPedido do usuário: {pedido}\n\n"
+            f"{contexto}\n\nPedido do usuário: {pedido}\n\n{guia}"
             f"{modo}Divida o trabalho em até {MAX_ETAPAS} etapas para a sua equipe: {equipe_txt}. "
             "Prefira micro-tarefas: cada etapa é uma entrega focada de um único especialista "
             "(ex.: post de Lodge = Copywriter escreve o texto da arte e a legenda com os dados do Cérebro, "
@@ -183,8 +236,12 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
     """`avisar(tipo, agente, detalhe)` recebe etapa_iniciada/etapa_salva (registro e animação do setor)."""
     pasta = PASTA_PROJETOS / str(tarefa_id)
     (pasta / "etapas").mkdir(parents=True, exist_ok=True)
-    plano = _plano(pasta, pedido, contexto, executar)
+    ficha = _ficha(pasta, pedido, contexto, executar)
+    plano = _plano(pasta, pedido, contexto, executar, ficha)
     fase = lambda n, p: p.get("fase", n)  # plano antigo (sem fases): uma etapa por vez
+    # Pedido longo: a etapa recebe a ficha (não o texto gigante) e termina com a âncora do objetivo.
+    projeto_txt = (f"Projeto (ficha de requisitos de um pedido de {len(pedido)} caracteres; é a sua referência):\n"
+                   f"{ficha}" if ficha else f"Projeto: {pedido}")
 
     def rodar_etapa(n: int, passo: dict) -> None:
         if cancelar.is_set():
@@ -193,11 +250,14 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
             f"## Etapa {i} ({_nome(p['agente'])})\n{_arquivo_etapa(pasta, i, p['agente']).read_text(encoding='utf-8')[:TRECHO_ETAPA]}"
             for i, p in enumerate(plano, 1) if fase(i, p) < fase(n, passo)
         )
+        ancora = (f"\n\nLEMBRETE: o objetivo do projeto é \"{_objetivo(ficha)}\". Faça só a sua etapa, cumpra os "
+                  "requisitos R# citados nela com os dados literais da ficha e não mude o objetivo nem o formato."
+                  if ficha else "")
         descricao = (
-            f"{contexto}\n\nProjeto: {pedido}\n\n{_passagem(pasta, plano)}\n"
+            f"{contexto}\n\n{projeto_txt}\n\n{_passagem(pasta, plano)}\n"
             f"Resultados das etapas anteriores:\n{anteriores or '(nenhuma)'}\n\n"
             f"Sua etapa ({n}): {passo['instrucao']}\n\n"
-            f"Seja objetivo: até ~{PALAVRAS_ETAPA} palavras, só o essencial para as próximas etapas."
+            f"Seja objetivo: até ~{PALAVRAS_ETAPA} palavras, só o essencial para as próximas etapas.{ancora}"
         )
         detalhe = f"Etapa {n}: {passo['instrucao'][:160]}"
         avisar("etapa_iniciada", passo["agente"], detalhe)
@@ -234,5 +294,25 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
                      "produzir, não assuma nada: termine com uma linha \"PERGUNTA: <pergunta objetiva>\" "
                      "(a produção espera a resposta). "
                      f"{ESTILO_CHAT}")
-        _gravar(final, executar("gestor", descricao, "Entrega final consolidada e revisada.", "gestor"))
+        if ficha:  # checklist: cada requisito do pedido longo conferido antes de entregar
+            descricao += (f"\n\nFICHA DE REQUISITOS:\n{ficha}\n\nAntes de entregar, confira cada R# contra a "
+                          "entrega. Depois do texto final, acrescente o bloco <<CHECAGEM>> com uma linha por "
+                          "requisito (\"R1: ok\" ou \"R1: faltou - motivo\") e feche com <<FIM>>.")
+        texto = executar("gestor", descricao, "Entrega final consolidada e revisada.", "gestor")
+        if ficha:
+            texto = _aplicar_checagem(pasta, texto)
+        _gravar(final, texto)
     return final.read_text(encoding="utf-8")
+
+
+def _aplicar_checagem(pasta: Path, texto: str) -> str:
+    """Tira o bloco de checagem da resposta (fica em checagem.md) e mostra ao usuário só o que faltou."""
+    achado = CHECAGEM.search(texto)
+    if not achado:
+        return texto
+    _gravar(pasta / "checagem.md", achado.group(1).strip())
+    texto = (texto[:achado.start()] + texto[achado.end():]).strip()
+    faltou = [linha.strip() for linha in achado.group(1).splitlines() if re.search(r"falt", linha, re.I)]
+    if faltou:
+        texto += "\n\nO que ainda falta do seu pedido:\n" + "\n".join(f"- {linha}" for linha in faltou)
+    return texto

@@ -44,6 +44,9 @@ log = logging.getLogger("veraneio")
 
 # 8 mil caracteres (~2 mil tokens): cabem nos modelos gratuitos; o Groq pula sozinho pedido grande (executor.py).
 TAMANHO_MAX_TEXTO = 8000
+# Só o Gestor recebe pedidos gigantes (briefings de até 30 mil): ele os transforma numa ficha de requisitos antes de
+# distribuir à equipe (agents/projeto.py), para ninguém se perder no texto. Thomas, 28/10/2026.
+TAMANHO_MAX_GESTOR = 30000
 # Comandos reservados do dono, pelo hash (sha256) do texto: nenhum nome no código público nem na interface.
 COMANDOS_RESERVADOS = {"ddf7839cb8fca09abdd9e9b0b2f498885f382f5bf9fec65d95db793bd0f11832": "chat",
                        "7416b21e82400f2b73863b1c65dafc0581d462baae82802358ea2c84fd389f7f": "todos"}
@@ -250,8 +253,12 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     if agente.id in AGENTES_PRODUCAO and usuario["sub"] != config.DONO_MAX:
         return await erro("A produção de imagens e vídeos é exclusiva da conta do Thomas. "
                           "Fale com ele para solicitar.", **alvo)
-    if not texto or len(texto) > TAMANHO_MAX_TEXTO:
-        return await erro(f"A tarefa deve ter entre 1 e {TAMANHO_MAX_TEXTO} caracteres.", **alvo)
+    limite = TAMANHO_MAX_GESTOR if agente.id == encaminhamento.GESTOR else TAMANHO_MAX_TEXTO
+    if not texto or len(texto) > limite:
+        extra = "" if limite == TAMANHO_MAX_GESTOR else (
+            f" Pedidos maiores (até {TAMANHO_MAX_GESTOR // 1000} mil caracteres) vão direto ao Gestor, que divide o "
+            "trabalho com a equipe.")
+        return await erro(f"A tarefa deve ter entre 1 e {limite} caracteres.{extra}", **alvo)
     # Marketing e Cérebro trabalham sempre para UMA empresa, escolhida no seletor da conversa (nada é assumido).
     # No Cérebro, "Aprenda:" também aceita "todas" (regra comum às três).
     empresa = str(msg.get("empresa", ""))

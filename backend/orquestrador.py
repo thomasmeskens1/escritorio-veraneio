@@ -187,22 +187,28 @@ async def retomar_producao(pendente, resposta: str) -> str:
 async def _produzir_pecas(linha, consolidado: str) -> bool:
     """Projeto do Gestor com Criador de Imagens/Editor de Vídeo: a peça final vai à produção no Max (só o dono)."""
     import producao  # import tardio: a produção depende do orquestrador
-    from agents.projeto import agentes_de_producao, titulo_do_projeto
+    from agents.projeto import PASTA_PROJETOS, agentes_de_producao, entregaveis_do_projeto, titulo_do_projeto
 
     # Pasta de entrega com o nome do projeto (ex.: "Post Réveillon Lodge 1"), não com o briefing.
     titulo = titulo_do_projeto(linha["id"]) or producao.titulo_curto(linha["texto"])
     produziu = False
     # Uma peça, um produtor: o especialista do formato (vídeo = Editor de Vídeo), mesmo que o plano cite os dois.
     # Teste real (26/10/2026): o plano com Criador e Editor gerou duas produções da mesma peça (#63 e #64).
-    produtores = ([producao.produtor_da_peca(f"{linha['texto']}\n{consolidado}", linha["texto"])]
+    # Pedido longo: decide pelos entregáveis da ficha (um briefing de 30 mil caracteres cita "vídeo" à toa).
+    entregaveis = entregaveis_do_projeto(linha["id"])
+    produtores = ([producao.produtor_da_peca(entregaveis, entregaveis) if entregaveis else
+                   producao.produtor_da_peca(f"{linha['texto']}\n{consolidado}", linha["texto"])]
                   if agentes_de_producao(linha["id"]) else [])
+    ficha = PASTA_PROJETOS / str(linha["id"]) / "requisitos.md"
+    if ficha.exists():  # a produção também confere a entrega contra os requisitos
+        consolidado = f"{consolidado}\n\nFICHA DE REQUISITOS DO PEDIDO (confira cada R#):\n{ficha.read_text(encoding='utf-8')}"
     for agente_id in produtores:
         agente = buscar_agente(linha["andar"], agente_id)
         if not agente:
             continue
         briefing = (f"Produza a peça final do projeto #{linha['id']}, coordenado pelo Gestor. Siga o plano, os "
                     f"textos e as especificações abaixo, sem inventar dados.\n\nPedido original: {linha['texto']}"
-                    f"\n\nResultado consolidado do Gestor:\n{consolidado[:8000]}")
+                    f"\n\nResultado consolidado do Gestor:\n{consolidado[:16000]}")
         def vincular(producao_id: int) -> None:
             # A entrega volta ao chat onde o usuário pediu (o do Gestor, se ele pediu direto ao Gestor).
             encaminhamento.registrar(producao_id, *(encaminhamento.origem(linha["id"]) or (linha["andar"], "gestor")),
