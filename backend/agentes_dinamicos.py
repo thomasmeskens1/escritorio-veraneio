@@ -31,7 +31,7 @@ log = logging.getLogger(__name__)
 SETORES = {
     "porao": {"oficina": 4, "operacoes": 4},
     "marketing": {"gestao": 4, "criacao": 6, "conteudo": 6, "video": 6, "performance": 6},
-    "comercial": {"hospedagem": 4, "corporativo": 4, "estrategia": 3},
+    "comercial": {"hospedagem": 4, "corporativo": 4},
 }
 NOMES_ANDARES = {"porao": "Porão", "marketing": "Marketing", "comercial": "Comercial", "cobertura": "Cobertura"}
 NOMES_SETORES = {"oficina": "Oficina", "operacoes": "Operações", "gestao": "Gestão", "criacao": "Criação",

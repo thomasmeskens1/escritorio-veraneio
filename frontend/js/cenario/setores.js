@@ -23,8 +23,8 @@ const SETORES = {
   comercial: [
     { id: 'hospedagem', nome: 'Hospedagem', area: [0, 0, 6, 5], cor: 0xe9c46a, estacao: 'mesa', vaga: 'vaga', mesas: [[1, 1], [3, 1], [1, 3]] },
     { id: 'corporativo', nome: 'Corporativo', area: [6, 0, 4, 5], cor: 0x2a9d8f, estacao: 'executiva', vaga: 'vagaExecutiva', mesas: [[7, 1], [9, 1], [7, 3]] },
-    { id: 'reuniao', nome: 'Reunião', area: [0, 6, 6, 3], cor: 0x8ecae6 },
-    { id: 'estrategia', nome: 'Estratégia', area: [0, 9, 6, 3], cor: 0x5e548e, estacao: 'graficos', mesas: [[1, 10], [3, 10]] },
+    // O Estrategista senta à mesa de reunião (cadeiras do fundo, sem estação própria), como os estagiários.
+    { id: 'reuniao', nome: 'Reunião', area: [0, 6, 6, 6], cor: 0x8ecae6, estacao: 'nenhuma', mesas: [[1.7, 7.35], [3.7, 7.35]], semVagas: true },
     { id: 'lounge', nome: 'Lounge', area: [7, 6, 5, 6], cor: 0xd4af37 },
   ],
   cobertura: [

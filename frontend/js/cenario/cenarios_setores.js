@@ -99,7 +99,7 @@ CENARIOS.comercial = {
     // Reunião
     { tipo: 'mesaReuniao', x: 1.5, y: 7.5 },
     { tipo: 'cadeirasFrente', x: 1.5, y: 8.9 },
-    { tipo: 'planta', x: 5.4, y: 11.2 },
+    { tipo: 'planta', x: 5, y: 11 },
     // Lounge
     { tipo: 'cafeteira', x: 8, y: 6 },
     { tipo: 'sofa', x: 8, y: 8, cor: 0x00361b },
