@@ -36,6 +36,9 @@ def test_pedido_de_trabalho():
     assert c.e_pedido_de_trabalho("Prospecte 10 indústrias em Campinas")
     assert c.e_pedido_de_trabalho("Crie a persona do cliente corporativo")
     assert not c.e_pedido_de_trabalho("Qual o perfil dos nossos clientes?")
+    assert c.PEDE_CRIACAO.search("Crie os leads da prévia #70")
+    assert c.PEDE_CRIACAO.search("pode criar")
+    assert not c.PEDE_CRIACAO.search("Prospecte 10 indústrias em Campinas")
 
 
 if __name__ == "__main__":

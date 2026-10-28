@@ -130,8 +130,8 @@ ANDARES: dict[str, dict[str, Agente]] = {
         Agente(id="prospectador", nome="Prospectador", funcao="Prospecção ativa de empresas (Corporativo)",
                setor="corporativo",
                descricao="Conhece os clientes corporativos do CRM, mantém a persona do cliente ideal e prospecta "
-                         "empresas na web: coleta nome, e-mail e telefone da empresa e cria o lead no grupo "
-                         "[Corp] Prospecção Ativa do Monday.",
+                         "empresas na web: coleta nome, e-mail e telefone da empresa e mostra uma prévia; com a "
+                         "sua aprovação, cria os leads no grupo [Corp] Prospecção Ativa do Monday.",
                exemplo="Prospecte 10 indústrias da região de Campinas com mais de 300 funcionários.",
                aparencia=_ap("#c68642", "curto", "#2b1d0e", "blazer", "#7f5347", "#1b263b", "cracha")),
     ),

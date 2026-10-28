@@ -351,9 +351,10 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         if usuario["sub"] != config.DONO_MAX:
             return await erro("A prospecção (pesquisa na web e leads no Monday) é exclusiva da conta do Thomas. "
                               "Aqui você pode tirar dúvidas sobre a persona e a estratégia.", **alvo)
-        await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "liberar": True, "titulo": "Prospecção iniciada",
-                                      "texto": "Vou pesquisar as empresas na web e criar os leads no grupo [Corp] "
-                                               "Prospecção Ativa. Leva alguns minutos; a resposta chega aqui."})
+        if not (comercial.PEDE_CRIACAO.search(texto) or comercial.PEDE_PERSONA.search(texto)):
+            await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "liberar": True, "titulo": "Prospecção iniciada",
+                                          "texto": "Vou pesquisar as empresas na web e trazer uma prévia aqui, sem "
+                                                   "criar nada no Monday. Leva alguns minutos."})
         await comercial.iniciar(usuario["sub"], agente, texto)
         return
     if agente.id in AGENTES_PRODUCAO:  # só chega aqui o dono do plano Max (checado acima)

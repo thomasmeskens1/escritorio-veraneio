@@ -15,6 +15,7 @@ import threading
 import time
 import unicodedata
 from datetime import datetime, timezone
+from pathlib import Path
 
 import config
 import tarefas
@@ -326,7 +327,7 @@ def criar_lead(lead: dict) -> int:
 # --- Execução da tarefa --------------------------------------------------------------------------------------
 
 def e_pedido_de_trabalho(texto: str) -> bool:
-    return bool(PEDE_PERSONA.search(texto) or PEDE_PROSPECCAO.search(texto))
+    return bool(PEDE_PERSONA.search(texto) or PEDE_PROSPECCAO.search(texto) or PEDE_CRIACAO.search(texto))
 
 
 def _quantidade(texto: str) -> int:
@@ -351,33 +352,98 @@ def atualizar_persona(tarefa_id: int) -> str:
             f"prospecção.\n\n{persona}")
 
 
+# Prévia antes do Monday (Thomas, 28/10/2026: "ver o resultado antes de colocar em prática"): toda prospecção
+# pesquisa e mostra a lista sem criar nada; os leads só vão ao Monday quando ele aprovar a prévia.
+PASTA_PREVIAS = config.DADOS_DIR / "prospeccao"
+PEDE_CRIACAO = re.compile(r"\b(cri[ae]r?|cadastr\w*|suba|subir|lan[cç]\w*|registr\w*)\b.{0,40}\bleads?\b|"
+                          r"\bpr[ée]via\s*#?\d+|\bpode criar\b", re.I)
+
+
+def _previa(tarefa_id: int) -> Path:
+    return PASTA_PREVIAS / f"{tarefa_id}.json"
+
+
+def _linha_lead(n: int, lead: dict) -> str:
+    detalhes = " · ".join(filter(None, [f"{lead.get('cidade', '')}/{lead.get('uf', '')}".strip("/"),
+                                        lead.get("segmento"), lead.get("porte"),
+                                        f"~{lead['funcionarios']} funcionários" if lead.get("funcionarios") else ""]))
+    contatos = " · ".join(filter(None, [f"E-mail: {lead['email']}" if lead.get("email") else "",
+                                        f"Telefone: {lead['telefone']}" if lead.get("telefone") else "",
+                                        lead.get("site", "")]))
+    fonte = (lead.get("fontes") or [""])[0]
+    return (f"{n}. **{lead['empresa'].strip().upper()}** ({detalhes})\n   {contatos}\n"
+            f"   Por quê: {lead.get('motivo', '').strip()}" + (f"\n   Fonte: {fonte}" if fonte else ""))
+
+
 def prospectar(tarefa_id: int, pedido: str) -> str:
+    """Pesquisa e devolve a PRÉVIA (nada é criado no Monday)."""
     _evento(tarefa_id, "consulta_cerebro", "Clientes e Prospecção Ativa no Monday (para não repetir empresas)")
     resposta = pedir_ao_max(prompt_prospeccao(pedido, _quantidade(pedido)))
     leads = json.loads(_bloco(resposta, "LEADS"))
     nomes, dominios = ja_conhecidos()  # de novo: a equipe pode ter cadastrado alguém durante a pesquisa
     aceitos, recusados = validar(leads if isinstance(leads, list) else [], nomes, dominios)
-    criados = []
-    for lead in aceitos:
-        try:
-            criar_lead(lead)
-            criados.append(lead)
-            _evento(tarefa_id, "item_monday", lead["empresa"].strip().upper())
-        except Exception as erro:
-            log.warning("Prospectador: não criou %s (%s).", lead.get("empresa"), erro)
-            recusados.append(f"{lead.get('empresa')}: erro no Monday")
-    linhas = [f"- **{l['empresa'].strip().upper()}** ({l.get('cidade', '')}/{l.get('uf', '')}, "
-              f"{l.get('segmento') or 'segmento a definir'}): {l.get('motivo', '').strip()}" for l in criados]
-    texto = (f"Criei {len(criados)} lead(s) no grupo [Corp] Prospecção Ativa do Dash Comercial, com Origem "
-             "\"Prospecção Ativa\", Tipo \"Corporativo\" e as fontes no Histórico:\n\n" + "\n".join(linhas)
-             if criados else "Não encontrei empresas novas com canal de contato da empresa publicado.")
+    if not aceitos:
+        return "Não encontrei empresas novas com canal de contato da empresa publicado." + (
+            "\n\nFicaram de fora: " + "; ".join(recusados[:12]) + "." if recusados else "")
+    PASTA_PREVIAS.mkdir(parents=True, exist_ok=True)
+    tarefa = tarefas.obter(tarefa_id)
+    _previa(tarefa_id).write_text(json.dumps({"usuario": tarefa["usuario"] if tarefa else "", "pedido": pedido,
+                                              "leads": aceitos, "criados": []}, ensure_ascii=False), encoding="utf-8")
+    texto = (f"Prévia #{tarefa_id}: {len(aceitos)} empresa(s) nova(s), ainda NÃO criadas no Monday.\n\n" +
+             "\n\n".join(_linha_lead(n, l) for n, l in enumerate(aceitos, 1)))
     if recusados:
         texto += "\n\nFicaram de fora: " + "; ".join(recusados[:12]) + "."
-    return texto
+    return texto + (f"\n\nPara colocar em prática, diga \"Crie os leads da prévia #{tarefa_id}\" (todos) ou "
+                    f"\"Crie os leads 1, 3 e 5 da prévia #{tarefa_id}\". Eles vão para o grupo [Corp] Prospecção Ativa.")
+
+
+def _qual_previa(texto: str, usuario: str) -> int | None:
+    if (citada := re.search(r"#\s*(\d+)", texto)) and _previa(int(citada.group(1))).exists():
+        return int(citada.group(1))
+    previas = sorted((int(a.stem) for a in PASTA_PREVIAS.glob("*.json")), reverse=True) if PASTA_PREVIAS.exists() else []
+    return next((n for n in previas if json.loads(_previa(n).read_text(encoding="utf-8"))["usuario"] == usuario), None)
+
+
+def criar_da_previa(tarefa_id: int, texto: str) -> str:
+    """Cria no Monday os leads aprovados de uma prévia (todos ou os números citados), sem nova pesquisa."""
+    tarefa = tarefas.obter(tarefa_id)
+    numero = _qual_previa(texto, tarefa["usuario"] if tarefa else "")
+    if numero is None:
+        return "Não achei nenhuma prévia de prospecção sua. Peça uma prospecção primeiro; eu mostro a lista antes."
+    previa = json.loads(_previa(numero).read_text(encoding="utf-8"))
+    escolhidos = {int(n) for n in re.findall(r"\b(\d{1,2})\b", re.sub(r"#\s*\d+", "", texto))}
+    leads = [(n, l) for n, l in enumerate(previa["leads"], 1) if not escolhidos or n in escolhidos]
+    nomes, dominios = ja_conhecidos()  # alguém pode ter cadastrado a empresa depois da prévia
+    criados, fora = [], []
+    for n, lead in leads:
+        if n in previa["criados"]:
+            fora.append(f"{lead['empresa']}: já criado desta prévia")
+            continue
+        if not validar([dict(lead)], nomes, dominios)[0]:
+            fora.append(f"{lead['empresa']}: já está no CRM")
+            continue
+        try:
+            criar_lead(lead)
+        except Exception as erro:
+            log.warning("Prospectador: não criou %s (%s).", lead.get("empresa"), erro)
+            fora.append(f"{lead['empresa']}: erro no Monday")
+            continue
+        previa["criados"].append(n)
+        criados.append(lead["empresa"].strip().upper())
+        _evento(tarefa_id, "item_monday", criados[-1])
+    _previa(numero).write_text(json.dumps(previa, ensure_ascii=False), encoding="utf-8")
+    texto = (f"Criei {len(criados)} lead(s) da prévia #{numero} no grupo [Corp] Prospecção Ativa, com Origem "
+             f"\"Prospecção Ativa\", Tipo \"Corporativo\" e as fontes no Histórico: {', '.join(criados)}."
+             if criados else f"Nenhum lead da prévia #{numero} foi criado.")
+    return texto + ("\n\nFicaram de fora: " + "; ".join(fora) + "." if fora else "")
 
 
 def executar(tarefa_id: int, texto: str) -> str:
-    return atualizar_persona(tarefa_id) if PEDE_PERSONA.search(texto) else prospectar(tarefa_id, texto)
+    if PEDE_PERSONA.search(texto):
+        return atualizar_persona(tarefa_id)
+    if PEDE_CRIACAO.search(texto):
+        return criar_da_previa(tarefa_id, texto)
+    return prospectar(tarefa_id, texto)
 
 
 async def iniciar(login: str, agente, texto: str) -> int:
