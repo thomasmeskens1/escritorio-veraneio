@@ -128,7 +128,12 @@ def prompt(agente_id: str, texto: str, empresa: str, historico: list = ()) -> st
             "critérios e notas explicados), SWOT, 5 Forças de Porter, Matriz de Ansoff e economia por cliente (custo "
             "de aquisição x valor do cliente, com os dados do painel). Para cada eixo e cada nota, diga a fonte e o "
             "grau de confiança. Posicione cada empresa separadamente e termine com onde estamos, o potencial e o "
-            "caminho para chegar lá.")
+            "caminho para chegar lá.\n"
+            "OBRIGATÓRIO quando o modelo usar participação de mercado ou comparar com o mercado (BCG, GE-McKinsey, "
+            "Porter): pesquise na web 3 a 5 concorrentes diretos de cada empresa analisada e traga os sinais públicos "
+            "de cada um (seguidores no Instagram, nota e número de avaliações no Google, tamanho do catálogo, "
+            "presença em buscas), numa tabela com a fonte. Sem isso a participação relativa não é medida; não "
+            "entregue o estudo sem essa etapa (primeiro estudo real, 28/10/2026, pulou os concorrentes).")
     partes.append(REGRAS)
     partes.append(f"PEDIDO DO USUÁRIO: {texto}")
     return "\n\n".join(p for p in partes if p)
