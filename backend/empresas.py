@@ -52,8 +52,8 @@ def contexto(empresa: str) -> str:
     outras = ", ".join(d["nome"] for e, d in EMPRESAS.items() if e != empresa)
     return (f"EMPRESA DESTE TRABALHO: {dados['nome']} ({dados['site']}) — {dados['resumo']}\n"
             f"Use SOMENTE dados da {dados['nome']}. Não use, cite nem misture nada de {outras}: imóveis com o mesmo "
-            "nome em outra empresa são OUTRAS casas. Não assuma nada; se faltar informação, pergunte ao usuário com "
-            "um formulário.")
+            "nome em outra empresa são OUTRAS casas. Não invente fatos (preço, capacidade, datas): o que faltar fica "
+            "PENDENTE; escolhas editoriais você faz e explica.")
 
 
 # Casa Vero: a regra geral é NÃO mostrar o valor de venda; vale só quando o usuário pede ou autoriza no próprio pedido

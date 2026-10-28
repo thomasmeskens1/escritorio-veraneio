@@ -204,9 +204,16 @@ REGRAS_DE_OURO = ("Regras de ouro: nunca use o WhatsApp como CTA nem escreva o n
                   "o site não aparece em artes, vídeos e stories (no máximo na legenda, com prioridade baixa); "
                   "stories não têm legenda: não escreva, rascunhe nem sugira legenda para stories.")
 # Quando falta informação do usuário: um formulário no chat (o front transforma o bloco em campos), com TUDO o que
-# falta de uma vez, para nada ficar pendente. Nunca assumir.
-FORMULARIO = ('Se faltar informação do usuário para seguir, não assuma: termine a resposta com um formulário no '
-              'formato <<FORMULARIO>>{"titulo": "...", "campos": [{"nome": "id_curto", "rotulo": "Pergunta", "tipo": '
+# falta de uma vez. Teste de estresse (28/10/2026): vários agentes respondiam SÓ com formulário pedindo o Lodge ou o
+# imóvel, quando dava para propor. Escolha editorial o agente faz e explica; formulário só para fato que só o
+# usuário sabe e que impede o trabalho. Dado nunca é inventado.
+FORMULARIO = ('ESCOLHAS x FATOS: escolhas editoriais (qual Lodge ou imóvel destacar, tema, gancho, tom, número de '
+              'slides, ordem) você FAZ sozinho com o que o Cérebro e as fichas trazem, diz em uma linha o que escolheu e '
+              'por quê e oferece trocar; entregue o trabalho pronto, não só perguntas. Fatos (preço, capacidade, datas e '
+              'detalhes do evento do cliente, disponibilidade) você nunca inventa: o que não estiver no Cérebro fica '
+              'marcado como PENDENTE no texto. Use formulário só quando faltar um fato que só o usuário sabe e sem o '
+              'qual não dá para entregar nada; nesse caso, termine a resposta com um formulário no formato '
+              '<<FORMULARIO>>{"titulo": "...", "campos": [{"nome": "id_curto", "rotulo": "Pergunta", "tipo": '
               '"texto|texto_longo|opcoes|multipla|data|numero", "opcoes": ["só para opcoes/multipla"], "obrigatorio": '
               'true}]}<<FIM DO FORMULARIO>>, com tudo o que falta de uma vez (JSON válido, sem comentários). Nunca escreva '
               '"formulário abaixo" ou "responda o formulário" sem colocar o bloco na mesma resposta.')

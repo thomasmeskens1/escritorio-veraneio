@@ -49,6 +49,16 @@ class LocalOcupado(Exception):
     """O modelo local já está processando outra tarefa (o Ollama atende uma por vez)."""
 
 
+class PedidoGrandeDemais(LocalOcupado):
+    """O pedido não cabe no limite por minuto do plano gratuito do Groq: pula para o próximo modelo, sem afastá-lo.
+    Teste de estresse (28/10/2026): pedidos de 7 a 11 mil tokens contra limites de 7 mil (Qwen) e 8 mil (GPT-OSS)
+    por minuto davam erro 413 em quase toda tarefa de agente com diretrizes (Casa Vero e Corporativo ~6 mil só de
+    diretrizes; o CrewAI e as consultas ao Cérebro somam o resto)."""
+
+
+ORCAMENTO_GROQ = 3500  # tokens estimados de persona + diretrizes + pedido (sobra para o CrewAI, Cérebro e resposta)
+
+
 @dataclass
 class Resultado:
     texto: str
@@ -192,6 +202,8 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
         perfil["backstory"] = f"{perfil['backstory']}\n\n{ferramentas_painel.instrucoes()}"
     # Monday (criar itens) e painel analítico (várias consultas por análise) pedem mais voltas.
     monday_ativo = any(f.name.startswith(("criar_ite", "analisar_", "comparar_")) for f in ferramentas)
+    if modelo.startswith("groq/") and (len(perfil["backstory"]) + len(descricao)) // 4 > ORCAMENTO_GROQ:
+        raise PedidoGrandeDemais(f"pedido grande demais para o plano gratuito do Groq ({modelo})")
     agente = Agent(**perfil, llm=_llm(modelo, limite_s), tools=ferramentas,
                    max_iter=MAX_ITERACOES_MONDAY if monday_ativo else MAX_ITERACOES, max_retry_limit=0, verbose=False)
     saida = Crew(agents=[agente], tasks=[Task(description=descricao, expected_output=esperado, agent=agente)]).kickoff()
