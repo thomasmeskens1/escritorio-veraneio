@@ -484,7 +484,7 @@ async function enviarTarefa(evento) {
     }
     return;
   }
-  if (!garantirEmpresa(andar, agente)) return; // sem empresa escolhida: formulário (js/empresa.js)
+  if (!garantirEmpresa(andar, agente, texto)) return; // sem empresa: a citada no pedido ou o formulário (js/empresa.js)
 
   let anexos = [];
   if (escolhidos.length) {

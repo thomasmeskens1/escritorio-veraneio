@@ -49,8 +49,28 @@ function empresaDaConversa(andar, agente) {
 
 // Antes de enviar: sem empresa, mostra o formulário de escolha e devolve false (a mensagem fica no campo e é
 // enviada assim que a empresa for escolhida).
-function garantirEmpresa(andar, agente) {
+// Empresa dita no pedido ("...para a Casa Veraneio"): a mesma regra do servidor (empresas.citada). Só vale se o
+// texto citar UMA empresa; "Casa Veraneio" sozinha não pode ser o começo de "Casa Veraneio Corporativo".
+const CITACOES_EMPRESA = [
+  ['cv_corporativo', /\bcasa veraneio corp(orativ[oa])?\b|\bcv corp\b/i],
+  ['casa_vero', /\bcasa vero\b/i],
+  ['casa_veraneio', /\bcasa veraneio\b(?!\s+corp)/i],
+];
+
+function empresaCitada(texto) {
+  const achadas = CITACOES_EMPRESA.filter(([, padrao]) => padrao.test(texto || '')).map(([empresa]) => empresa);
+  return achadas.length === 1 ? achadas[0] : '';
+}
+
+function garantirEmpresa(andar, agente, texto = '') {
   if (!precisaEmpresa(andar, agente) || seletorEmpresa.value) return true;
+  // Teste real (28/10/2026): "...para a Casa Veraneio" ainda abria o formulário de empresa.
+  const citada = empresaCitada(texto);
+  if (citada) {
+    seletorEmpresa.value = citada;
+    seletorEmpresa.dispatchEvent(new Event('change'));
+    return true;
+  }
   const opcoes = [...EMPRESAS_DO_GRUPO, ...opcaoTodas(andar, agente)];
   const formulario = criarFormulario({
     titulo: 'Para qual empresa é esta conversa?', botao: 'Confirmar empresa',

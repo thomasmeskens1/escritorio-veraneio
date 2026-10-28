@@ -109,7 +109,7 @@ ANDARES: dict[str, dict[str, Agente]] = {
                exemplo="Escreva o e-mail do feriado de 15/11 com 3 Lodges no litoral.",
                aparencia=_ap("#e0ac69", "longo", "#3b2f2f", "camisa", "#f4a261", "#2b2d42", "oculos")),
         Agente(id="analista_tendencias", nome="Analista de Tendências", funcao="Tendências, datas e previsões",
-               setor="conteudo",
+               setor="reuniao",
                descricao="Antecipa os momentos que importam (Carnaval, Natal, Réveillon, feriadões, grandes eventos) "
                          "com as datas calculadas e propõe com antecedência os temas e ganchos para a produção.",
                exemplo="Quais momentos dos próximos 3 meses devemos preparar desde já para a Casa Veraneio?",

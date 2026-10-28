@@ -15,7 +15,8 @@ const SETORES = {
     { id: 'gestao', nome: 'Gestão', area: [0, 0, 5, 4], cor: 0xd4af37, estacao: 'executiva', vaga: 'vagaExecutiva', mesas: [[1, 1], [3, 1]] },
     { id: 'criacao', nome: 'Criação', area: [5, 0, 6, 4], cor: 0xc77dff, estacao: 'design', mesas: [[6, 1], [8, 1], [10, 1]] },
     { id: 'conteudo', nome: 'Conteúdo', area: [0, 5, 6, 4], cor: 0xff8fab, estacao: 'redacao', mesas: [[1, 6], [3, 6], [5, 6]] },
-    { id: 'reuniao', nome: 'Reunião', area: [6, 5, 4, 4], cor: 0x8ecae6 },
+    // A Analista de Tendências senta à mesa de reunião (cadeiras do fundo, sem estação própria).
+    { id: 'reuniao', nome: 'Reunião', area: [6, 5, 4, 4], cor: 0x8ecae6, estacao: 'nenhuma', mesas: [[6.7, 5.35], [8.7, 5.35]], semVagas: true },
     { id: 'copa', nome: 'Copa', area: [10, 4, 4, 5], cor: 0xe9c46a },
     { id: 'video', nome: 'Vídeo', area: [0, 10, 7, 4], cor: 0xff6b6b, estacao: 'video', mesas: [[1, 11], [3, 11], [5, 11]] },
     { id: 'performance', nome: 'Performance', area: [7, 10, 7, 4], cor: 0x2a9d8f, estacao: 'graficos', mesas: [[8, 11], [10, 11], [12, 11]] },

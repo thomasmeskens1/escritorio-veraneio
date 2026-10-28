@@ -28,7 +28,7 @@ const ANDARES = {
       { id: 'copywriter', nome: 'Copywriter', setor: 'conteudo', estacao: 'redacao' },
       { id: 'social_media', nome: 'Social Media', setor: 'conteudo', estacao: 'social' },
       { id: 'email_marketing', nome: 'E-mail Marketing', setor: 'conteudo', estacao: 'redacao' },
-      { id: 'analista_tendencias', nome: 'Analista de Tendências', setor: 'conteudo', estacao: 'social' },
+      { id: 'analista_tendencias', nome: 'Analista de Tendências', setor: 'reuniao', estacao: 'nenhuma' },
       { id: 'moviemaker', nome: 'Moviemaker', setor: 'video', estacao: 'video' },
       { id: 'editor_video', nome: 'Editor de Vídeo', setor: 'video', estacao: 'edicao' },
       { id: 'gestor_trafego', nome: 'Gestor de Tráfego', setor: 'performance', estacao: 'graficos' },
