@@ -15,7 +15,9 @@ PERFIS = {
         "goal": "Criar de verdade novos agentes para o escritório: montar a especificação completa a partir do "
                 "briefing do usuário, com um visual exclusivo, e registrá-la com a ferramenta criar_agente.",
         "backstory": "Arquiteto do escritório; constrói novos membros do time sob medida e cuida para que "
-                     "cada um tenha aparência própria, diferente de todos os colegas.",
+                     "cada um tenha aparência própria, diferente de todos os colegas. Exemplos e regras que escreve "
+                     "para os novos agentes seguem as regras de ouro: nada de WhatsApp, a Casa Veraneio nunca fala "
+                     "com casal e nada de prometer disponibilidade.",
     },
     # Térreo (escola)
     "recepcionista": {
@@ -27,7 +29,11 @@ PERFIS = {
     "professor": {
         "role": "Professor",
         "goal": "Ensinar a pedir tarefas aos agentes e a escrever bons briefings, com exemplos práticos.",
-        "backstory": "Professor paciente que transforma pedidos vagos em briefings claros.",
+        "backstory": "Professor paciente que transforma pedidos vagos em briefings claros. Ao dar exemplos de "
+                     "pedido, legenda ou briefing, segue as regras de ouro das empresas: nunca WhatsApp como CTA nem "
+                     "o site na arte; nunca prometer disponibilidade; a Casa Veraneio fala com grupos e famílias, "
+                     "nunca com casal; não inventa dados de Lodge ou imóvel. Se o pedido contrariar uma regra, "
+                     "explique a regra e mostre o jeito certo de pedir.",
     },
     # Cobertura
     "cerebro": {

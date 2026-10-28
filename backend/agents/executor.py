@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 import agentes_dinamicos
 import atividade
 import config
+import empresas
 import encaminhamento
 import cerebro
 import max_texto
@@ -35,6 +36,10 @@ MAX_ITERACOES_MONDAY = 14  # Social Media com o Monday: consultas + leitura do b
 CHAMADA_EM_TEXTO = re.compile(r"(?:<tool_call>\s*)?<function=([\w-]+)>(.*?)(?:</function>\s*(?:</tool_call>)?|$)", re.S)
 PARAMETRO_EM_TEXTO = re.compile(r"<parameter=([\w-]+)>\s*(.*?)\s*(?:</parameter>|(?=<parameter=)|$)", re.S)
 MAX_TOKENS_SAIDA_CLAUDE = 2000
+# Modelo de raciocínio que devolve o pensamento em vez da resposta (teste de estresse de 28/10/2026: "We need to
+# answer..." chegou como resposta ao usuário).
+RACIOCINIO_VAZADO = re.compile(r"\s*(We need to|The user (asks|wants|is asking)|Let me (think|analy)|Okay, (so|let)|"
+                               r"First, I need to)\b")
 _trava_total = threading.Lock()  # soma de tokens/custo de etapas paralelas
 
 
@@ -196,6 +201,8 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
         total.tokens_entrada += uso.prompt_tokens
         total.tokens_saida += uso.completion_tokens
         total.custo_usd += custo
+    if RACIOCINIO_VAZADO.match(saida.raw or ""):  # o roteamento passa ao próximo modelo
+        raise RuntimeError("o modelo devolveu o raciocínio (em inglês) no lugar da resposta")
     return _chamadas_em_texto(saida.raw, ferramentas)
 
 
@@ -248,6 +255,7 @@ def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa,
         total.texto = _rodar(agente_id, descricao_tarefa(agente_id, texto, historico, tarefa_id), esperado,
                              etapa.modelo, etapa.limite_s, total, tarefa_id)
     total.texto = _garantir_formulario(total.texto)
+    total.texto = empresas.sem_precos(total.texto, cerebro.empresa_da_tarefa(tarefa_id), texto)  # Casa Vero
     return total
 
 

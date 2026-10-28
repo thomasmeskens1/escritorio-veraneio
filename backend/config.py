@@ -40,13 +40,13 @@ MODELOS_GRATUITOS = _lista(
     "MODELOS_GRATUITOS",
     # Groq (plano gratuito, 2-3 s por resposta; 8 mil tokens/min: usa os manuais compactos, e no limite sai da
     # rota por 2 min); Mistral entra quando houver chave válida; Nemotron Super por último (afastado no teste).
+    # Fora desde 28/10/2026 (teste de estresse): MiniMax M3.1 Flash (fim do período gratuito em 22/10) e Nemotron
+    # Nano Omni Reasoning (devolvia o raciocínio em inglês no lugar da resposta).
     "groq/openai/gpt-oss-120b,"
     "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free,"
     "mistral/mistral-medium-latest,"
-    "openrouter/minimax/minimax-m3.1-flash:free,"
     "groq/qwen/qwen3.8-27b,"
     "openrouter/dots-studio/dots-3-note-preview:free,"
-    "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,"
     "openrouter/google/gemma-4-31b-it:free,"
     "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
 )

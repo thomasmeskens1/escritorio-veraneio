@@ -111,8 +111,10 @@ def consultar(pergunta: str, agente: str, tarefa_id: int = 0) -> str:
     if not trechos:
         return ("O Cérebro não tem nada registrado sobre isso. Não invente: diga que essa informação não está "
                 "na base da Casa Veraneio ou pergunte ao usuário.")
+    linha = tarefas.obter(tarefa_id) if tarefa_id else None
     return ("Conhecimento do Cérebro (cite a fonte ao usar; prefira o mais recente se houver conflito):\n\n"
-            + _formatar(trechos, MAX_CARACTERES_FERRAMENTA))
+            + empresas.sem_precos(_formatar(trechos, MAX_CARACTERES_FERRAMENTA), empresa_da_tarefa(tarefa_id),
+                                  linha["texto"] if linha else ""))
 
 
 def descricao_tarefa(texto: str, historico: list = (), tarefa_id: int = 0) -> str:
@@ -125,9 +127,9 @@ def descricao_tarefa(texto: str, historico: list = (), tarefa_id: int = 0) -> st
     except Exception:
         log.exception("Cérebro: falha ao recuperar trechos.")
         trechos = []
-    conhecimento = (_formatar(trechos, MAX_CARACTERES_CONTEXTO) if trechos
-                    else "(nenhum trecho relevante encontrado na base)")
     empresa = empresa_da_tarefa(tarefa_id)
+    conhecimento = (empresas.sem_precos(_formatar(trechos, MAX_CARACTERES_CONTEXTO), empresa, texto) if trechos
+                    else "(nenhum trecho relevante encontrado na base)")
     return (f"Pergunta do usuário: {texto}\n\n{contexto(ID, historico, texto, empresa)}\n\n"
             f"Conhecimento recuperado da base da {empresas.nome(empresa)}:\n{conhecimento}\n\n"
             "Responda usando SOMENTE o conhecimento acima. Cite a fonte de cada informação no formato [n] "

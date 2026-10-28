@@ -5,6 +5,8 @@ Casa Veraneio são entidades distintas (mesmo que seja a mesma casa física): ca
 comum às três (regras de ouro, formatos, Monday, fluxo do escritório) usa COMUM.
 """
 
+import re
+
 COMUM = "*"
 PADRAO = "casa_veraneio"  # só para dados antigos, anteriores à separação (todos eram da Casa Veraneio)
 
@@ -52,3 +54,16 @@ def contexto(empresa: str) -> str:
             f"Use SOMENTE dados da {dados['nome']}. Não use, cite nem misture nada de {outras}: imóveis com o mesmo "
             "nome em outra empresa são OUTRAS casas. Não assuma nada; se faltar informação, pergunte ao usuário com "
             "um formulário.")
+
+
+# Casa Vero: a regra geral é NÃO mostrar o valor de venda; vale só quando o usuário pede ou autoriza no próprio pedido
+# (Thomas, 26/10/2026). O teste de estresse de 28/10/2026 achou o valor vazando em roteiro e resposta do Cérebro: o
+# filtro roda nos trechos do Cérebro e na resposta final, não depende do modelo obedecer.
+PRECO = re.compile(r"R\$\s?\d+(?:[.,]\d+)*(?:\s?(?:mil|milh(?:ão|ões|oes)|mi)\b)?", re.I)
+PEDE_PRECO = re.compile(r"\b(pre[çc]os?|valor(?:es)?|quanto custa|quanto vale)\b|R\$", re.I)
+
+
+def sem_precos(texto: str, empresa: str, pedido: str = "") -> str:
+    if empresa != "casa_vero" or not texto or PEDE_PRECO.search(pedido or ""):
+        return texto
+    return PRECO.sub("valor sob consulta", texto)
