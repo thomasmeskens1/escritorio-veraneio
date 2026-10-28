@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import config
+import segredos
 import tarefas
 from monday import _api
 
@@ -46,8 +47,11 @@ CACHE_S = 6 * 3600
 PASTA_PERSONA = config.PASTA_CONHECIMENTO / "14_persona_corporativo.md"
 
 # Pedido de pesquisa (o resto, como dúvidas sobre clientes ou a persona, o agente responde no chat normal).
-PEDE_PROSPECCAO = re.compile(r"\b(prospect\w*|encontr\w*|busqu\w*|pesquis\w*|levant\w*|gere|gerar|traga|"
-                             r"novos? leads?)", re.I)
+# Verbos no imperativo/infinitivo. "Prospectador" (o nome do agente) NÃO conta: "Prospectador, você tem acesso ao
+# Monday?" virou uma pesquisa no Max (teste real, 28/10/2026). Pergunta sem quantidade de empresas também não.
+PEDE_PROSPECCAO = re.compile(r"\b(prospect(?:e|em|ar|ando)|prospec[çc](?:ão|ões|ao|oes)|encontre|encontrar|busque|"
+                             r"buscar|pesquise|pesquisar|levante|levantar|gere|gerar|traga|novos? leads?)\b", re.I)
+QUANTIDADE_EMPRESAS = re.compile(r"\b\d{1,2}\s+(?:empresas|leads|contatos|prospects?|ind[uú]strias)\b", re.I)
 PEDE_PERSONA = re.compile(r"\bpersona\b", re.I)
 # LGPD (Thomas, 27/10/2026): só canais da empresa. E-mail genérico do domínio, nunca nominal nem gratuito.
 GRATUITOS = {"gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "yahoo.com.br", "bol.com.br", "uol.com.br",
@@ -327,7 +331,13 @@ def criar_lead(lead: dict) -> int:
 # --- Execução da tarefa --------------------------------------------------------------------------------------
 
 def e_pedido_de_trabalho(texto: str) -> bool:
-    return bool(PEDE_PERSONA.search(texto) or PEDE_PROSPECCAO.search(texto) or PEDE_CRIACAO.search(texto))
+    """Pedido de trabalho (persona, prospecção, criar leads da prévia); o resto é conversa com o agente.
+    Pergunta ("...?") só vira prospecção se pedir uma quantidade de empresas ("Pode prospectar 5 indústrias?")."""
+    if PEDE_CRIACAO.search(texto):
+        return True
+    if texto.strip().endswith("?") and not QUANTIDADE_EMPRESAS.search(texto):
+        return False
+    return bool(PEDE_PERSONA.search(texto) or PEDE_PROSPECCAO.search(texto))
 
 
 def _quantidade(texto: str) -> int:
@@ -379,6 +389,8 @@ def prospectar(tarefa_id: int, pedido: str) -> str:
     """Pesquisa e devolve a PRÉVIA (nada é criado no Monday)."""
     _evento(tarefa_id, "consulta_cerebro", "Clientes e Prospecção Ativa no Monday (para não repetir empresas)")
     resposta = pedir_ao_max(prompt_prospeccao(pedido, _quantidade(pedido)))
+    if "<<LEADS>>" not in resposta:  # o Claude Code respondeu em texto (ex.: pedido ambíguo): vale como resposta
+        return segredos.limpar(resposta.strip()) or "Não consegui montar a lista de empresas desta vez."
     leads = json.loads(_bloco(resposta, "LEADS"))
     nomes, dominios = ja_conhecidos()  # de novo: a equipe pode ter cadastrado alguém durante a pesquisa
     aceitos, recusados = validar(leads if isinstance(leads, list) else [], nomes, dominios)

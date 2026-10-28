@@ -36,6 +36,10 @@ def test_pedido_de_trabalho():
     assert c.e_pedido_de_trabalho("Prospecte 10 indústrias em Campinas")
     assert c.e_pedido_de_trabalho("Crie a persona do cliente corporativo")
     assert not c.e_pedido_de_trabalho("Qual o perfil dos nossos clientes?")
+    assert not c.e_pedido_de_trabalho("Prospectador, você tem acesso ao monday?")  # teste real, 28/10/2026
+    assert not c.e_pedido_de_trabalho("Como você pesquisa as empresas?")
+    assert c.e_pedido_de_trabalho("Pode prospectar 5 indústrias em Jundiaí?")
+    assert c.e_pedido_de_trabalho("Prospectador, encontre empresas de tecnologia em Campinas")
     assert c.PEDE_CRIACAO.search("Crie os leads da prévia #70")
     assert c.PEDE_CRIACAO.search("pode criar")
     assert not c.PEDE_CRIACAO.search("Prospecte 10 indústrias em Campinas")
