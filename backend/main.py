@@ -42,7 +42,8 @@ from estado import AGENTES_PRODUCAO, Status, buscar_agente, pode_acessar, snapsh
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("veraneio")
 
-TAMANHO_MAX_TEXTO = 4000
+# 8 mil caracteres (~2 mil tokens): cabem nos modelos gratuitos; o Groq pula sozinho pedido grande (executor.py).
+TAMANHO_MAX_TEXTO = 8000
 # Comandos reservados do dono, pelo hash (sha256) do texto: nenhum nome no código público nem na interface.
 COMANDOS_RESERVADOS = {"ddf7839cb8fca09abdd9e9b0b2f498885f382f5bf9fec65d95db793bd0f11832": "chat",
                        "7416b21e82400f2b73863b1c65dafc0581d462baae82802358ea2c84fd389f7f": "todos"}
