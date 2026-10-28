@@ -3,6 +3,7 @@
 const ROTULOS_STATUS = { dormindo: 'Pausado', disponivel: 'Disponível', trabalhando: 'Trabalhando', construindo: 'Em construção' };
 
 const historicos = {}; // 'andar/agente' -> [{ autor, texto, tipo, meta?, tarefa_id? }]
+let respondendoTarefa = null; // tarefa cujo formulário está sendo respondido (vai junto com a mensagem)
 const pendentes = new Set(); // agentes com tarefa enviada aguardando resposta
 const rascunhos = {}; // 'andar/agente' -> texto digitado e não enviado
 const historicoCarregado = new Set(); // agentes cujo histórico salvo já veio do servidor
@@ -59,7 +60,11 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
   const extraido = tipo === 'agente' ? extrairFormulario(texto) : { texto, formulario: null };
   div.append(nome, document.createTextNode(tipo === 'agente' ? textoNatural(extraido.texto) : texto));
   const pedido = formulario || extraido.formulario;
-  if (pedido) div.append(criarFormulario(pedido));
+  // A resposta leva a tarefa do formulário: o servidor continua aquela tarefa (e a empresa dela).
+  if (pedido) div.append(criarFormulario(pedido, tarefa_id ? (respostas, textoRespostas) => {
+    respondendoTarefa = tarefa_id;
+    enviarRespostasDoFormulario(respostas, textoRespostas);
+  } : undefined));
   if (anexos?.length) div.append(criarAnexosDaMensagem(anexos));
   if (tipo === 'agente' && link && LINK_DRIVE.test(link)) div.append(criarBotaoVisualizar(link));
   if (tipo === 'agente' && tarefa_id && /^✅ Pedido concluído/.test(texto)) div.append(criarBotaoAjuste(tarefa_id));
@@ -491,6 +496,8 @@ async function enviarTarefa(evento) {
   const mensagem = { tipo: 'mensagem', andar, agente, texto };
   if (empresaDaConversa(andar, agente)) mensagem.empresa = empresaDaConversa(andar, agente);
   if (anexos.length) mensagem.anexos = anexos.map((a) => a.id);
+  if (respondendoTarefa && texto.startsWith('Respostas')) mensagem.responde_a = respondendoTarefa;
+  respondendoTarefa = null;
   if (!enviar(mensagem)) {
     avisarAnexo('Sem conexão com o servidor. Tente de novo.');
     return;

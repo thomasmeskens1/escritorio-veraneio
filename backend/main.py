@@ -45,6 +45,7 @@ TAMANHO_MAX_TEXTO = 4000
 COMANDOS_RESERVADOS = {"ddf7839cb8fca09abdd9e9b0b2f498885f382f5bf9fec65d95db793bd0f11832": "chat",
                        "7416b21e82400f2b73863b1c65dafc0581d462baae82802358ea2c84fd389f7f": "todos"}
 EMPRESA_DO_AGENTE = {"prospectador": "cv_corporativo"}  # agentes de uma empresa só (Comercial)
+VISAO_DO_GRUPO = {"analista_metricas"}  # podem trabalhar com as três empresas juntas (opção "Todas" do seletor)
 EXIGEM_EMPRESA = {"marketing"}  # andares que trabalham para uma empresa (o Cérebro também, ver tratar_mensagem)
 MAX_FALHAS_LOGIN = 5          # senhas erradas seguidas por usuário/IP antes do bloqueio
 MAX_FALHAS_IP = 20            # senhas erradas de um IP (qualquer usuário) antes do bloqueio
@@ -255,8 +256,22 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     base_ajuste = producao.base_do_ajuste(usuario["sub"], agente.id, texto) if agente.id in AGENTES_PRODUCAO else None
     if base_ajuste and (peca := tarefas.obter(base_ajuste)) and empresas.valida(peca["empresa"]):
         empresa = peca["empresa"]
+    # Resposta a um formulário: continua a tarefa que perguntou, na empresa dela. Teste real (#84/#85, 28/10/2026):
+    # a resposta foi com a empresa do seletor, o histórico perdeu o carrossel e o Gestor retomou o Reels anterior.
+    elif (responde_a := msg.get("responde_a")) and isinstance(responde_a, int) \
+            and (anterior := tarefas.obter(responde_a)) and anterior["usuario"] == usuario["sub"] \
+            and empresas.valida(anterior["empresa"]):
+        empresa = anterior["empresa"]
+    # A empresa dita no pedido vale mais que o seletor ("A empresa é a Casa Veraneio" com o seletor em Casa Vero).
+    elif (dita := empresas.citada(texto)) and empresas.valida(empresa) and dita != empresa \
+            and (andar in EXIGEM_EMPRESA or agente.id == cerebro.ID) and not cerebro.e_ensino(texto):
+        await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "titulo": "Empresa",
+                                      "texto": f"Segui com a {empresas.nome(dita)}, citada no pedido (o seletor da "
+                                               f"conversa estava em {empresas.nome(empresa)})."})
+        empresa = dita
     if andar in EXIGEM_EMPRESA or agente.id == cerebro.ID:
-        if not (empresas.valida(empresa) or (ensino and empresa == empresas.COMUM)):
+        todas = empresa == empresas.COMUM and (ensino or agente.id in VISAO_DO_GRUPO)
+        if not (empresas.valida(empresa) or todas):
             return await erro("Escolha a empresa desta conversa (Casa Veraneio, Corporativo ou Casa Vero) no "
                               "seletor do topo do chat antes de enviar.", **alvo)
     elif agente.id in EMPRESA_DO_AGENTE:  # Comercial: o setor já diz a empresa (sem seletor)

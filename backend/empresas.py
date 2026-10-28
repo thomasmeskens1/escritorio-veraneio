@@ -44,8 +44,28 @@ def da_conta_monday(conta: str) -> str | None:
     return next((e for e, d in EMPRESAS.items() if d["monday"].lower() == (conta or "").strip().lower()), None)
 
 
+# Empresa dita no pedido ("A empresa é a Casa Veraneio"). "Casa Veraneio" sozinha não pode ser o começo de
+# "Casa Veraneio Corporativo".
+CITACOES = {
+    "cv_corporativo": re.compile(r"\bcasa veraneio corp(?:orativ[oa])?\b|\bcv corp\b", re.I),
+    "casa_vero": re.compile(r"\bcasa vero\b", re.I),
+    "casa_veraneio": re.compile(r"\bcasa veraneio\b(?!\s+corp)|\bcasaveraneio\b(?!\.com/corp)", re.I),
+}
+
+
+def citada(texto: str) -> str | None:
+    """A única empresa citada no texto (None se nenhuma ou mais de uma)."""
+    achadas = [e for e, padrao in CITACOES.items() if padrao.search(texto or "")]
+    return achadas[0] if len(achadas) == 1 else None
+
+
 def contexto(empresa: str) -> str:
     """Bloco que abre o contexto de todo agente: de qual empresa é o trabalho e a proibição de misturar."""
+    if empresa == COMUM:  # visão do grupo (Analista de Métricas): as três, sempre separadas
+        return ("TRABALHO DO GRUPO INTEIRO: " + "; ".join(f"{d['nome']} ({d['site']})" for d in EMPRESAS.values())
+                + ". Analise cada empresa separadamente e mostre lado a lado; nunca some números de empresas "
+                "diferentes como se fossem um só, e não leve dados de uma para a outra. Não invente fatos: o que "
+                "faltar fica PENDENTE.")
     if not valida(empresa):
         return ""
     dados = EMPRESAS[empresa]

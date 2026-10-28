@@ -167,9 +167,32 @@ E_VIDEO = re.compile(r"\b(reels?|shorts?|v[ií]deos?|mp4|cenas?|anima[cç][aã]o
                      re.IGNORECASE)
 
 
-def produtor_da_peca(texto: str) -> str:
-    """"editor_video" se a peça é (ou tem partes em) vídeo; senão "criador_imagens"."""
-    return "editor_video" if E_VIDEO.search(texto or "") else "criador_imagens"
+FORMATO_DECLARADO = re.compile(r"FORMATO DA PE[ÇC]A \(obrigat[óo]rio\):\s*([A-Z]+)")
+
+
+def produtor_da_peca(texto: str, pedido: str = "") -> str:
+    """"editor_video" se a peça é (ou tem partes em) vídeo; senão "criador_imagens".
+
+    O formato declarado decide primeiro. A descrição padrão do CARROSSEL cita "vídeo", "MP4" e "Editor de Vídeo" (as
+    páginas PODEM ser vídeo), e isso mandava todo carrossel ao Editor de Vídeo (teste real, #84 -> #86, 28/10/2026).
+    """
+    import monday  # import tardio: monday depende da produção
+
+    texto = texto or ""
+    sem_descricoes = texto
+    for descricao in monday.TIPOS.values():
+        sem_descricoes = sem_descricoes.replace(descricao, "")
+    formato = (m.group(1) if (m := FORMATO_DECLARADO.search(texto)) else "")
+    if formato in ("REELS", "SHORTS"):
+        return "editor_video"
+    if formato == "POST":
+        return "criador_imagens"
+    if formato in ("CARROSSEL", "STORIES"):  # vídeo só se o próprio pedido pedir páginas/telas em vídeo
+        base = pedido or sem_descricoes
+        for descricao in monday.TIPOS.values():
+            base = base.replace(descricao, "")
+        return "editor_video" if E_VIDEO.search(base) else "criador_imagens"
+    return "editor_video" if E_VIDEO.search(sem_descricoes) else "criador_imagens"
 
 
 def agente_da_peca(login: str, texto: str) -> str | None:

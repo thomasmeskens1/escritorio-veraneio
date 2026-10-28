@@ -5,11 +5,15 @@ const EMPRESAS_DO_GRUPO = [
   ['casa_veraneio', 'Casa Veraneio'], ['cv_corporativo', 'Casa Veraneio Corporativo'], ['casa_vero', 'Casa Vero Imóveis'],
 ];
 const TODAS_AS_EMPRESAS = ['*', 'Todas (só para ensinar regras comuns)'];
+// Quem pode trabalhar com o grupo inteiro (Thomas, 28/10/2026: "como estão as métricas das 3 empresas").
+const VISAO_DO_GRUPO = { analista_metricas: ['*', 'Todas as empresas (visão do grupo)'] };
 const seletorEmpresa = document.getElementById('modal-empresa');
 const chaveEmpresa = (andar, agente) => `empresa:${andar}/${agente}`;
 
 const ehCerebroEmpresa = (andar, agente) => dadosAgente(andar, agente).visual === 'cerebro';
 const precisaEmpresa = (andar, agente) => andar === 'marketing' || ehCerebroEmpresa(andar, agente);
+const opcaoTodas = (andar, agente) => (ehCerebroEmpresa(andar, agente) ? [TODAS_AS_EMPRESAS]
+  : VISAO_DO_GRUPO[agente] ? [VISAO_DO_GRUPO[agente]] : []);
 
 function lerEmpresa(andar, agente) {
   try {
@@ -33,8 +37,7 @@ function mostrarSeletorEmpresa(andar, agente) {
   const precisa = precisaEmpresa(andar, agente);
   seletorEmpresa.hidden = !precisa;
   if (!precisa) return;
-  const opcoes = [['', 'Escolha a empresa…'], ...EMPRESAS_DO_GRUPO,
-    ...(ehCerebroEmpresa(andar, agente) ? [TODAS_AS_EMPRESAS] : [])];
+  const opcoes = [['', 'Escolha a empresa…'], ...EMPRESAS_DO_GRUPO, ...opcaoTodas(andar, agente)];
   seletorEmpresa.replaceChildren(...opcoes.map(([valor, rotulo]) => new Option(rotulo, valor)));
   seletorEmpresa.value = lerEmpresa(andar, agente);
   seletorEmpresa.dataset.empresa = seletorEmpresa.value;
@@ -48,7 +51,7 @@ function empresaDaConversa(andar, agente) {
 // enviada assim que a empresa for escolhida).
 function garantirEmpresa(andar, agente) {
   if (!precisaEmpresa(andar, agente) || seletorEmpresa.value) return true;
-  const opcoes = [...EMPRESAS_DO_GRUPO, ...(ehCerebroEmpresa(andar, agente) ? [TODAS_AS_EMPRESAS] : [])];
+  const opcoes = [...EMPRESAS_DO_GRUPO, ...opcaoTodas(andar, agente)];
   const formulario = criarFormulario({
     titulo: 'Para qual empresa é esta conversa?', botao: 'Confirmar empresa',
     campos: [{ nome: 'empresa', rotulo: 'Empresa', tipo: 'opcoes', obrigatorio: true, opcoes: opcoes.map(([, r]) => r) }],

@@ -17,11 +17,11 @@ import config
 
 TODOS = "*"
 MARKETING = ("gestor", "designer", "criador_imagens", "copywriter", "social_media", "email_marketing", "moviemaker",
-             "editor_video", "gestor_trafego", "analista_metricas")
+             "editor_video", "gestor_trafego", "analista_metricas", "analista_tendencias")
 VISUAL = ("gestor", "designer", "criador_imagens", "moviemaker", "editor_video")
 TEXTO = ("gestor", "copywriter", "social_media", "email_marketing", "moviemaker", "gestor_trafego")
 PRODUZEM = ("gestor", "designer", "criador_imagens", "copywriter", "moviemaker", "editor_video")
-ESTRATEGIA = ("gestor", "social_media", "gestor_trafego", "analista_metricas")
+ESTRATEGIA = ("gestor", "social_media", "gestor_trafego", "analista_metricas", "analista_tendencias")
 
 # Manual -> {número da seção (ou "ouro") -> quem recebe}. Seção fora do mapa não vai para ninguém;
 # manual com TODOS no lugar do dicionário vai inteiro para quem está em DA_FUNCAO.
@@ -47,6 +47,7 @@ ORDEM = ("00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "13",
 # Agente -> documentos da função, que vão inteiros (exceto o 05, recortado pelo mapa para o Editor).
 DA_FUNCAO = {
     "social_media": ("02", "15"), "gestor_trafego": ("02",), "analista_metricas": ("02", "15"), "gestor": ("02", "15"),
+    "analista_tendencias": ("02", "15"),
     "designer": ("03",), "criador_imagens": ("04",), "moviemaker": ("05",), "editor_video": ("06", "05"),
     "copywriter": ("07",), "email_marketing": ("07", "13"), "prospectador": ("14",),
 }

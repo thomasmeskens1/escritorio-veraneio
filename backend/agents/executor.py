@@ -42,6 +42,23 @@ RACIOCINIO_VAZADO = re.compile(r"\s*(We need to|The user (asks|wants|is asking)|
                                r"First, I need to)\b")
 # Reteste de 28/10/2026: "<<function>>> <parameter name="pergunta">..." (sem nome de ferramenta) chegou ao usuário.
 FERRAMENTA_QUEBRADA = re.compile(r"<<\s*function|<parameter name=|<function=|</?tool_call>")
+# Palavra em espanhol no meio da resposta (Analista de Métricas, #87, 28/10/2026: "condición especial"). Só formas que
+# não existem em português; "-ción" vira "-ção".
+ESPANHOL = {"también": "também", "además": "além disso", "después": "depois", "aunque": "embora", "muy": "muito",
+            "sin embargo": "no entanto", "mientras": "enquanto", "hasta": "até", "pero": "mas", "entonces": "então"}
+_ESPANHOL = re.compile(r"\b(" + "|".join(ESPANHOL) + r")\b", re.I)
+_CION = re.compile(r"\b(\w+?)(ción|ciones)\b", re.I)
+
+
+def sem_espanhol(texto: str) -> str:
+    """Troca as palavras em espanhol mais comuns pelas portuguesas (mantém a maiúscula inicial)."""
+    def trocar(achado, nova: str) -> str:
+        return nova[0].upper() + nova[1:] if achado.group(0)[0].isupper() else nova
+
+    texto = _ESPANHOL.sub(lambda m: trocar(m, ESPANHOL[m.group(1).lower()]), texto or "")
+    return _CION.sub(lambda m: m.group(1) + ("ções" if m.group(2).lower() == "ciones" else "ção"), texto)
+
+
 _trava_total = threading.Lock()  # soma de tokens/custo de etapas paralelas
 
 
@@ -273,6 +290,7 @@ def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa,
                              etapa.modelo, etapa.limite_s, total, tarefa_id)
     total.texto = _garantir_formulario(total.texto)
     total.texto = empresas.sem_precos(total.texto, cerebro.empresa_da_tarefa(tarefa_id), texto)  # Casa Vero
+    total.texto = sem_espanhol(total.texto)
     return total
 
 

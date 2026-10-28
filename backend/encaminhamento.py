@@ -24,6 +24,8 @@ ESCOPO = {
     "email_marketing": r"e-?mails?|newsletter|brevo|pr[eé]-?header|disparos?|campanha de e-?mail",
     "gestor_trafego": r"campanhas?|an[uú]ncios?|tr[aá]fego|segmenta[cç][aã]o|p[uú]blicos?",
     "analista_metricas": r"m[eé]tricas?|relat[oó]rios?|indicadores?|kpis?|resultados?",
+    "analista_tendencias": r"tend[eê]ncias?|previs[aã]o|previs[oõ]es|sazonal(?:idade)?|datas? comemorativas?|feriad[aã]o|"
+                           r"feriados?|eventos? do ano",
 }
 
 
