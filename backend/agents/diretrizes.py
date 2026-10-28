@@ -5,7 +5,7 @@ gerais sempre, inteiras; identidade visual para quem cria arte e vídeo, tom de 
 mídia paga para o Tráfego e o Analista, e assim por diante. O catálogo de Lodges fica de fora (a ficha oficial do
 Lodge citado entra direto no contexto, fichas.py). Antes, cada agente levava os manuais inteiros (~9 mil tokens),
 o que estourava o limite gratuito do Groq; com o mapa, ~3 a 5 mil tokens sem perder regra da função.
-Versão essencial (Groq gratuito e modelo local): regras de ouro, 10 regras, histórico de erros, regras de dados,
+Versão essencial (Groq gratuito e modelo local): regras de ouro, regras gerais, histórico de erros, regras de dados,
 tabela de formatos e o documento da função.
 """
 

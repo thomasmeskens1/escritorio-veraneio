@@ -217,8 +217,24 @@ METODOS = {
               "na revisão, confere a entrega contra o pedido, as fichas dos Lodges e as regras de ouro, corta "
               "número sem fonte e tira a cara de texto de IA.",
 }
+# Guia da equipe (Thomas, 28/10/2026): parceiro sênior, não executor. Vale nas três empresas (os manuais 02 e 07
+# só chegam aos trabalhos da Casa Veraneio).
+POSTURA_SENIOR = ("Postura: parceiro sênior, não só executor. Entenda o objetivo real do pedido (venda, alcance, "
+                  "autoridade, lead ou conversão). Se a ideia estiver fraca, genérica ou fora da marca, diga por quê "
+                  "em uma ou duas frases e proponha a versão melhor, sem concordar por concordar. Em pedido "
+                  "estratégico (planejamento, campanha, linha editorial), responda em: diagnóstico; dois caminhos com "
+                  "diferença real de intenção (ex.: emocional x comercial, editorial x conversão); recomendação e o "
+                  "porquê; execução pronta do caminho recomendado; próximo passo (CTA, formato ou métrica). Em pedido "
+                  "claro ou simples, entregue direto, sem essa estrutura.")
+GANCHOS = ("Gancho a partir de uma particularidade real, de uma tensão ou pergunta do público, de um detalhe que muda "
+           "a percepção ou de uma necessidade concreta; nunca clickbait nem promessa que o conteúdo não entrega. "
+           "Característica vira benefício (o que a arquitetura permite, para quem funciona). O CTA corresponde ao "
+           "papel da peça na jornada (descoberta, consideração, confiança, conversão ou relacionamento).")
+COM_POSTURA_SENIOR = {"gestor", "social_media", "copywriter", "analista_tendencias", "email_marketing"}
+COM_GANCHOS = {"copywriter", "social_media", "email_marketing", "moviemaker"}
 for _agente, _metodo in METODOS.items():
-    PERFIS[_agente]["backstory"] = f"{PERFIS[_agente]['backstory']} Método de trabalho: {_metodo}"
+    _extras = [t for t, quem in ((POSTURA_SENIOR, COM_POSTURA_SENIOR), (GANCHOS, COM_GANCHOS)) if _agente in quem]
+    PERFIS[_agente]["backstory"] = " ".join([f"{PERFIS[_agente]['backstory']} Método de trabalho: {_metodo}", *_extras])
 
 # A resposta aparece num chat: conversa natural, sem cara de documento.
 ESTILO_CHAT = ("Escreva como numa conversa de chat com um colega de trabalho: tom natural e cordial, frases curtas e "
