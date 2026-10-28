@@ -93,6 +93,11 @@ _DIARIO = re.compile(r"\b(?:todos\s+os\s+dias|todo\s+(?:santo\s+)?dia|diariament
 _UNICA = re.compile(r"\b(?P<quando>depois\s+de\s+amanha|amanha|hoje)\b")
 # Frequência logo depois destas palavras costuma ser conteúdo ("post para todas as segundas").
 _BLOQUEIO = re.compile(r"\b(?:para|pra|de|do|da|das|dos|sobre)\s*$")
+# Texto longo é briefing: frequência nele é conteúdo ("arrumadeira todos os dias", "3 stories por dia"), não pedido
+# de rotina. Teste real (28/10/2026): o briefing da influenciadora virou rotina diária às 9h. Acima deste tamanho, só
+# vira rotina com pedido explícito ("agende", "rotina", "programe"...).
+LIMITE_SEM_PEDIDO = 300
+_PEDE_ROTINA = re.compile(r"\b(?:agend\w*|rotinas?|program(?:e|ar|ada?)|automati\w*|recorrente|repita|repetir)\b")
 
 
 def _horarios(norm: str, livre: list[tuple[int, int]]) -> list[tuple[int, int, int, int]]:
@@ -197,7 +202,7 @@ def interpretar(texto: str, agora: datetime | None = None) -> dict | None:
     agora = (agora or datetime.now(FUSO)).astimezone(FUSO)
     norm = _normalizar(texto)
     achado = _frequencia(norm)
-    if not achado:
+    if not achado or (len(norm) > LIMITE_SEM_PEDIDO and not _PEDE_ROTINA.search(norm)):
         return None
     regra, desc, trecho, usa_horario = achado
     trechos = [trecho]
