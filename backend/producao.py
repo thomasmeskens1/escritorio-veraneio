@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS producao_info (
     tarefa_id INTEGER PRIMARY KEY,
     titulo TEXT NOT NULL,            -- nome da pasta de entrega (ex.: "Post Réveillon Lodge 1")
     base_tarefa_id INTEGER,          -- ajuste: a produção que está sendo ajustada (mesma pasta, nova versão)
-    pasta TEXT                       -- pasta de entrega, gravada ao concluir
+    pasta TEXT,                      -- pasta de entrega, gravada ao concluir
+    link TEXT                        -- URL da pasta no Google Drive (botão "Visualizar" do chat)
 );
 CREATE TABLE IF NOT EXISTS producao_anexos (
     tarefa_id INTEGER PRIMARY KEY,
@@ -74,8 +75,19 @@ def _db():
     db = tarefas._db()
     if not _esquema_criado:
         db.executescript(_ESQUEMA)
+        if "link" not in {c["name"] for c in db.execute("PRAGMA table_info(producao_info)")}:  # banco anterior
+            db.execute("ALTER TABLE producao_info ADD COLUMN link TEXT")
         _esquema_criado = True
     return db
+
+
+LINK_DRIVE = re.compile(r"https://drive\.google\.com/drive/folders/[\w-]{10,80}")
+
+
+def link_de(tarefa_id: int) -> str | None:
+    """Pasta da entrega no Google Drive (botão "Visualizar"), se a produção já foi concluída com o link."""
+    linha = _db().execute("SELECT link FROM producao_info WHERE tarefa_id = ?", (tarefa_id,)).fetchone()
+    return linha["link"] if linha and linha["link"] else None
 
 
 def _agora() -> str:
@@ -251,6 +263,7 @@ class Conclusao(BaseModel):
     resumo: str
     pasta: str               # caminho relativo dentro de "ESCRITÓRIO VERANEIO"
     arquivos: list[str] = []
+    link: str = ""           # pasta no Google Drive (botão "Visualizar"); vazio se o Drive ainda não sincronizou
 
 
 class Falha(BaseModel):
@@ -437,7 +450,8 @@ async def _finalizar(tarefa_id: int, status: str, resposta: str, evento: str, de
 async def concluir(tarefa_id: int, conclusao: Conclusao, authorization: str = Header("")):
     _exigir_operador(authorization)
     with _db() as db:  # a pasta fica registrada para os ajustes desta peça
-        db.execute("UPDATE producao_info SET pasta = ? WHERE tarefa_id = ?", (conclusao.pasta, tarefa_id))
+        link = conclusao.link if LINK_DRIVE.fullmatch(conclusao.link or "") else None
+        db.execute("UPDATE producao_info SET pasta = ?, link = ? WHERE tarefa_id = ?", (conclusao.pasta, link, tarefa_id))
     arquivos = "\n".join(f"- {nome}" for nome in conclusao.arquivos) or "- (nenhum arquivo listado)"
     conclusao.resumo = segredos.limpar(conclusao.resumo)  # vai ao chat e ao Monday: nunca leva chave/token
     resposta = (f"✅ Pedido concluído pelo Claude Code (Max).\n\n{conclusao.resumo.strip()}\n\n"

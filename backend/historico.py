@@ -6,6 +6,7 @@ from fastapi import APIRouter, Header, HTTPException
 
 import auth
 import encaminhamento
+import producao
 import tarefas
 from estado import buscar_agente, pode_acessar
 
@@ -49,7 +50,8 @@ def _mensagens_da_tarefa(linha, encaminhada: bool | None = None) -> list[dict]:
             "autor": "agente", "texto": linha["resposta"] or "", "em": linha["concluida_em"], "tarefa_id": tarefa_id,
             "meta": {"modelo": linha["modelo"], "dificuldade": linha["dificuldade"],
                      "tempo_segundos": round(linha["tempo_segundos"], 1), "adiada": linha["motivo"] is not None,
-                     **({"por": quem.nome} if quem else {})},
+                     **({"por": quem.nome} if quem else {}),
+                     **({"link": link} if (link := producao.link_de(tarefa_id)) else {})},  # botão "Visualizar"
         })
     elif status == "falhou":
         mensagens.append({"autor": "sistema", "texto": linha["motivo"] or "Falha ao executar a tarefa.",

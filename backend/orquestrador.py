@@ -252,7 +252,14 @@ def _mensagem(linha) -> dict:
         return {"tipo": "erro", "texto": linha["motivo"] or "Falha ao executar a tarefa.", **alvo}
     return {"tipo": "resposta_agente", **alvo, "texto": linha["resposta"], "modelo": linha["modelo"],
             "dificuldade": linha["dificuldade"], "tempo_segundos": round(linha["tempo_segundos"], 1),
-            "adiada": linha["motivo"] is not None}
+            "adiada": linha["motivo"] is not None, "link": _link(linha)}
+
+
+def _link(linha) -> str | None:
+    """Pasta da entrega no Drive (botão "Visualizar"), só nas produções concluídas."""
+    import producao  # import tardio: produção depende do orquestrador
+
+    return producao.link_de(linha["id"]) if linha["modelo"] == producao.MODELO_MAX else None
 
 
 async def _entregar(linha) -> None:

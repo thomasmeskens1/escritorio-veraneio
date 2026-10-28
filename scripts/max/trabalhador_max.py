@@ -25,6 +25,7 @@ from urllib.parse import urlparse
 
 import catalogo_fotos_empresas
 import catalogo_lodges
+import link_drive
 import comum
 import emails_brevo
 import painel_analitico
@@ -453,10 +454,11 @@ def produzir(producao: dict) -> None:
             log(f"   não foi possível avisar a falha ao backend: {erro_api}")
         return
     # Daqui em diante a peça já está no Drive (e no Monday): nunca vira "falha"; insiste em avisar a conclusão.
+    link = link_drive.link_da_pasta(entrega, DRIVE)  # botão "Visualizar" do chat ("" se o Drive não sincronizou)
     for tentativa in range(6):
         try:
             comum.chamar("POST", f"/api/producao/{producao['tarefa_id']}/concluir",
-                         {"resumo": resumo, "pasta": relativa, "arquivos": arquivos})
+                         {"resumo": resumo, "pasta": relativa, "arquivos": arquivos, "link": link})
             log(f"   concluída: {', '.join(arquivos)}")
             return
         except Exception as erro_api:

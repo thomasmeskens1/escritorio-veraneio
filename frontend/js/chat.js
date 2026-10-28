@@ -49,7 +49,7 @@ function textoNatural(texto) {
     .trim();
 }
 
-function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, formulario }) {
+function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, formulario, link }) {
   const div = document.createElement('div');
   div.className = `msg msg-${tipo}`;
   const nome = document.createElement('span');
@@ -61,6 +61,7 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
   const pedido = formulario || extraido.formulario;
   if (pedido) div.append(criarFormulario(pedido));
   if (anexos?.length) div.append(criarAnexosDaMensagem(anexos));
+  if (tipo === 'agente' && link && LINK_DRIVE.test(link)) div.append(criarBotaoVisualizar(link));
   if (tipo === 'agente' && tarefa_id && /^✅ Pedido concluído/.test(texto)) div.append(criarBotaoAjuste(tarefa_id));
   if (opcoes?.length) div.append(criarOpcoes(opcoes));
   if (meta) {
@@ -90,6 +91,19 @@ function criarOpcoes(opcoes) {
     grupo.append(botao);
   });
   return grupo;
+}
+
+// Entrega de produção: "Visualizar" abre a pasta da entrega no Google Drive (link montado pelo trabalhador do Max).
+const LINK_DRIVE = /^https:\/\/drive\.google\.com\/drive\/folders\/[\w-]+$/;
+function criarBotaoVisualizar(link) {
+  const botao = document.createElement('a');
+  botao.className = 'botao-secundario msg-ajuste msg-visualizar';
+  botao.href = link;
+  botao.target = '_blank';
+  botao.rel = 'noopener noreferrer';
+  botao.textContent = 'Visualizar';
+  botao.title = 'Abrir a pasta da entrega no Google Drive';
+  return botao;
 }
 
 // Entrega de produção: "Pedir ajuste" prepara o pedido; a nova versão sai na mesma pasta (_v2, _v3...).
@@ -216,7 +230,7 @@ function mensagemDoAgente(andar, agente, dados) {
   const nome = dados.por || dadosAgente(andar, agente).nome;
   const meta = metadadosResposta(dados);
   const autor = !meta && dados.modelo ? `${nome} · ${dados.modelo}` : nome;
-  return { autor, texto: dados.texto, tipo: 'agente', meta, tarefa_id: dados.tarefa_id };
+  return { autor, texto: dados.texto, tipo: 'agente', meta, tarefa_id: dados.tarefa_id, link: dados.link };
 }
 
 function converterDoServidor(andar, agente, m) {

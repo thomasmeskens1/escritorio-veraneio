@@ -451,6 +451,17 @@
   font-size: 0.75rem;
 }
 
+/* "Visualizar" (pasta no Drive) ao lado de "Pedir ajuste" */
+.msg-visualizar {
+  display: inline-block;
+  margin-right: 8px;
+  text-decoration: none;
+}
+
+.msg-visualizar + .msg-ajuste {
+  display: inline-block;
+}
+
 /* Respostas rápidas (ex.: planejamento ou peça final), lado a lado */
 .msg-opcoes {
   display: flex;
