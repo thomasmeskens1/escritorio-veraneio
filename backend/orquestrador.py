@@ -18,6 +18,7 @@ import encaminhamento
 import espera
 import max_texto
 import monday
+import relatorios
 import saude
 import tarefas
 from conexoes import gerenciador
@@ -138,6 +139,8 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
     await asyncio.to_thread(cerebro.registrar_resultado, tarefa_id, True)  # trechos usados ganham pontos
     await asyncio.to_thread(cerebro.aprender_tarefa, tarefa_id)            # o trabalho concluído vira conhecimento
     linha = tarefas.obter(tarefa_id)
+    if linha["agente"] == relatorios.AGENTE and linha["usuario"] == config.DONO_MAX:  # "Ver relatório" (em teste)
+        await asyncio.to_thread(relatorios.gerar, linha)
     await _entregar(linha)
     await entregar_na_origem(linha)
     producao_a_seguir = False
@@ -253,7 +256,8 @@ def _mensagem(linha) -> dict:
         return {"tipo": "erro", "texto": linha["motivo"] or "Falha ao executar a tarefa.", **alvo}
     return {"tipo": "resposta_agente", **alvo, "texto": linha["resposta"], "modelo": linha["modelo"],
             "dificuldade": linha["dificuldade"], "tempo_segundos": round(linha["tempo_segundos"], 1),
-            "adiada": linha["motivo"] is not None, "link": _link(linha)}
+            "adiada": linha["motivo"] is not None, "link": _link(linha),
+            "relatorio": relatorios.link_de(linha["id"])}
 
 
 def _link(linha) -> str | None:

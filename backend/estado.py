@@ -140,6 +140,13 @@ ANDARES: dict[str, dict[str, Agente]] = {
                          "sua aprovação, cria os leads no grupo [Corp] Prospecção Ativa do Monday.",
                exemplo="Prospecte 10 indústrias da região de Campinas com mais de 300 funcionários.",
                aparencia=_ap("#c68642", "curto", "#2b1d0e", "blazer", "#7f5347", "#1b263b", "cracha")),
+        Agente(id="estrategista", nome="Estrategista", funcao="Estratégia e posicionamento das três empresas",
+               setor="estrategia",
+               descricao="Posiciona as empresas do grupo na Matriz BCG e na GE-McKinsey, faz SWOT, 5 Forças, Ansoff e "
+                         "a conta de custo de aquisição x valor do cliente, com os números do painel e do CRM e "
+                         "pesquisa de mercado na web, sempre com a fonte e o grau de confiança de cada ponto.",
+               exemplo="Onde estamos na Matriz BCG e para onde devemos crescer?",
+               aparencia=_ap("#f1c27d", "curto", "#9a9a9a", "blazer", "#22333b", "#111111", "oculos")),
     ),
     "cobertura": _andar(
         Agente(id="cerebro", nome="Cérebro", funcao="Conhecimento central da Casa Veraneio", setor="laboratorio",

@@ -22,6 +22,7 @@ import correcoes
 import empresas
 import encaminhamento
 import espera
+import estudos
 import modelos_uso
 import monday
 import cerebro
@@ -31,6 +32,7 @@ import entrevista
 import historico
 import orquestrador
 import producao
+import relatorios
 import tarefas
 from api_painel import rotas as rotas_painel
 from auth import autenticar, criar_token, validar_token
@@ -44,7 +46,8 @@ TAMANHO_MAX_TEXTO = 4000
 # Comandos reservados do dono, pelo hash (sha256) do texto: nenhum nome no código público nem na interface.
 COMANDOS_RESERVADOS = {"ddf7839cb8fca09abdd9e9b0b2f498885f382f5bf9fec65d95db793bd0f11832": "chat",
                        "7416b21e82400f2b73863b1c65dafc0581d462baae82802358ea2c84fd389f7f": "todos"}
-EMPRESA_DO_AGENTE = {"prospectador": "cv_corporativo"}  # agentes de uma empresa só (Comercial)
+# Comercial: o setor já diz a empresa (o Estrategista olha as três; estudos.empresa_do_estudo).
+EMPRESA_DO_AGENTE = {"prospectador": "cv_corporativo", "estrategista": empresas.COMUM}
 VISAO_DO_GRUPO = {"analista_metricas"}  # podem trabalhar com as três empresas juntas (opção "Todas" do seletor)
 EXIGEM_EMPRESA = {"marketing"}  # andares que trabalham para uma empresa (o Cérebro também, ver tratar_mensagem)
 MAX_FALHAS_LOGIN = 5          # senhas erradas seguidas por usuário/IP antes do bloqueio
@@ -131,6 +134,7 @@ app.include_router(monday.rotas)
 app.include_router(andamento.rotas)
 app.include_router(modelos_uso.rotas)
 app.include_router(correcoes.rotas)
+app.include_router(relatorios.rotas)
 
 
 class Credenciais(BaseModel):
@@ -290,6 +294,15 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         texto_aviso = await orquestrador.retomar_producao(pendente, texto)
         return await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "titulo": "Produção", "liberar": True,
                                              "texto": texto_aviso})
+    # Estudo com pesquisa na web (Analista de Tendências, Estrategista): no Max, só na conta do Thomas. Para as
+    # outras contas, ou pergunta simples ("o que é a Matriz BCG?"), o agente responde pelos modelos gratuitos.
+    if usuario["sub"] == config.DONO_MAX and estudos.e_estudo(agente.id, texto):
+        await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "liberar": True, "titulo": "Estudo iniciado",
+                                      "texto": "Vou pesquisar na web (notícias, dados de mercado e concorrentes) e "
+                                               "trazer o estudo aqui, com as fontes. Leva alguns minutos."})
+        await estudos.iniciar(usuario["sub"], andar, agente, texto,
+                              estudos.empresa_do_estudo(agente.id, texto, empresa))
+        return
     # A resposta final sempre volta ao chat onde o usuário pediu (origem_id), mesmo rodando em outro agente.
     origem_id = None
     aviso = None  # "encaminhei/mandei para...": só sai depois de o pedido passar nas validações abaixo

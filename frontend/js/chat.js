@@ -50,7 +50,7 @@ function textoNatural(texto) {
     .trim();
 }
 
-function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, formulario, link }) {
+function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, formulario, link, relatorio }) {
   const div = document.createElement('div');
   div.className = `msg msg-${tipo}`;
   const nome = document.createElement('span');
@@ -67,6 +67,7 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
   } : undefined));
   if (anexos?.length) div.append(criarAnexosDaMensagem(anexos));
   if (tipo === 'agente' && link && LINK_DRIVE.test(link)) div.append(criarBotaoVisualizar(link));
+  if (tipo === 'agente' && relatorio && LINK_RELATORIO.test(relatorio)) div.append(criarBotaoRelatorio(relatorio));
   if (tipo === 'agente' && tarefa_id && /^✅ Pedido concluído/.test(texto)) div.append(criarBotaoAjuste(tarefa_id));
   if (opcoes?.length) div.append(criarOpcoes(opcoes));
   if (meta) {
@@ -100,6 +101,16 @@ function criarOpcoes(opcoes) {
 
 // Entrega de produção: "Visualizar" abre a pasta da entrega no Google Drive (link montado pelo trabalhador do Max).
 const LINK_DRIVE = /^https:\/\/drive\.google\.com\/drive\/folders\/[\w-]+$/;
+// Página com gráficos da resposta do Analista de Métricas (em teste): os números vêm direto do painel.
+const LINK_RELATORIO = /^\/relatorios\/\d+-[\w-]{20,}\.html$/;
+
+function criarBotaoRelatorio(link) {
+  const botao = criarBotaoVisualizar(link);
+  botao.textContent = 'Ver relatório';
+  botao.title = 'Abrir o relatório com gráficos numa nova aba';
+  return botao;
+}
+
 function criarBotaoVisualizar(link) {
   const botao = document.createElement('a');
   botao.className = 'botao-secundario msg-ajuste msg-visualizar';
@@ -235,7 +246,8 @@ function mensagemDoAgente(andar, agente, dados) {
   const nome = dados.por || dadosAgente(andar, agente).nome;
   const meta = metadadosResposta(dados);
   const autor = !meta && dados.modelo ? `${nome} · ${dados.modelo}` : nome;
-  return { autor, texto: dados.texto, tipo: 'agente', meta, tarefa_id: dados.tarefa_id, link: dados.link };
+  return { autor, texto: dados.texto, tipo: 'agente', meta, tarefa_id: dados.tarefa_id, link: dados.link,
+    relatorio: dados.relatorio };
 }
 
 function converterDoServidor(andar, agente, m) {

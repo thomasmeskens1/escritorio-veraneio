@@ -21,7 +21,8 @@ MARKETING = ("gestor", "designer", "criador_imagens", "copywriter", "social_medi
 VISUAL = ("gestor", "designer", "criador_imagens", "moviemaker", "editor_video")
 TEXTO = ("gestor", "copywriter", "social_media", "email_marketing", "moviemaker", "gestor_trafego")
 PRODUZEM = ("gestor", "designer", "criador_imagens", "copywriter", "moviemaker", "editor_video")
-ESTRATEGIA = ("gestor", "social_media", "gestor_trafego", "analista_metricas", "analista_tendencias")
+ESTRATEGIA = ("gestor", "social_media", "gestor_trafego", "analista_metricas", "analista_tendencias",
+              "estrategista")
 
 # Manual -> {número da seção (ou "ouro") -> quem recebe}. Seção fora do mapa não vai para ninguém;
 # manual com TODOS no lugar do dicionário vai inteiro para quem está em DA_FUNCAO.
@@ -50,6 +51,7 @@ DA_FUNCAO = {
     "analista_tendencias": ("02", "15"),
     "designer": ("03",), "criador_imagens": ("04",), "moviemaker": ("05",), "editor_video": ("06", "05"),
     "copywriter": ("07",), "email_marketing": ("07", "13"), "prospectador": ("14",),
+    "estrategista": ("02", "14"),
 }
 # Versão essencial (Groq gratuito e modelo local, contexto curto): estas seções + o documento da função.
 ESSENCIAL = {"00": ("ouro", "2", "8"), "01": ("5",), "08": ("2",)}
