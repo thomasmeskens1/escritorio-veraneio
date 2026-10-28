@@ -40,6 +40,8 @@ MAX_TOKENS_SAIDA_CLAUDE = 2000
 # answer..." chegou como resposta ao usuário).
 RACIOCINIO_VAZADO = re.compile(r"\s*(We need to|The user (asks|wants|is asking)|Let me (think|analy)|Okay, (so|let)|"
                                r"First, I need to)\b")
+# Reteste de 28/10/2026: "<<function>>> <parameter name="pergunta">..." (sem nome de ferramenta) chegou ao usuário.
+FERRAMENTA_QUEBRADA = re.compile(r"<<\s*function|<parameter name=|<function=|</?tool_call>")
 _trava_total = threading.Lock()  # soma de tokens/custo de etapas paralelas
 
 
@@ -203,7 +205,10 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
         total.custo_usd += custo
     if RACIOCINIO_VAZADO.match(saida.raw or ""):  # o roteamento passa ao próximo modelo
         raise RuntimeError("o modelo devolveu o raciocínio (em inglês) no lugar da resposta")
-    return _chamadas_em_texto(saida.raw, ferramentas)
+    texto = _chamadas_em_texto(saida.raw, ferramentas)
+    if FERRAMENTA_QUEBRADA.search(texto):  # chamada de ferramenta num formato que não dá para executar
+        raise RuntimeError("o modelo devolveu uma chamada de ferramenta quebrada no lugar da resposta")
+    return texto
 
 
 def _chamadas_em_texto(texto: str, ferramentas: list[BaseTool]) -> str:
