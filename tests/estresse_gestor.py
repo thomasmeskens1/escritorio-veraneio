@@ -49,8 +49,8 @@ def checar_plano(plano: list[dict], tipo: str) -> list[str]:
         problemas.append("pedido de ideias acionou produção de arquivo")
     if tipo == "peca_video" and "editor_video" not in agentes:
         problemas.append("reels sem o Editor de Vídeo no plano")
-    if tipo == "peca_video" and "criador_imagens" in agentes and "editor_video" in agentes:
-        problemas.append("reels com dois produtores (Criador de Imagens e Editor de Vídeo)")
+    # Criador de Imagens numa etapa de texto do reels (ex.: capa) é aceito: a produção de arquivo tem UM produtor,
+    # escolhido pelo formato em orquestrador._produzir_pecas (conferido em 28/10/2026).
     if tipo == "peca_imagem" and "criador_imagens" not in agentes:
         problemas.append("carrossel sem o Criador de Imagens no plano")
     return problemas
