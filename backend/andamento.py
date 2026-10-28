@@ -52,6 +52,65 @@ def _etapas_do_gestor(tarefa_id: int, eventos: list) -> list[dict] | None:
     return etapas
 
 
+def _etapas_no_projeto(tarefa_id: int, agente_id: str, eventos: list) -> list[dict] | None:
+    """O especialista dentro de um projeto do Gestor: as etapas DELE (fila, Cérebro, modelo, entrega). Antes, o log
+    do especialista ficava vazio enquanto ele trabalhava para o Gestor (Thomas, 28/10/2026)."""
+    from agents.projeto import PASTA_PROJETOS, _arquivo_etapa
+
+    pasta = PASTA_PROJETOS / str(tarefa_id)
+    if not (pasta / "plano.json").exists():
+        return None
+    plano = json.loads((pasta / "plano.json").read_text(encoding="utf-8"))
+    minhas = [(n, p) for n, p in enumerate(plano, 1) if p["agente"] == agente_id]
+    if not minhas:
+        return None
+    etapas = [{"texto": f"Pedido do Gestor (projeto #{tarefa_id})", "status": "concluida"}]
+    for n, passo in minhas:
+        marca = f"Etapa {n}:"
+        inicio = next((i for i, e in enumerate(eventos) if e["tipo"] == "etapa_iniciada"
+                       and e["agente"] == agente_id and (e["detalhe"] or "").startswith(marca)), None)
+        pronta = _arquivo_etapa(pasta, n, agente_id).exists()
+        if inicio is None and not pronta:
+            etapas.append({"texto": f"Etapa {n} na fila: começa na fase {passo.get('fase', n)}, depois das anteriores",
+                           "status": "pendente"})
+            continue
+        etapas.append({"texto": f"Etapa {n}: {passo['instrucao'][:110]}", "status": "concluida"})
+        fim = next((i for i, e in enumerate(eventos) if i > (inicio or 0) and e["tipo"] == "etapa_salva"
+                    and e["agente"] == agente_id and (e["detalhe"] or "").startswith(marca)), len(eventos))
+        for e in eventos[inicio or 0:fim]:
+            if e["agente"] != agente_id:
+                continue
+            if e["tipo"] == "etapa_modelo":
+                etapas.append({"texto": f"Trabalhando com {_modelo_curto(e['modelo'])}",
+                               "status": "concluida" if pronta else "andamento"})
+            elif e["tipo"] == "consulta_cerebro":
+                etapas.append({"texto": f"Consultou o Cérebro: {(e['detalhe'] or '')[:90]}", "status": "concluida"})
+        if not any(e["status"] == "andamento" for e in etapas) and not pronta:
+            etapas.append({"texto": f"Trabalhando na etapa {n}", "status": "andamento"})
+        etapas.append({"texto": f"Entregar a etapa {n} ao Gestor", "status": "concluida" if pronta else "pendente"})
+    etapas.append({"texto": "Gestor revisa e consolida a entrega",
+                   "status": "concluida" if (pasta / "final.md").exists()
+                   else ("andamento" if all(_arquivo_etapa(pasta, i, p["agente"]).exists()
+                                            for i, p in enumerate(plano, 1)) else "pendente")})
+    return _sem_repeticao(etapas)
+
+
+def _projeto_do_gestor(andar: str, agente_id: str, filtro: str | None):
+    """Projeto ativo do Gestor que tem etapa deste especialista (o mais recente)."""
+    if agente_id == "gestor":
+        return None
+    marcadores = ",".join("?" * len(ATIVAS))
+    linhas = tarefas._db().execute(
+        f"SELECT * FROM tarefas WHERE andar = ? AND agente = 'gestor' AND status IN ({marcadores}) "
+        + ("AND usuario = ? " if filtro else "") + "ORDER BY id DESC LIMIT 5",
+        (andar, *ATIVAS, *([filtro] if filtro else []))).fetchall()
+    for linha in linhas:
+        eventos = tarefas.eventos_de([linha["id"]]).get(linha["id"], [])
+        if (etapas := _etapas_no_projeto(linha["id"], agente_id, eventos)):
+            return linha, eventos, etapas
+    return None
+
+
 def _etapas_por_eventos(linha, eventos: list) -> list[dict]:
     etapas = [{"texto": "Pedido recebido", "status": "concluida"}]
     for i, e in enumerate(eventos):
@@ -205,7 +264,14 @@ def andamento(andar: str, agente_id: str, authorization: str = Header("")):
         + ("AND usuario = ? " if filtro else "") + "ORDER BY id DESC LIMIT 1",
         (andar, agente_id, *vindas, *ATIVAS, *([filtro] if filtro else []))).fetchone()
     if not linha:
-        return {"ativa": None}
+        # Sem tarefa própria: pode estar trabalhando numa etapa de projeto do Gestor.
+        if not (no_projeto := _projeto_do_gestor(andar, agente_id, filtro)):
+            return {"ativa": None}
+        projeto, eventos, etapas = no_projeto
+        return {"ativa": {"tarefa_id": projeto["id"], "status": projeto["status"],
+                          "pedido": encaminhamento.pedido_original(projeto["texto"])[:140],
+                          "agente": f"{_nome_do_agente(agente_id)} (projeto do Gestor)", "etapas": etapas,
+                          "estimativa": None}}
     eventos = tarefas.eventos_de([linha["id"]]).get(linha["id"], [])
     etapas = (_etapas_do_gestor(linha["id"], eventos) if linha["agente"] == "gestor" else None) \
         or _etapas_por_eventos(linha, eventos)

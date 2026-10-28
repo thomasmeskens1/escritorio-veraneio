@@ -273,10 +273,12 @@ def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa,
         equipe = config.MODELO_FILA_PADRAO if etapa.modelo == config.MODELO_FILA_COMPLEXO else etapa.modelo
 
         def executar(agente: str, descricao: str, esperado: str, papel: str) -> str:
+            modelo = etapa.modelo if papel == "gestor" else equipe
+            if papel != "gestor":  # o log do especialista mostra com que modelo ele trabalha na etapa (andamento.py)
+                tarefas.registrar_evento(tarefa_id, "etapa_modelo", agente, modelo)
             if etapa.modelo == max_texto.MODELO:  # cada etapa: Max se livre, senão a API em paralelo
                 return _rodar_max_ou_api(agente, descricao, esperado, etapa.limite_s, total, tarefa_id)
-            return _rodar(agente, descricao, esperado, etapa.modelo if papel == "gestor" else equipe,
-                          etapa.limite_s, total, tarefa_id)
+            return _rodar(agente, descricao, esperado, modelo, etapa.limite_s, total, tarefa_id)
 
         def avisar(tipo: str, agente: str, detalhe: str) -> None:
             atividade.etapa_em_thread(tarefa_id, tipo, agente, detalhe)
