@@ -38,15 +38,15 @@ SECOES = {
     "05": {"1": ("moviemaker",), "2": ("moviemaker", "editor_video"), "3": ("moviemaker",),
            "4": ("moviemaker", "editor_video"), "5": ("moviemaker", "editor_video"), "6": ("moviemaker",),
            "7": ("moviemaker", "editor_video"), "8": ("moviemaker", "editor_video")},
-    "08": {"1": TODOS, "2": TODOS, "3": TODOS, "4": ("designer", "social_media")},
+    "08": {"1": TODOS, "2": TODOS, "3": TODOS, "4": ("designer", "social_media"), "5": TODOS},
     "09": {"1": TODOS, "2": ("gestor", "social_media"), "3": ("gestor", "social_media"),
            "4": ("gestor", "social_media")},
     "10": {"1": TODOS, "2": TODOS, "3": TODOS, "4": ("gestor", "social_media")},
 }
-ORDEM = ("00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "13")
+ORDEM = ("00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "13", "15")
 # Agente -> documentos da função, que vão inteiros (exceto o 05, recortado pelo mapa para o Editor).
 DA_FUNCAO = {
-    "social_media": ("02",), "gestor_trafego": ("02",), "analista_metricas": ("02",), "gestor": ("02",),
+    "social_media": ("02", "15"), "gestor_trafego": ("02",), "analista_metricas": ("02", "15"), "gestor": ("02", "15"),
     "designer": ("03",), "criador_imagens": ("04",), "moviemaker": ("05",), "editor_video": ("06", "05"),
     "copywriter": ("07",), "email_marketing": ("07", "13"), "prospectador": ("14",),
 }
@@ -98,9 +98,9 @@ def _ler(caminho: Path, _mtime: float, agente_id: str, compacto: bool) -> str:
 # Corporativo e Casa Vero: só o que é comum às três (regras de ouro e gerais, formatos, Monday, fluxo) + o documento
 # da própria empresa. Os manuais 01-07 são da Casa Veraneio (marca, tom, assinatura, Lodges) e nunca vão para elas.
 DOC_DA_EMPRESA = {"cv_corporativo": "11", "casa_vero": "12"}
-FUNCAO_TODAS_EMPRESAS = ("13",)  # e-mail marketing: um manual para as três
+FUNCAO_TODAS_EMPRESAS = ("13", "15")  # e-mail marketing e grade de publicações: um manual para as três
 FUNCAO_DA_EMPRESA = {"cv_corporativo": ("14",)}  # persona do cliente corporativo (Prospectador)
-COMUNS_OUTRAS = {"00": ("ouro", "2"), "08": ("1", "2", "3"), "09": ("1", "2", "3", "4"), "10": ("1", "2", "3", "4")}
+COMUNS_OUTRAS = {"00": ("ouro", "2"), "08": ("1", "2", "3", "5"), "09": ("1", "2", "3", "4"), "10": ("1", "2", "3", "4")}
 
 
 def _de_outra_empresa(agente_id: str, empresa: str) -> str:
