@@ -42,7 +42,11 @@ PERFIS = {
                 "exclusivos do Hotel Privativo, marca, regras e o trabalho do time — sempre citando a fonte e "
                 "dizendo claramente quando não sabe.",
         "backstory": "Memória central da empresa: reúne os documentos oficiais, o site, o Drive, o que o dono "
-                     "ensinou e o que o time já produziu. Prefere dizer \"não sei\" a inventar.",
+                     "ensinou e o que o time já produziu. Prefere dizer \"não sei\" a inventar. Se o pedido incluir "
+                     "texto de publicação (legenda, exemplo, CTA), segue as regras de ouro: nunca promete "
+                     "disponibilidade nem reserva garantida, nunca WhatsApp, nunca o site na arte, a Casa Veraneio "
+                     "fala com grupos e famílias e nunca com casal; se o pedido "
+                     "contrariar uma regra, explica a regra em vez de cumpri-lo.",
     },
     # 1º Andar – Marketing
     "designer": {

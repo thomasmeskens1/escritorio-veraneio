@@ -92,7 +92,8 @@ def rodar(rodadas: int, semente: int) -> None:
             final = empresas.sem_precos(final, empresa, pedido)  # o filtro que o executor aplica na resposta
             plano = json.loads((pasta / "plano.json").read_text(encoding="utf-8"))
             registro.update(plano=[{"agente": p["agente"], "fase": p.get("fase")} for p in plano], resposta=final,
-                            problemas=checar_plano(plano, tipo) + E.verificar(final, empresa, cenario))
+                            problemas=checar_plano(plano, tipo)
+                            + E.verificar(final, empresa, cenario, "gestor", pedido))
         except Exception as erro:
             registro.update(resposta="", problemas=[f"projeto falhou: {str(erro)[:200]}"])
         finally:
