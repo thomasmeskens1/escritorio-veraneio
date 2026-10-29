@@ -314,7 +314,7 @@ const FREQUENCIAS_ROTINA = ['Uma vez', 'Todos os dias', 'De segunda a sexta', 'F
 function abrirAgendamento() {
   if (!chatAberto || !sessao) return;
   const { andar, agente } = chatAberto;
-  const formulario = criarFormulario({
+  abrirFormularioPopup({
     titulo: 'Agendar tarefa', botao: 'Agendar',
     campos: [
       { nome: 'tarefa', rotulo: 'O que o agente deve fazer', tipo: 'texto_longo', obrigatorio: true },
@@ -326,11 +326,7 @@ function abrirAgendamento() {
       { nome: 'dia_mes', rotulo: 'Dia do mês (só em "Todo mês")', tipo: 'numero' },
       { nome: 'intervalo_horas', rotulo: 'De quantas em quantas horas (só em "A cada X horas")', tipo: 'numero' },
     ],
-  }, (respostas) => agendarTarefa(andar, agente, respostas));
-  const aviso = novoEl('div', 'msg msg-sistema');
-  aviso.append(novoEl('span', 'msg-autor', 'sistema'), formulario);
-  modalHistorico.append(aviso);
-  modalHistorico.scrollTop = modalHistorico.scrollHeight;
+  }, (respostas) => agendarTarefa(andar, agente, respostas), `${dadosAgente(andar, agente).nome} vai executar no horário`);
 }
 
 async function agendarTarefa(andar, agente, respostas) {

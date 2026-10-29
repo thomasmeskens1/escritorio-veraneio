@@ -72,7 +72,7 @@ function garantirEmpresa(andar, agente, texto = '') {
     return true;
   }
   const opcoes = [...EMPRESAS_DO_GRUPO, ...opcaoTodas(andar, agente)];
-  const formulario = criarFormulario({
+  abrirFormularioPopup({
     titulo: 'Para qual empresa é esta conversa?', botao: 'Confirmar empresa',
     campos: [{ nome: 'empresa', rotulo: 'Empresa', tipo: 'opcoes', obrigatorio: true, opcoes: opcoes.map(([, r]) => r) }],
   }, (respostas) => {
@@ -81,13 +81,7 @@ function garantirEmpresa(andar, agente, texto = '') {
     seletorEmpresa.value = escolhida[0];
     seletorEmpresa.dispatchEvent(new Event('change'));
     document.getElementById('modal-form').requestSubmit(); // envia o pedido que estava esperando
-  });
-  const aviso = novoEl('div', 'msg msg-sistema');
-  aviso.append(novoEl('span', 'msg-autor', 'sistema'),
-    document.createTextNode('Cada empresa tem dados próprios e nada é misturado. Escolha a empresa desta conversa:'),
-    formulario);
-  modalHistorico.append(aviso);
-  modalHistorico.scrollTop = modalHistorico.scrollHeight;
+  }, 'Cada empresa tem dados próprios e nada é misturado');
   return false;
 }
 

@@ -337,6 +337,31 @@ function renderizarAndar(nivel) {
   assinaturaAtual = assinatura(nivel);
   sincronizarVisitas(false, escalaRotulo);
   atualizarUI(nivel);
+  aplicarPendencias();
+}
+
+// "!" vermelho nos agentes com algo esperando o usuário (GET /api/pendencias): formulário sem resposta ou produção
+// em espera. Atualiza ao enviar, ao receber resposta e a cada 30 s.
+const INTERVALO_PENDENCIAS = 30000;
+let pendenciasAgentes = new Set();
+let timerPendencias = null;
+
+function aplicarPendencias() {
+  Object.entries(avatares).forEach(([id, avatar]) => avatar.definirPendente?.(pendenciasAgentes.has(`${andarAtual}/${id}`)));
+}
+
+async function atualizarPendencias() {
+  if (!sessao) return;
+  timerPendencias ||= setInterval(atualizarPendencias, INTERVALO_PENDENCIAS);
+  try {
+    const resposta = await fetch('/api/pendencias', { headers: { Authorization: `Bearer ${sessao.token}` } });
+    if (!resposta.ok) return;
+    const dados = await resposta.json();
+    pendenciasAgentes = new Set((dados.pendencias || []).map((p) => `${p.andar}/${p.agente}`));
+    aplicarPendencias();
+  } catch {
+    // sem conexão: mantém o que estava
+  }
 }
 
 // Só troca status/animações, brilho dos setores e anima visitas, sem recriar a cena.

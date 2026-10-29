@@ -81,6 +81,43 @@ function criarFormulario(definicao, aoEnviar) {
   return form;
 }
 
+// Formulário em pop-up (Thomas, 29/10/2026): o formulário não fica no chat; na conversa aparecem só as respostas
+// enviadas. Um pop-up por vez, por cima do chat; fechar sem enviar deixa o "!" no agente até a resposta.
+let popupFormulario = null;
+
+function fecharFormularioPopup() {
+  popupFormulario?.remove();
+  popupFormulario = null;
+}
+
+function abrirFormularioPopup(definicao, aoEnviar, subtitulo = '') {
+  fecharFormularioPopup();
+  const fundo = novoEl('div', 'modal aberto modal-formulario');
+  const janela = novoEl('section', 'janela janela-formulario');
+  janela.setAttribute('role', 'dialog');
+  janela.setAttribute('aria-modal', 'true');
+  const barra = novoEl('header', 'janela-barra');
+  const titulo = novoEl('div', 'janela-titulo');
+  titulo.append(novoEl('h2', null, definicao.titulo || 'Formulário'), novoEl('p', null, subtitulo || 'Responda para o agente seguir'));
+  const fechar = novoEl('button', 'fechar', '×');
+  fechar.type = 'button';
+  fechar.setAttribute('aria-label', 'Fechar o formulário');
+  fechar.addEventListener('click', fecharFormularioPopup);
+  barra.append(titulo, fechar);
+  const corpo = novoEl('div', 'formulario-corpo');
+  corpo.append(criarFormulario({ ...definicao, titulo: '' }, (respostas, texto) => {
+    fecharFormularioPopup();
+    (aoEnviar || enviarRespostasDoFormulario)(respostas, texto.replace(/^Respostas:/, `Respostas — ${definicao.titulo || 'Formulário'}:`));
+  }));
+  janela.append(barra, corpo);
+  fundo.append(janela);
+  fundo.addEventListener('click', (e) => { if (e.target === fundo) fecharFormularioPopup(); });
+  fundo.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); fecharFormularioPopup(); } });
+  document.body.append(fundo);
+  popupFormulario = fundo;
+  corpo.querySelector('input, select, textarea')?.focus();
+}
+
 function enviarRespostasDoFormulario(_respostas, texto) {
   if (modalInput.disabled) return;
   modalInput.value = texto;

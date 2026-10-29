@@ -62,8 +62,15 @@ function criarRotulo(cena, x, y, nome, tipo = 'ia') {
   fundo.lineStyle(1, borda, alfaBorda);
   fundo.strokeRoundedRect(-largura / 2, -10, largura, 20, 10);
   const bolinha = cena.add.circle(-largura / 2 + 11, 0, 4.5, CORES_STATUS.dormindo).setStrokeStyle(1.5, 0x15171c);
-  const rotulo = cena.add.container(x, y, [fundo, texto, bolinha]).setDepth(PROF_ROTULOS + y);
-  return { rotulo, bolinha };
+  // "!" vermelho: algo esperando o usuário (formulário sem resposta, produção em espera). Fica no rótulo, que não
+  // espelha quando o boneco vira.
+  const alerta = cena.add.container(largura / 2 + 2, -11, [
+    cena.add.circle(0, 0, 8, 0xe03131).setStrokeStyle(1.5, 0x15171c),
+    cena.add.text(0, 0, '!', { fontFamily: 'system-ui, sans-serif', fontSize: '12px', fontStyle: 'bold', color: '#ffffff' })
+      .setOrigin(0.5),
+  ]).setVisible(false);
+  const rotulo = cena.add.container(x, y, [fundo, texto, bolinha, alerta]).setDepth(PROF_ROTULOS + y);
+  return { rotulo, bolinha, alerta };
 }
 
 // Etiqueta informativa (pílula sem status), ex.: "Trabalhando em outro andar".
@@ -131,7 +138,14 @@ function criarAvatar(cena, x, y, { id, aparencia, nome, tipo, status, aoClicar, 
 
   const avatar = cena.add.container(x, y, [sombra, boneco, balao, zzz, martelo]).setDepth(PROF_BASE + y);
   let rotuloDy = CABECA_Y - CABECA_R - 26 - rotuloAcima;
-  const { rotulo, bolinha } = criarRotulo(cena, x, y + rotuloDy, nome, tipo);
+  const { rotulo, bolinha, alerta } = criarRotulo(cena, x, y + rotuloDy, nome, tipo);
+  let pulsoAlerta = null;
+  function definirPendente(pendente) {
+    if (alerta.visible === pendente) return;
+    alerta.setVisible(pendente).setScale(1);
+    pulsoAlerta?.remove();
+    pulsoAlerta = pendente ? cena.tweens.add({ targets: alerta, scale: 1.25, duration: 600, yoyo: true, repeat: -1 }) : null;
+  }
   rotulo.setScale(escalaRotulo);
 
   // Área de clique generosa: corpo inteiro + rótulo.
@@ -230,9 +244,10 @@ function criarAvatar(cena, x, y, { id, aparencia, nome, tipo, status, aoClicar, 
   definirStatus(status);
   return {
     objetos: [avatar, rotulo, alvo].filter(Boolean),
-    definirStatus, mover, caminhar, virar, definirAlfa, ajustarRotulo,
+    definirStatus, mover, caminhar, virar, definirAlfa, ajustarRotulo, definirPendente,
     destruir: () => {
       caminhar(false);
+      pulsoAlerta?.remove();
       animacoes.forEach((t) => t.remove());
       [avatar, rotulo, alvo].forEach((o) => o?.destroy());
     },

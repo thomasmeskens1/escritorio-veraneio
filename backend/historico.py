@@ -90,6 +90,42 @@ def _limpo_ate(usuario: str, andar: str, agente_id: str) -> int:
     return linha[0] or 0
 
 
+def pendencias(usuario: str) -> list[dict]:
+    """Chats com algo esperando o usuário: formulário sem resposta (a última mensagem do chat pede um formulário)
+    ou produção em espera de decisão. Vira o "!" vermelho no agente (Thomas, 29/10/2026).
+    A tarefa conta no chat em que rodou e no chat onde o pedido nasceu (encaminhamento)."""
+    import espera  # import tardio: espera depende do orquestrador só para o fluxo
+
+    achados: dict[tuple[str, str], dict] = {}
+    for linha in espera._db().execute("SELECT * FROM producao_em_espera WHERE usuario = ?", (usuario,)):
+        achados[(linha["andar"], linha["agente"])] = {"andar": linha["andar"], "agente": linha["agente"],
+                                                      "tarefa_id": linha["tarefa_id"], "motivo": "producao"}
+    vistos: set[tuple[str, str]] = set()
+    linhas = tarefas._db().execute("SELECT id, andar, agente, status, resposta FROM tarefas WHERE usuario = ? "
+                                   "ORDER BY id DESC LIMIT 300", (usuario,)).fetchall()
+    for linha in linhas:  # da mais nova para a mais antiga: só a última tarefa de cada chat decide
+        chats = {(linha["andar"], linha["agente"])}
+        if (de := encaminhamento.origem(linha["id"])):
+            chats.add(de)
+        if chats & vistos:
+            vistos |= chats
+            continue
+        vistos |= chats
+        if linha["status"] == "concluida" and "<<FORMULARIO>>" in (linha["resposta"] or ""):
+            for andar, agente in chats:
+                achados.setdefault((andar, agente), {"andar": andar, "agente": agente, "tarefa_id": linha["id"],
+                                                     "motivo": "formulario"})
+    return list(achados.values())
+
+
+@rotas.get("/pendencias")
+def pendencias_do_usuario(authorization: str = Header("")):
+    usuario = auth.validar_token(authorization.removeprefix("Bearer ").strip())
+    if not usuario:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    return {"pendencias": pendencias(usuario["sub"])}
+
+
 @rotas.get("/historico/{andar}/{agente_id}")
 def historico_do_chat(andar: str, agente_id: str, limite: int = 30, authorization: str = Header("")):
     """Últimas `limite` tarefas do próprio usuário com o agente, em ordem cronológica."""

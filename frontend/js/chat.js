@@ -60,11 +60,8 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
   const extraido = tipo === 'agente' ? extrairFormulario(texto) : { texto, formulario: null };
   div.append(nome, document.createTextNode(tipo === 'agente' ? textoNatural(extraido.texto) : texto));
   const pedido = formulario || extraido.formulario;
-  // A resposta leva a tarefa do formulário: o servidor continua aquela tarefa (e a empresa dela).
-  if (pedido) div.append(criarFormulario(pedido, tarefa_id ? (respostas, textoRespostas) => {
-    respondendoTarefa = tarefa_id;
-    enviarRespostasDoFormulario(respostas, textoRespostas);
-  } : undefined));
+  // O formulário abre em pop-up (js/formularios.js); no chat fica só o botão para reabrir.
+  if (pedido) div.append(criarBotaoFormulario(pedido, tarefa_id));
   if (anexos?.length) div.append(criarAnexosDaMensagem(anexos));
   if (tipo === 'agente' && link && LINK_DRIVE.test(link)) div.append(criarBotaoVisualizar(link));
   if (tipo === 'agente' && relatorio && LINK_RELATORIO.test(relatorio)) div.append(criarBotaoRelatorio(relatorio));
@@ -77,6 +74,41 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
     div.append(linha);
   }
   return div;
+}
+
+// A resposta leva a tarefa do formulário: o servidor continua aquela tarefa (e a empresa dela).
+function abrirFormularioDaMensagem(pedido, tarefaId) {
+  const nome = chatAberto ? dadosAgente(chatAberto.andar, chatAberto.agente).nome : '';
+  abrirFormularioPopup(pedido, tarefaId ? (respostas, textoRespostas) => {
+    respondendoTarefa = tarefaId;
+    enviarRespostasDoFormulario(respostas, textoRespostas);
+  } : undefined, nome ? `${nome} precisa destas respostas para seguir` : '');
+}
+
+function criarBotaoFormulario(pedido, tarefaId) {
+  const botao = novoEl('button', 'botao-secundario msg-ajuste', 'Responder formulário');
+  botao.type = 'button';
+  botao.addEventListener('click', () => abrirFormularioDaMensagem(pedido, tarefaId));
+  return botao;
+}
+
+// Última mensagem da conversa pede um formulário: o pop-up abre sozinho (uma vez por formulário; depois, pelo botão).
+const formulariosMostrados = new Set();
+
+function formularioDaMensagem(m) {
+  if (!m || m.tipo === 'voce') return null;
+  return m.formulario || (m.tipo === 'agente' ? extrairFormulario(m.texto).formulario : null);
+}
+
+function mostrarFormularioPendente(andar, agente) {
+  if (!chatEstaAberto(andar, agente)) return;
+  const lista = historicos[chave(andar, agente)] || [];
+  const ultima = lista[lista.length - 1];
+  const pedido = formularioDaMensagem(ultima);
+  const assinatura = ultima && `${chave(andar, agente)}|${ultima.tarefa_id ?? ''}|${ultima.texto}`;
+  if (!pedido || formulariosMostrados.has(assinatura)) return;
+  formulariosMostrados.add(assinatura);
+  abrirFormularioDaMensagem(pedido, ultima.tarefa_id);
 }
 
 // Respostas rápidas (ex.: "Só o planejamento" / "Peça final"): o clique envia a resposta como mensagem.
@@ -166,7 +198,9 @@ function adicionarMensagem(andar, agente, mensagem) {
   if (chatEstaAberto(andar, agente)) {
     modalHistorico.append(criarMensagem(mensagem));
     rolarParaFim();
+    mostrarFormularioPendente(andar, agente);
   }
+  if (formularioDaMensagem(mensagem)) atualizarPendencias(); // "!" no agente
 }
 
 // Atualiza cabeçalho, indicador "pensando" e bloqueio de envio.
@@ -219,6 +253,7 @@ function renderizarHistorico(andar, agente) {
     modalHistorico.prepend(aviso);
   }
   rolarParaFim();
+  mostrarFormularioPendente(andar, agente);
 }
 
 function abrirChat(andar, agente) {
@@ -517,6 +552,7 @@ async function enviarTarefa(evento) {
 
   selecionados[k] = [];
   rascunhos[k] = '';
+  setTimeout(atualizarPendencias, 2000); // a resposta ao formulário tira o "!" do agente
   if (chatEstaAberto(andar, agente)) {
     modalInput.value = '';
     ajustarAlturaInput();
@@ -546,6 +582,7 @@ function receberResposta(msg) {
   adicionarMensagem(andar, agente, mensagemDoAgente(andar, agente, msg));
   if (chatEstaAberto(andar, agente)) carregarPerfil(andar, agente); // atualiza o contador de tarefas
   else mostrarToast(andar, agente, texto);
+  atualizarPendencias();
   atualizarChat();
   avisarPainel();
 }

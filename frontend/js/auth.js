@@ -103,6 +103,7 @@ function iniciarSessao(nova) {
   configurarMapa(); // ícone "Mapa do Cérebro" só para a diretoria
   configurarElevador();
   iniciarEscritorio();
+  atualizarPendencias(); // "!" nos agentes com formulário ou produção esperando
   conectar();
 }
 
