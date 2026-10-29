@@ -84,8 +84,9 @@ function pararCaminhada(p) {
   p.tweens = [];
 }
 
-// Caminha pelos `pontos` (tiles) em ~2–3 s; ao final executa `aoFim`.
-function caminhar(p, pontos, aoFim) {
+// Caminha pelos `pontos` (tiles) em ~2–3 s; ao final executa `aoFim`. `ritmo` < 1 acelera (o tour da
+// Recepcionista usa 0,55: os colaboradores não ficam esperando ela andar).
+function caminhar(p, pontos, aoFim, ritmo = 1) {
   pararCaminhada(p);
   const trechos = [];
   let total = 0;
@@ -96,7 +97,7 @@ function caminhar(p, pontos, aoFim) {
     total += dist;
     de = para;
   });
-  const duracao = Math.min(3000, Math.max(total < 1.5 ? 700 : 2000, (total / VEL_CAMINHADA) * 1000));
+  const duracao = ritmo * Math.min(3000, Math.max(total < 1.5 ? 700 : 2000, (total / VEL_CAMINHADA) * 1000));
   p.avatar.caminhar(true);
 
   const proximo = (i) => {

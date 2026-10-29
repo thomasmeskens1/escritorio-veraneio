@@ -14,27 +14,36 @@ const PASSOS_ONBOARDING = [
   { andar: 'terreo', agente: 'professor', titulo: 'Térreo: a escola',
     texto: 'Este é o Professor. Ele ensina a escrever bons pedidos (briefings), com exemplos práticos.' },
   { andar: 'marketing', agente: 'gestor', titulo: 'Marketing: o time criativo',
-    texto: 'Aqui ficam Gestão, Criação, Conteúdo, Vídeo e Performance. O Gestor coordena projetos grandes: divide em etapas e distribui para a equipe.' },
+    texto: 'Aqui ficam Gestão, Criação, Conteúdo, Vídeo e Performance. Peça pronta (post, carrossel, reels, apresentação) é com o Gestor: comece com “Peça final:” e ele monta o plano e aciona a equipe. Só ideias? Comece com “Planejamento:”.' },
   { andar: 'marketing', agente: 'copywriter', titulo: 'Como pedir uma tarefa',
-    texto: 'Clique em qualquer agente para abrir a ficha e a conversa. Descreva o que precisa e envie: a resposta chega no chat, mesmo se você sair.' },
+    texto: 'Clique em qualquer agente para abrir a ficha e a conversa. Cada conversa trabalha para uma empresa (Casa Veraneio, Corporativo ou Casa Vero), escolhida no seletor do topo ou citada no próprio pedido.' },
   { andar: 'marketing', agente: 'copywriter', chat: true, titulo: 'A conversa continua de onde parou',
-    texto: 'Ao abrir um agente, você já vê a última interação; para rever o que veio antes, é só rolar para cima. Enter envia e Shift+Enter pula linha.' },
-  { andar: 'marketing', agente: 'criador_imagens', titulo: 'Imagens e vídeos',
-    texto: 'O Criador de Imagens e o Editor de Vídeo entregam artes em PNG e vídeos em MP4, salvos no Drive. Mesas com “Vaga” esperam novos agentes.' },
+    texto: 'Ao abrir um agente, você vê a última interação. O painel “Andamento” mostra cada passo do trabalho. Se o agente precisar de uma informação sua, abre um formulário em pop-up.' },
+  { andar: 'marketing', agente: 'social_media', titulo: 'O “!” vermelho',
+    texto: 'Agente com um “!” vermelho no nome está esperando você: um formulário sem resposta ou uma decisão antes de produzir. Abra o chat dele e responda.' },
+  { andar: 'marketing', agente: 'criador_imagens', titulo: 'Imagens, vídeos e apresentações',
+    texto: 'O Criador de Imagens e o Editor de Vídeo produzem as peças finais, salvas no Drive. Na entrega, “Visualizar” abre a pasta e “Pedir ajuste” gera uma nova versão. Mesas com “Vaga” esperam novos agentes.' },
+  { andar: 'marketing', agente: 'analista_tendencias', titulo: 'Tendências e datas',
+    texto: 'Na mesa de reunião fica a Analista de Tendências: ela calcula as datas que importam (Carnaval, feriadões, Réveillon), estuda o mercado e as notícias e diz o que preparar antes do momento.' },
+  { andar: 'comercial', agente: 'prospectador', titulo: '2º andar: Comercial',
+    texto: 'O Prospectador encontra empresas para o Corporativo e mostra uma prévia; só com a sua aprovação os leads entram no Monday.' },
+  { andar: 'comercial', agente: 'estrategista', titulo: 'O Estrategista',
+    texto: 'Na mesa de reunião, o Estrategista posiciona as três empresas na Matriz BCG, faz SWOT e estudos de concorrência, sempre com a fonte e o grau de confiança.' },
   { andar: 'porao', agente: 'construtor', titulo: 'Porão: o Construtor',
     texto: 'Precisa de um especialista que ainda não existe? Descreva a função ao Construtor e ele cria um agente novo, com mesa própria.' },
   { andar: 'porao', agente: 'despachante', titulo: 'O Despachante',
     texto: 'Clique no Despachante para ver a fila de tarefas: o que está rodando, o que aguarda e o que já foi concluído.' },
   { andar: 'cobertura', agente: 'cerebro', titulo: 'Cobertura: o Cérebro',
-    texto: 'Esta é a memória da Casa Veraneio: lodges, preços, serviços e o que o time aprende. Todos consultam o Cérebro, e os estagiários levam as respostas até as mesas.' },
+    texto: 'Esta é a memória das três empresas: imóveis, preços, serviços, regras e o que o time aprende, sem misturar uma empresa com a outra. Todos consultam o Cérebro, e os estagiários levam as respostas até as mesas.' },
   { ui: '#abrir-registro', titulo: 'Registro de atividade',
     texto: 'Tudo o que acontece fica registrado aqui: pedidos, respostas, falhas e trocas de modelo.' },
   { andar: 'terreo', agente: 'recepcionista', titulo: 'Duas dicas e até logo!',
-    texto: 'Use o clipe do chat para enviar imagens e PDFs (até 15 MB) e escreva “todos os dias às 8h…” para agendar rotinas. Qualquer dúvida, é só falar comigo no chat!' },
+    texto: 'Use o clipe do chat para enviar imagens e PDFs (até 15 MB). Para uma tarefa repetir sozinha, use o botão “Agendar tarefa” na ficha do agente. Qualquer dúvida, é só falar comigo ou com o Professor!' },
 ];
 
 const ZOOM_TOUR = 1.7;         // aproximação da câmera sobre ela (x enquadramento do andar)
 const MS_POR_LETRA = 22;
+const RITMO_TOUR = 0.55;      // caminhada 45% mais rápida que a dos estagiários (visitas.js)
 const SEGUIR_ACIMA = 40;       // a câmera mira o corpo, não os pés (px)
 
 let onboarding = null; // { passos, indice, geracao, raiz, foco, caixa, guia, timerTexto, completo }
@@ -228,8 +237,8 @@ function levarGuia(andar, agente, aoChegar) {
     const guia = criarGuia(veioDoElevador ? portaElevador() : destino);
     if (!veioDoElevador) return chegar(destino);
     guia.avatar.definirAlfa(0);
-    cena.tweens.add({ targets: guia.avatar.objetos, alpha: 1, duration: 300 });
-    caminhar(guia, [saidaElevador(), destino], () => chegar(destino));
+    cena.tweens.add({ targets: guia.avatar.objetos, alpha: 1, duration: 200 });
+    caminhar(guia, [saidaElevador(), destino], () => chegar(destino), RITMO_TOUR);
   };
 
   const guia = onboarding.guia;
@@ -238,12 +247,12 @@ function levarGuia(andar, agente, aoChegar) {
     // Sai pelo elevador do andar atual antes de aparecer no próximo.
     return caminhar(guia, [saidaElevador(), portaElevador()], () => {
       if (!vivo()) return;
-      cena.tweens.add({ targets: guia.avatar.objetos, alpha: 0, duration: 250, onComplete: entrarNoAndar });
-    });
+      cena.tweens.add({ targets: guia.avatar.objetos, alpha: 0, duration: 200, onComplete: entrarNoAndar });
+    }, RITMO_TOUR);
   }
   const destino = destinoAoLadoDe(agente);
   focarCamera();
-  caminhar(guia, [destino], () => chegar(destino));
+  caminhar(guia, [destino], () => chegar(destino), RITMO_TOUR);
 }
 
 // ---------- Fala (caixa de diálogo) ----------
