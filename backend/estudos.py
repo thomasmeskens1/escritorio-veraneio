@@ -76,8 +76,28 @@ def _painel() -> str:
             blocos.append(f"### {titulo}\n{str(ler())[:MAX_DADOS]}")
         except Exception as erro:
             blocos.append(f"### {titulo}\n(não foi possível ler: {erro})")
+    blocos.insert(0, _receita_por_empresa())
     return "DADOS INTERNOS DO PAINEL ANALÍTICO (números reais; use-os e cite \"painel interno\"):\n\n" + \
-        "\n\n".join(blocos)
+        "\n\n".join(b for b in blocos if b)
+
+
+def _receita_por_empresa() -> str:
+    """Receita dos últimos 12 meses por negócio (CRM do Monday no painel). O ler_crm do painel soma o grupo; a BCG
+    precisa de cada empresa (teste do Lucca, 29/10/2026: o Estrategista pediu "receita de cada empresa")."""
+    import relatorios
+
+    if not relatorios.BANCO.exists():
+        return ""
+    try:
+        with relatorios._conexao() as db:
+            linhas = db.execute("SELECT negocio, COUNT(*), SUM(valor) FROM crm_vendas WHERE data >= "
+                                "date('now', '-365 day') GROUP BY negocio ORDER BY 3 DESC").fetchall()
+    except Exception as erro:
+        return f"### Receita por empresa (12 meses)\n(não foi possível ler: {erro})"
+    nomes = {"Hospedagem": "Casa Veraneio (hospedagem)", "Corp": "Casa Veraneio Corporativo"}
+    texto = "\n".join(f"- {nomes.get(n, n)}: R$ {v:,.0f} em {q} vendas".replace(",", ".") for n, q, v in linhas)
+    return ("### Receita por empresa nos últimos 12 meses (vendas do CRM)\n" + texto +
+            "\n- Casa Vero Imóveis: sem vendas registradas no CRM (PENDENTE: informar fora do sistema).")
 
 
 def _cerebro(texto: str, empresa: str) -> str:
