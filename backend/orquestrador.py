@@ -344,9 +344,9 @@ def _com_max(etapas: list[Etapa], usuario: str, agente_id: str) -> list[Etapa]:
     """Caminho imediato do dono: o Max entra antes da API do Claude (gratuitos continuam primeiro)."""
     if not max_texto.pode_usar(usuario, agente_id):
         return etapas
-    posicao = next((i for i, e in enumerate(etapas) if e.modelo.startswith("anthropic/")), None)
-    if posicao is None:
-        return etapas
+    # Logo depois dos gratuitos: antes da API do Claude E do modelo local. Teste real (29/10/2026, Francielle): numa
+    # tarefa média não havia API do Claude na rota, o Max nunca entrava e o pedido caía no local por 15 min.
+    posicao = next((i for i, e in enumerate(etapas) if e.modelo.startswith(("anthropic/", "ollama/"))), len(etapas))
     return etapas[:posicao] + [Etapa(max_texto.MODELO, max_texto.LIMITE_S)] + etapas[posicao:]
 
 

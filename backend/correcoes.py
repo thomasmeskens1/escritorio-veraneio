@@ -24,6 +24,12 @@ CORRECAO = re.compile(
     r"^\s*(n[aã]o\s+(é|era|foi|está|use|usa|coloque|ponha|escreva|fa[cç]a|mencione|quero)|na\s+verdade|"
     r"est[aá]\s+errad|errou|errado|corrij|corrigindo|nunca|sempre|prefiro|evite|cuidado|isso\s+n[aã]o|"
     r"o\s+certo\s+[ée]|o\s+correto\s+[ée]|lembre(-se)?\s+que)", re.IGNORECASE)
+# Elogio com intenção de repetir (teste real, 29/10/2026, Francielle: "adorei, podemos seguir assim nas próximas,
+# exatamente o que eu quero"): vira observação "elogio" para a Diretoria aprovar como padrão a seguir.
+ELOGIO = re.compile(
+    r"\b(adorei|amei|perfeit[oa]|excelente|ficou (ótim|otim|lind|show|incr[ií]vel)|gostei muito|"
+    r"exatamente (o que|isso)|(podemos|pode|vamos) seguir (assim|nesse|neste|desse|deste)|"
+    r"(é|e) (isso|esse) (mesmo|a[ií])|mandou bem|aprovad[oa])", re.IGNORECASE)
 JANELA_H = 24             # a correção precisa vir até 24 h depois da resposta do agente
 MAX_REGRAS_NO_CONTEXTO = 15
 LEMBRETE_DIAS = 7
@@ -46,14 +52,21 @@ def _db():
     db = tarefas._db()
     if not _pronto:
         db.executescript(_ESQUEMA)
+        if "tipo" not in {c[1] for c in db.execute("PRAGMA table_info(observacoes)")}:
+            db.execute("ALTER TABLE observacoes ADD COLUMN tipo TEXT NOT NULL DEFAULT 'correcao'")
         _pronto = True
     return db
 
 
 def registrar_se_correcao(usuario: str, andar: str, agente_id: str, texto: str) -> bool:
-    """Guarda a observação quando um usuário corrige uma resposta recente deste agente. Desde 29/10/2026 vale para
-    TODOS os usuários (Thomas); quem aprova e vira regra é só a Diretoria."""
-    if not CORRECAO.search(texto or ""):
+    """Guarda a observação quando um usuário corrige OU elogia uma resposta recente deste agente. Desde 29/10/2026
+    vale para TODOS os usuários (Thomas); quem aprova e vira regra é só a Diretoria. Roda em segundo plano (main.py):
+    nunca atrasa a resposta."""
+    if CORRECAO.search(texto or ""):
+        tipo = "correcao"
+    elif ELOGIO.search(texto or ""):
+        tipo = "elogio"
+    else:
         return False
     desde = (datetime.now(timezone.utc) - timedelta(hours=JANELA_H)).strftime("%Y-%m-%dT%H:%M:%SZ")
     anterior = _db().execute(
@@ -62,9 +75,10 @@ def registrar_se_correcao(usuario: str, andar: str, agente_id: str, texto: str) 
     if not anterior:
         return False
     with _db() as db:
-        db.execute("INSERT INTO observacoes (em, usuario, andar, agente, tarefa_anterior, correcao, resposta_anterior) "
-                   "VALUES (?, ?, ?, ?, ?, ?, ?)", (tarefas._agora(), usuario, andar, agente_id, anterior["id"],
-                                                    texto.strip()[:1000], (anterior["resposta"] or "")[:400]))
+        db.execute("INSERT INTO observacoes (em, usuario, andar, agente, tarefa_anterior, correcao, resposta_anterior, "
+                   "tipo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                   (tarefas._agora(), usuario, andar, agente_id, anterior["id"], texto.strip()[:1000],
+                    (anterior["resposta"] or "")[:400], tipo))
     return True
 
 
@@ -129,7 +143,7 @@ def listar(authorization: str = Header("")):
     regras = _db().execute("SELECT * FROM regras_aprendidas WHERE ativa = 1 ORDER BY id DESC").fetchall()
     nomes = {login: dados["nome"] for login, dados in carregar_usuarios().items()}
     return {"observacoes": [{"id": o["id"], "em": o["em"], "agente": o["agente"], "agente_nome": _nome(o["agente"]),
-                             "autor": nomes.get(o["usuario"], o["usuario"]),
+                             "autor": nomes.get(o["usuario"], o["usuario"]), "tipo": o["tipo"],
                              "correcao": o["correcao"], "resposta_anterior": o["resposta_anterior"]} for o in novas],
             "regras": [{"id": r["id"], "agente": r["agente"], "agente_nome": _nome(r["agente"]), "regra": r["regra"],
                         "criada_em": r["criada_em"]} for r in regras]}

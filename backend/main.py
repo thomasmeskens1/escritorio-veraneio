@@ -309,7 +309,8 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         return await ensinar_cerebro(ws, usuario, andar, agente, texto, empresa)
     # Produção em espera neste chat (o Gestor fez uma pergunta): esta mensagem é a resposta.
     # Correção do Thomas a uma resposta recente vira observação para a revisão semanal (o pedido segue normal).
-    correcoes.registrar_se_correcao(usuario["sub"], andar, agente.id, texto)
+    orquestrador._em_segundo_plano(asyncio.to_thread(  # correção ou elogio: em segundo plano, sem atrasar a resposta
+        correcoes.registrar_se_correcao, usuario["sub"], andar, agente.id, texto))
     if (pendente := espera.no_chat(usuario["sub"], andar, agente.id)):
         texto_aviso = await orquestrador.retomar_producao(pendente, texto)
         return await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "titulo": "Produção", "liberar": True,
