@@ -471,10 +471,88 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px 16px;
+  width: 100%;
   padding: 10px 12px;
   background: #1b1e24;
   border: 1px solid #343a40;
   border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.usuario-item:hover,
+.usuario-item:focus-visible {
+  border-color: #f4a261;
+  outline: none;
+}
+
+.usuario-resumo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #adb5bd;
+  font-size: 0.78rem;
+}
+
+.usuario-seta {
+  font-size: 1.2rem;
+  color: #868e96;
+}
+
+/* Tela do usuário (pop-up) */
+.janela-usuario {
+  max-width: 600px;
+}
+
+.usuario-corpo {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.usuario-agentes {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #343a40;
+  border-radius: 8px;
+}
+
+.usuario-todos {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.usuario-andar {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 4px 12px;
+  margin-top: 8px;
+}
+
+.usuario-andar strong {
+  grid-column: 1 / -1;
+  color: #868e96;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.usuario-senha {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.usuario-senha .botao-primario {
+  align-self: flex-start;
+}
+
+.botao-perigo {
+  border-color: rgba(250, 82, 82, 0.5);
+  color: #ffa8a8;
 }
 
 .usuario-item.inativo {

@@ -74,8 +74,12 @@ function renderizarUsuarios() {
   }
   const total = dadosUsuarios.agentes.length;
   const lista = novoEl('ul', 'usuarios-lista');
+  // Cada usuário é um botão: o clique abre a tela dele (perfil, agentes, senha, desativar).
   dadosUsuarios.usuarios.forEach((u) => {
-    const item = novoEl('li', `usuario-item${u.ativo ? '' : ' inativo'}`);
+    const item = novoEl('li');
+    const botao = novoEl('button', `usuario-item${u.ativo ? '' : ' inativo'}`);
+    botao.type = 'button';
+    botao.title = `Abrir ${u.nome}: perfil, agentes, senha e acesso`;
     const info = novoEl('div', 'usuario-info');
     const nome = novoEl('strong', null, u.nome);
     if (u.master) nome.append(novoEl('span', 'usuario-selo', 'master'));
@@ -83,44 +87,16 @@ function renderizarUsuarios() {
     info.append(nome, novoEl('small', null, u.login),
       novoEl('small', null, `${u.tarefas} tarefa(s) · última: ${dataCurta(u.ultima_tarefa)}`
         + (u.mais_usados.length ? ` · mais usados: ${u.mais_usados.join(', ')}` : '')));
-    const acoes = novoEl('div', 'usuario-acoes');
-    const perfil = novoEl('select', 'form-entrada');
-    perfil.setAttribute('aria-label', `Perfil de ${u.nome}`);
-    dadosUsuarios.roles.forEach((r) => perfil.append(new Option(r === 'diretoria' ? 'Diretoria' : 'Funcionário', r)));
-    perfil.value = u.role;
-    perfil.disabled = u.master;
-    perfil.addEventListener('change', () => alterarUsuario(u, { role: perfil.value }, 'Perfil atualizado.'));
-    const agentes = novoEl('button', 'botao-secundario', resumoAgentes(u.agentes, total));
-    agentes.type = 'button';
-    agentes.disabled = u.master;
-    agentes.title = u.master ? 'O master usa todos os agentes' : 'Escolher os agentes deste usuário';
-    agentes.addEventListener('click', () => editarAgentes(u));
-    const senha = novoEl('button', 'botao-secundario', 'Redefinir senha');
-    senha.type = 'button';
-    senha.addEventListener('click', () => redefinirSenha(u));
-    acoes.append(perfil, agentes, senha);
-    if (!u.master) {
-      const ativo = novoEl('button', 'botao-secundario', u.ativo ? 'Desativar' : 'Reativar');
-      ativo.type = 'button';
-      ativo.addEventListener('click', () => alterarUsuario(u, { ativo: !u.ativo },
-        u.ativo ? `${u.nome} foi desativado: a sessão dele caiu e o login fica bloqueado.` : `${u.nome} foi reativado.`));
-      acoes.append(ativo);
-    }
-    item.append(info, acoes);
+    const resumo = novoEl('div', 'usuario-resumo');
+    resumo.append(novoEl('span', null, u.role === 'diretoria' ? 'Diretoria' : 'Funcionário'),
+      novoEl('span', null, resumoAgentes(u.agentes, total)), novoEl('span', 'usuario-seta', '›'));
+    botao.append(info, resumo);
+    botao.addEventListener('click', () => abrirUsuario(u));
+    item.append(botao);
     lista.append(item);
   });
   partes.push(lista);
   usuariosConteudo.replaceChildren(...partes);
-}
-
-async function alterarUsuario(u, campos, sucesso) {
-  try {
-    await chamarUsuarios(`/${encodeURIComponent(u.login)}`, { method: 'PATCH', body: JSON.stringify(campos) });
-    mensagemUsuarios = { texto: sucesso, erro: false };
-  } catch (erro) {
-    mensagemUsuarios = { texto: erro.message, erro: true };
-  }
-  carregarUsuarios();
 }
 
 function novoUsuario() {
@@ -143,33 +119,147 @@ function novoUsuario() {
       mensagemUsuarios = { texto: erro.message, erro: true };
     }
     carregarUsuarios();
-  }, 'Começa com acesso a todos os agentes; ajuste depois em "Agentes"');
+  }, 'Começa com acesso a todos os agentes; para ajustar, clique no usuário na lista');
 }
 
-function redefinirSenha(u) {
-  abrirFormularioPopup({
-    titulo: `Nova senha de ${u.nome}`, botao: 'Salvar senha',
-    campos: [{ nome: 'senha', rotulo: 'Nova senha (mínimo 8 caracteres)', tipo: 'texto', obrigatorio: true }],
-  }, (r) => alterarUsuario(u, { senha: r.senha }, `Senha de ${u.nome} redefinida.`), u.login);
-}
-
-// Lista de agentes por andar, com "Todos os agentes" no topo.
-function editarAgentes(u) {
+// Tela do usuário (clique na lista): perfil, agentes por andar, redefinir senha e desativar, tudo num pop-up.
+function abrirUsuario(u) {
+  fecharFormularioPopup();
   const agentes = dadosUsuarios.agentes;
   const chaveAg = (a) => `${a.andar}/${a.id}`;
-  const rotulo = (a) => `${NOMES_ANDARES_USUARIOS[a.andar] || a.andar} · ${a.nome}`;
-  const TODOS_ROTULO = 'Todos os agentes (inclusive os que forem criados depois)';
-  const marcados = u.agentes === '*' ? [TODOS_ROTULO] : agentes.filter((a) => u.agentes.includes(chaveAg(a))).map(rotulo);
-  abrirFormularioPopup({
-    titulo: `Agentes de ${u.nome}`, botao: 'Salvar acesso',
-    campos: [{ nome: 'agentes', rotulo: 'Pode usar', tipo: 'multipla', opcoes: [TODOS_ROTULO, ...agentes.map(rotulo)],
-      marcados }],
-  }, (r) => {
-    const escolhidos = r.agentes ? r.agentes.split(', ') : [];
-    const lista = escolhidos.includes(TODOS_ROTULO) ? '*'
-      : agentes.filter((a) => escolhidos.includes(rotulo(a))).map(chaveAg);
-    alterarUsuario(u, { agentes: lista }, `Acesso de ${u.nome} atualizado: ${resumoAgentes(lista, agentes.length)}.`);
-  }, 'Andares sem nenhum agente marcado ficam trancados para ele');
+  const fundo = novoEl('div', 'modal aberto modal-formulario');
+  const janela = novoEl('section', 'janela janela-formulario janela-usuario');
+  janela.setAttribute('role', 'dialog');
+  janela.setAttribute('aria-modal', 'true');
+  const barra = novoEl('header', 'janela-barra');
+  const titulo = novoEl('div', 'janela-titulo');
+  titulo.append(novoEl('h2', null, u.nome), novoEl('p', null, `${u.login}${u.master ? ' · master' : ''}`));
+  const fechar = novoEl('button', 'fechar', '×');
+  fechar.type = 'button';
+  fechar.setAttribute('aria-label', 'Fechar');
+  fechar.addEventListener('click', fecharFormularioPopup);
+  barra.append(titulo, fechar);
+
+  const corpo = novoEl('div', 'formulario-corpo usuario-corpo');
+  const aviso = novoEl('p', 'form-aviso');
+
+  // Perfil
+  const grupoPerfil = novoEl('div', 'form-campo');
+  const perfil = novoEl('select', 'form-entrada');
+  perfil.id = 'usuario-perfil';
+  dadosUsuarios.roles.forEach((r) => perfil.append(new Option(r === 'diretoria' ? 'Diretoria' : 'Funcionário', r)));
+  perfil.value = u.role;
+  perfil.disabled = u.master;
+  const rotuloPerfil = novoEl('label', 'form-rotulo', 'Perfil');
+  rotuloPerfil.htmlFor = perfil.id;
+  grupoPerfil.append(rotuloPerfil, perfil);
+
+  // Agentes por andar ("Todos" marca e trava os demais)
+  const grupoAgentes = novoEl('fieldset', 'usuario-agentes');
+  grupoAgentes.append(novoEl('legend', 'form-rotulo', u.master ? 'Agentes (o master usa todos)' : 'Agentes que pode usar'));
+  const marcarTodos = document.createElement('input');
+  marcarTodos.type = 'checkbox';
+  marcarTodos.checked = u.agentes === '*';
+  const linhaTodos = novoEl('label', 'form-marcar usuario-todos');
+  linhaTodos.append(marcarTodos, document.createTextNode(' Todos os agentes (inclusive os criados depois)'));
+  grupoAgentes.append(linhaTodos);
+  const caixas = [];
+  Object.entries(NOMES_ANDARES_USUARIOS).forEach(([andar, nomeAndar]) => {
+    const doAndar = agentes.filter((a) => a.andar === andar);
+    if (!doAndar.length) return;
+    const bloco = novoEl('div', 'usuario-andar');
+    bloco.append(novoEl('strong', null, nomeAndar));
+    doAndar.forEach((a) => {
+      const caixa = document.createElement('input');
+      caixa.type = 'checkbox';
+      caixa.value = chaveAg(a);
+      caixa.checked = u.agentes === '*' || u.agentes.includes(chaveAg(a));
+      const linha = novoEl('label', 'form-marcar');
+      linha.title = a.funcao || '';
+      linha.append(caixa, document.createTextNode(` ${a.nome}`));
+      bloco.append(linha);
+      caixas.push(caixa);
+    });
+    grupoAgentes.append(bloco);
+  });
+  const sincronizar = () => caixas.forEach((c) => {
+    if (marcarTodos.checked) c.checked = true;
+    c.disabled = marcarTodos.checked || u.master;
+  });
+  marcarTodos.disabled = u.master;
+  marcarTodos.addEventListener('change', sincronizar);
+  sincronizar();
+
+  // Senha (abre o campo ao clicar)
+  const grupoSenha = novoEl('div', 'form-campo usuario-senha');
+  grupoSenha.hidden = true;
+  const senha = document.createElement('input');
+  senha.className = 'form-entrada';
+  senha.id = 'usuario-senha';
+  senha.type = 'text';
+  senha.autocomplete = 'off';
+  const rotuloSenha = novoEl('label', 'form-rotulo', 'Nova senha (mínimo 8 caracteres)');
+  rotuloSenha.htmlFor = senha.id;
+  const salvarSenha = novoEl('button', 'botao-primario', 'Salvar senha');
+  salvarSenha.type = 'button';
+  grupoSenha.append(rotuloSenha, senha, salvarSenha);
+
+  // Ações
+  const acoes = novoEl('div', 'usuario-acoes');
+  const salvar = novoEl('button', 'botao-primario', 'Salvar alterações');
+  salvar.type = 'button';
+  salvar.hidden = u.master;
+  const abrirSenha = novoEl('button', 'botao-secundario', 'Redefinir senha');
+  abrirSenha.type = 'button';
+  acoes.append(salvar, abrirSenha);
+  let alternarAtivo = null;
+  if (!u.master) {
+    alternarAtivo = novoEl('button', `botao-secundario${u.ativo ? ' botao-perigo' : ''}`, u.ativo ? 'Desativar' : 'Reativar');
+    alternarAtivo.type = 'button';
+    acoes.append(alternarAtivo);
+  }
+
+  const enviar = async (campos, sucesso) => {
+    [salvar, abrirSenha, salvarSenha, alternarAtivo].forEach((b) => { if (b) b.disabled = true; });
+    try {
+      await chamarUsuarios(`/${encodeURIComponent(u.login)}`, { method: 'PATCH', body: JSON.stringify(campos) });
+      mensagemUsuarios = { texto: sucesso, erro: false };
+      fecharFormularioPopup();
+      carregarUsuarios();
+    } catch (erro) {
+      aviso.textContent = erro.message;
+      [salvar, abrirSenha, salvarSenha, alternarAtivo].forEach((b) => { if (b) b.disabled = false; });
+    }
+  };
+  salvar.addEventListener('click', () => {
+    const lista = marcarTodos.checked ? '*' : caixas.filter((c) => c.checked).map((c) => c.value);
+    enviar({ role: perfil.value, agentes: lista },
+      `${u.nome}: ${perfil.value === 'diretoria' ? 'Diretoria' : 'Funcionário'}, ${resumoAgentes(lista, agentes.length)}.`);
+  });
+  abrirSenha.addEventListener('click', () => {
+    grupoSenha.hidden = false;
+    senha.focus();
+  });
+  salvarSenha.addEventListener('click', () => {
+    if (senha.value.length < 8) {
+      aviso.textContent = 'A senha precisa ter pelo menos 8 caracteres.';
+      return;
+    }
+    enviar({ senha: senha.value }, `Senha de ${u.nome} redefinida.`);
+  });
+  alternarAtivo?.addEventListener('click', () => {
+    if (u.ativo && !window.confirm(`Desativar ${u.nome}? A sessão dele cai agora e o login fica bloqueado.`)) return;
+    enviar({ ativo: !u.ativo }, u.ativo ? `${u.nome} foi desativado.` : `${u.nome} foi reativado.`);
+  });
+
+  corpo.append(grupoPerfil, grupoAgentes, grupoSenha, aviso, acoes);
+  janela.append(barra, corpo);
+  fundo.append(janela);
+  fundo.addEventListener('click', (e) => { if (e.target === fundo) fecharFormularioPopup(); });
+  fundo.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); fecharFormularioPopup(); } });
+  document.body.append(fundo);
+  popupFormulario = fundo;
+  perfil.focus();
 }
 
 document.getElementById('abrir-usuarios').addEventListener('click', abrirUsuarios);
