@@ -53,6 +53,8 @@ function fecharUsuarios() {
   janelaUsuarios.classList.remove('aberto');
 }
 
+const resumoAndares = (andares) => (andares === '*' ? 'Todos os andares'
+  : `${andares.length} de ${dadosUsuarios?.andares.length ?? 5} andares`);
 const resumoAgentes = (agentes, total) => (agentes === '*' ? 'Todos os agentes'
   : `${agentes.length} de ${total} agentes`);
 
@@ -89,7 +91,8 @@ function renderizarUsuarios() {
         + (u.mais_usados.length ? ` · mais usados: ${u.mais_usados.join(', ')}` : '')));
     const resumo = novoEl('div', 'usuario-resumo');
     resumo.append(novoEl('span', null, u.role === 'diretoria' ? 'Diretoria' : 'Funcionário'),
-      novoEl('span', null, resumoAgentes(u.agentes, total)), novoEl('span', 'usuario-seta', '›'));
+      novoEl('span', null, resumoAndares(u.andares)), novoEl('span', null, resumoAgentes(u.agentes, total)),
+      novoEl('span', 'usuario-seta', '›'));
     botao.append(info, resumo);
     botao.addEventListener('click', () => abrirUsuario(u));
     item.append(botao);
@@ -154,6 +157,26 @@ function abrirUsuario(u) {
   rotuloPerfil.htmlFor = perfil.id;
   grupoPerfil.append(rotuloPerfil, perfil);
 
+  // Andares (camada acima dos agentes): andar fechado tranca o andar no elevador e trava os agentes dele.
+  const grupoAndares = novoEl('fieldset', 'usuario-agentes');
+  grupoAndares.append(novoEl('legend', 'form-rotulo', u.master ? 'Andares (o master acessa todos)' : 'Andares que pode acessar'));
+  const andaresLiberados = (andar) => u.andares === '*' || u.andares.includes(andar);
+  const caixasAndares = {};
+  const linhaAndares = novoEl('div', 'usuario-andar');
+  Object.entries(NOMES_ANDARES_USUARIOS).forEach(([andar, nomeAndar]) => {
+    if (!dadosUsuarios.andares.includes(andar)) return;
+    const caixa = document.createElement('input');
+    caixa.type = 'checkbox';
+    caixa.value = andar;
+    caixa.checked = andaresLiberados(andar);
+    caixa.disabled = u.master;
+    const linha = novoEl('label', 'form-marcar');
+    linha.append(caixa, document.createTextNode(` ${nomeAndar}`));
+    linhaAndares.append(linha);
+    caixasAndares[andar] = caixa;
+  });
+  grupoAndares.append(linhaAndares);
+
   // Agentes por andar ("Todos" marca e trava os demais)
   const grupoAgentes = novoEl('fieldset', 'usuario-agentes');
   grupoAgentes.append(novoEl('legend', 'form-rotulo', u.master ? 'Agentes (o master usa todos)' : 'Agentes que pode usar'));
@@ -164,15 +187,18 @@ function abrirUsuario(u) {
   linhaTodos.append(marcarTodos, document.createTextNode(' Todos os agentes (inclusive os criados depois)'));
   grupoAgentes.append(linhaTodos);
   const caixas = [];
+  const blocosAgentes = {};
   Object.entries(NOMES_ANDARES_USUARIOS).forEach(([andar, nomeAndar]) => {
     const doAndar = agentes.filter((a) => a.andar === andar);
     if (!doAndar.length) return;
     const bloco = novoEl('div', 'usuario-andar');
+    blocosAgentes[andar] = bloco;
     bloco.append(novoEl('strong', null, nomeAndar));
     doAndar.forEach((a) => {
       const caixa = document.createElement('input');
       caixa.type = 'checkbox';
       caixa.value = chaveAg(a);
+      caixa.dataset.andar = a.andar;
       caixa.checked = u.agentes === '*' || u.agentes.includes(chaveAg(a));
       const linha = novoEl('label', 'form-marcar');
       linha.title = a.funcao || '';
@@ -182,12 +208,19 @@ function abrirUsuario(u) {
     });
     grupoAgentes.append(bloco);
   });
-  const sincronizar = () => caixas.forEach((c) => {
-    if (marcarTodos.checked) c.checked = true;
-    c.disabled = marcarTodos.checked || u.master;
-  });
+  // A escolha de agentes de um andar fechado fica guardada (volta igual se o andar for liberado de novo).
+  const sincronizar = () => {
+    Object.entries(blocosAgentes).forEach(([andar, bloco]) => {
+      bloco.classList.toggle('desativado', !caixasAndares[andar]?.checked);
+    });
+    caixas.forEach((c) => {
+      if (marcarTodos.checked) c.checked = true;
+      c.disabled = marcarTodos.checked || u.master || !caixasAndares[c.dataset.andar]?.checked;
+    });
+  };
   marcarTodos.disabled = u.master;
   marcarTodos.addEventListener('change', sincronizar);
+  Object.values(caixasAndares).forEach((c) => c.addEventListener('change', sincronizar));
   sincronizar();
 
   // Senha (abre o campo ao clicar)
@@ -233,8 +266,11 @@ function abrirUsuario(u) {
   };
   salvar.addEventListener('click', () => {
     const lista = marcarTodos.checked ? '*' : caixas.filter((c) => c.checked).map((c) => c.value);
-    enviar({ role: perfil.value, agentes: lista },
-      `${u.nome}: ${perfil.value === 'diretoria' ? 'Diretoria' : 'Funcionário'}, ${resumoAgentes(lista, agentes.length)}.`);
+    const todosAndares = Object.values(caixasAndares).every((c) => c.checked);
+    const andares = todosAndares ? '*' : Object.values(caixasAndares).filter((c) => c.checked).map((c) => c.value);
+    enviar({ role: perfil.value, agentes: lista, andares },
+      `${u.nome}: ${perfil.value === 'diretoria' ? 'Diretoria' : 'Funcionário'}, ${resumoAndares(andares)}, `
+      + `${resumoAgentes(lista, agentes.length)}.`);
   });
   abrirSenha.addEventListener('click', () => {
     grupoSenha.hidden = false;
@@ -252,7 +288,7 @@ function abrirUsuario(u) {
     enviar({ ativo: !u.ativo }, u.ativo ? `${u.nome} foi desativado.` : `${u.nome} foi reativado.`);
   });
 
-  corpo.append(grupoPerfil, grupoAgentes, grupoSenha, aviso, acoes);
+  corpo.append(grupoPerfil, grupoAndares, grupoAgentes, grupoSenha, aviso, acoes);
   janela.append(barra, corpo);
   fundo.append(janela);
   fundo.addEventListener('click', (e) => { if (e.target === fundo) fecharFormularioPopup(); });

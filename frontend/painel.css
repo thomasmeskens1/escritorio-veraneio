@@ -604,3 +604,7 @@
 .usuario-acoes .form-entrada {
   width: auto;
 }
+
+.usuario-andar.desativado {
+  opacity: 0.4;
+}

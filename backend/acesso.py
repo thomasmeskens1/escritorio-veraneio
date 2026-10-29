@@ -19,9 +19,17 @@ def agentes_do_usuario(login: str) -> str | list[str]:
     return carregar_usuarios().get(login, {}).get("agentes", TODOS)
 
 
+def andares_do_usuario(login: str) -> str | list[str]:
+    """TODOS ou a lista de andares liberados (camada acima dos agentes: andar fechado trava todos os agentes dele)."""
+    if e_master(login):
+        return TODOS
+    return carregar_usuarios().get(login, {}).get("andares", TODOS)
+
+
 def pode_usar(usuario: dict, andar: str, agente_id: str) -> bool:
-    liberados = agentes_do_usuario(usuario.get("sub", ""))
-    return liberados == TODOS or f"{andar}/{agente_id}" in liberados
+    login = usuario.get("sub", "")
+    andares, agentes = andares_do_usuario(login), agentes_do_usuario(login)
+    return (andares == TODOS or andar in andares) and (agentes == TODOS or f"{andar}/{agente_id}" in agentes)
 
 
 def pode_ver_andar(usuario: dict, andar: str) -> bool:
