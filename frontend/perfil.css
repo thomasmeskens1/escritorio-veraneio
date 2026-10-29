@@ -429,22 +429,45 @@
     max-height: 60%;
   }
 
-  .janela-larga .perfil-corpo:not([hidden]) {
+  /* Cérebro: duas colunas independentes (esquerda: descrição, correções; direita: Conhecimento e Rotinas). */
+  .perfil-colunas:not([hidden]) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-auto-flow: dense;
     align-items: start;
     gap: 10px 16px;
   }
+}
 
-  .janela-larga .perfil-corpo > * {
-    grid-column: 1;
-  }
+.perfil-coluna {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
 
-  .janela-larga .perfil-corpo > .perfil-conhecimento {
-    grid-column: 2;
-    grid-row: 1 / span 6;
-  }
+/* Cérebro sem chat: a ficha ocupa a janela inteira. */
+.janela-agente.sem-chat #modal-historico,
+.janela-agente.sem-chat #modal-pensando,
+.janela-agente.sem-chat #modal-form,
+.janela-agente.sem-chat #modal-andamento {
+  display: none !important;
+}
+
+.janela-agente.sem-chat .perfil {
+  flex: 1;
+  max-height: none;
+  overflow-y: auto;
+}
+
+.conhecimento-ensino {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.conhecimento-ensino .botao-secundario {
+  align-self: flex-start;
 }
 
 @media (max-width: 640px) {
@@ -533,3 +556,7 @@
 .conhecimento-fontes .empresa-cv_corporativo .fonte-barra i { background: #4dabf7; }
 .conhecimento-fontes .empresa-casa_vero .fonte-barra i { background: #69db7c; }
 .conhecimento-fontes .empresa-comum .fonte-barra i { background: #adb5bd; }
+
+.janela-agente.sem-chat > #modal-perfil {
+  max-height: none !important;
+}

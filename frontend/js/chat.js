@@ -586,6 +586,7 @@ function limparConversas({ andar, agente, todos }) {
 function receberResposta(msg) {
   const { andar, agente, texto } = msg;
   pendentes.delete(chave(andar, agente));
+  if (agente === 'cerebro') aoRespostaCerebro(texto); // o Cérebro não tem chat: a resposta vai para o campo de ensinar
   adicionarMensagem(andar, agente, mensagemDoAgente(andar, agente, msg));
   if (chatEstaAberto(andar, agente)) carregarPerfil(andar, agente); // atualiza o contador de tarefas
   else mostrarToast(andar, agente, texto);
@@ -625,6 +626,7 @@ function receberErro({ andar, agente, texto, tarefa_id }) {
     return;
   }
   pendentes.delete(chave(andar, agente));
+  if (agente === 'cerebro') aoRespostaCerebro(texto, true);
   adicionarMensagem(andar, agente, { autor: 'sistema', texto, tipo: 'sistema', tarefa_id });
   if (!chatAberto) console.warn(`Erro (${andar}/${agente}):`, texto);
   atualizarChat();

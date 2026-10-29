@@ -23,8 +23,8 @@ Um escritório virtual onde cada andar reúne agentes de IA especialistas, a ser
 
 ## O Cérebro e os Estagiários
 - Todos os agentes consultam o Cérebro antes de afirmar fatos sobre a empresa. Quem leva a resposta é um dos 4 Estagiários: ele desce até o andar do agente que perguntou e depois volta à Cobertura.
-- A diretoria pode conversar direto com o Cérebro: ele responde citando a fonte e diz quando não sabe.
-- Só a conta do Thomas ensina o Cérebro pelo chat: comece a mensagem com "Aprenda:" (ou "Anote:", "Memorize:", "Registre:").
+- O Cérebro não tem chat: a ficha dele mostra o Conhecimento (por empresa), as rotinas, as correções e elogios para a Diretoria aprovar. Os agentes consultam o Cérebro sozinhos.
+- Só a conta do Thomas ensina o Cérebro, pelo campo "Ensinar" na ficha dele (vale para a empresa escolhida no seletor do topo; "Todas" = regra comum).
 - O Cérebro também aprende sozinho com cada tarefa concluída.
 
 ## Conversar com um agente

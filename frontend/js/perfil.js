@@ -52,7 +52,6 @@ async function carregarPerfil(andar, agente) {
   if (ehCerebro(andar, agente)) {
     carregarConhecimento(andar, agente);
     carregarCorrecoes(andar, agente); // correções do Thomas para virar regra (js/correcoes.js)
-    carregarEntrevista(andar, agente); // educação do Corporativo e da Casa Vero (js/entrevista.js)
   }
   try {
     const dados = await buscarAgente(andar, agente);
@@ -74,8 +73,10 @@ function renderizarPerfil() {
   const dados = perfis[k];
   modalRestrito.hidden = !dados?.producao_restrita;
   modalRestrito.textContent = AVISO_PRODUCAO;
-  // Cérebro: janela larga, ficha em duas colunas (Conhecimento à direita) para não precisar rolar.
-  modalPerfil.closest('.janela-agente')?.classList.toggle('janela-larga', ehCerebro(chatAberto.andar, chatAberto.agente));
+  // Cérebro: janela larga e sem chat (só a ficha, em duas colunas).
+  const janelaAgente = modalPerfil.closest('.janela-agente');
+  janelaAgente?.classList.toggle('janela-larga', ehCerebro(chatAberto.andar, chatAberto.agente));
+  janelaAgente?.classList.toggle('sem-chat', ehCerebro(chatAberto.andar, chatAberto.agente));
 
   if (!dados) {
     const texto = errosPerfil[k] || 'Carregando informações...';
@@ -85,19 +86,34 @@ function renderizarPerfil() {
 
   const corpo = novoEl('div', 'perfil-corpo');
   corpo.id = 'perfil-corpo';
-  corpo.hidden = !perfilExpandido;
-  if (dados.descricao) corpo.append(novoEl('p', 'perfil-descricao', dados.descricao));
-  if (dados.exemplo) corpo.append(criarExemplo(dados.exemplo));
-  corpo.append(criarFatos(dados));
-  if (ehCerebro(chatAberto.andar, chatAberto.agente) && !conhecimento.oculto) corpo.append(criarConhecimento());
-  if (ehCerebro(chatAberto.andar, chatAberto.agente) && !correcoes.oculto) corpo.append(criarCorrecoes());
-  if (ehCerebro(chatAberto.andar, chatAberto.agente) && !entrevista.oculto) corpo.append(criarEntrevista());
-  if (dados.tipo === 'ia') corpo.append(criarRotinas(chatAberto.andar, chatAberto.agente));
+  const cerebroAberto = ehCerebro(chatAberto.andar, chatAberto.agente);
+  corpo.hidden = !perfilExpandido && !cerebroAberto; // o Cérebro não tem chat: a ficha fica sempre aberta
   const ajustes = dados.aprendizado?.ajustes;
-  if (Array.isArray(ajustes) && ajustes.length) corpo.append(criarAjustesAgente(ajustes));
-  if (dados.tipo === 'ia' || dados.pode_treinar) corpo.append(criarTreino(k, dados));
+  if (cerebroAberto) {
+    // Cérebro (Thomas, 29/10/2026): sem chat, ficha em duas colunas. Esquerda: descrição, números, correções;
+    // direita: Conhecimento, Rotinas agendadas logo abaixo e o campo de ensinar. "Educação das empresas" saiu
+    // (as entrevistas das três empresas estão completas).
+    const esquerda = novoEl('div', 'perfil-coluna');
+    const direita = novoEl('div', 'perfil-coluna');
+    if (dados.descricao) esquerda.append(novoEl('p', 'perfil-descricao', dados.descricao));
+    esquerda.append(criarFatos(dados));
+    if (!correcoes.oculto) esquerda.append(criarCorrecoes());
+    if (Array.isArray(ajustes) && ajustes.length) esquerda.append(criarAjustesAgente(ajustes));
+    if (dados.tipo === 'ia' || dados.pode_treinar) esquerda.append(criarTreino(k, dados));
+    if (!conhecimento.oculto) direita.append(criarConhecimento());
+    if (dados.tipo === 'ia') direita.append(criarRotinas(chatAberto.andar, chatAberto.agente));
+    corpo.classList.add('perfil-colunas');
+    corpo.append(esquerda, direita);
+  } else {
+    if (dados.descricao) corpo.append(novoEl('p', 'perfil-descricao', dados.descricao));
+    if (dados.exemplo) corpo.append(criarExemplo(dados.exemplo));
+    corpo.append(criarFatos(dados));
+    if (dados.tipo === 'ia') corpo.append(criarRotinas(chatAberto.andar, chatAberto.agente));
+    if (Array.isArray(ajustes) && ajustes.length) corpo.append(criarAjustesAgente(ajustes));
+    if (dados.tipo === 'ia' || dados.pode_treinar) corpo.append(criarTreino(k, dados));
+  }
 
-  modalPerfil.replaceChildren(criarAlternador(dados), corpo);
+  modalPerfil.replaceChildren(...(cerebroAberto ? [] : [criarAlternador(dados)]), corpo);
 }
 
 function criarAlternador(dados) {
@@ -454,19 +470,42 @@ function criarConhecimento() {
   }
   if (meta.length) bloco.append(novoEl('small', 'conhecimento-meta', meta.join(' — ')));
 
-  if (d.pode_ensinar) {
-    const dica = novoEl('button', 'conhecimento-dica');
-    dica.type = 'button';
-    dica.title = 'Começar uma mensagem com “Aprenda:”';
-    dica.append(document.createTextNode('Para ensinar, comece a mensagem com '), novoEl('strong', null, '“Aprenda:”'),
-      document.createTextNode(' (ex.: “Aprenda: o check-in é às 15h”).'));
-    dica.addEventListener('click', () => {
-      if (modalInput.disabled) return;
-      if (!/^aprenda:/i.test(modalInput.value)) modalInput.value = `Aprenda: ${modalInput.value}`;
-      ajustarAlturaInput();
-      modalInput.focus();
-    });
-    bloco.append(dica);
-  }
+  if (d.pode_ensinar) bloco.append(criarEnsino());
   return bloco;
+}
+
+// Ensinar o Cérebro sem o chat (só o Thomas): vale para a empresa do seletor do topo ("Todas" = regra comum).
+let ensinoStatus = null; // { texto, erro }
+
+function criarEnsino() {
+  const caixa = novoEl('div', 'conhecimento-ensino');
+  const campo = novoEl('textarea', 'form-entrada');
+  campo.rows = 2;
+  campo.placeholder = 'Ensinar o Cérebro (ex.: o check-in é às 15h)';
+  campo.setAttribute('aria-label', 'Ensinar o Cérebro');
+  const botao = novoEl('button', 'botao-secundario', 'Ensinar');
+  botao.type = 'button';
+  botao.addEventListener('click', () => {
+    const texto = campo.value.trim();
+    const empresa = empresaDaConversa('cobertura', 'cerebro');
+    if (!texto) return;
+    if (!empresa) {
+      ensinoStatus = { texto: 'Escolha a empresa no seletor do topo (ou "Todas" para uma regra comum).', erro: true };
+    } else if (enviar({ tipo: 'mensagem', andar: 'cobertura', agente: 'cerebro', texto: `Aprenda: ${texto}`, empresa })) {
+      ensinoStatus = { texto: 'Ensinando…', erro: false };
+    } else {
+      ensinoStatus = { texto: 'Sem conexão com o servidor.', erro: true };
+    }
+    renderizarPerfil();
+  });
+  caixa.append(campo, botao);
+  if (ensinoStatus) caixa.append(novoEl('p', `perfil-treino-resultado${ensinoStatus.erro ? ' erro' : ''}`, ensinoStatus.texto));
+  return caixa;
+}
+
+// Resposta do Cérebro (o ensino ou um erro) aparece no campo de ensinar, já que ele não tem mais chat.
+function aoRespostaCerebro(texto, erro = false) {
+  ensinoStatus = { texto, erro };
+  carregarConhecimento('cobertura', 'cerebro');
+  if (chatEstaAberto('cobertura', 'cerebro')) renderizarPerfil();
 }
