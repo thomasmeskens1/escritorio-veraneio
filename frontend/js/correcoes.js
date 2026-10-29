@@ -48,7 +48,7 @@ function criarCorrecoes() {
   }
   d.observacoes.forEach((o) => {
     const item = novoEl('div', 'correcao-item');
-    item.append(novoEl('small', 'correcao-meta', `${o.agente_nome} · ${formatarQuando(o.em)}`));
+    item.append(novoEl('small', 'correcao-meta', `${o.agente_nome} · ${o.autor ? `por ${o.autor} · ` : ''}${formatarQuando(o.em)}`));
     if (o.resposta_anterior) {
       const antes = novoEl('details', 'correcao-antes');
       antes.append(novoEl('summary', null, 'Resposta corrigida'), novoEl('p', null, o.resposta_anterior));

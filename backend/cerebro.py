@@ -34,6 +34,7 @@ ID = "cerebro"
 PASTA_CONHECIMENTO = config.PASTA_CONHECIMENTO
 FUSO = ZoneInfo("America/Sao_Paulo")
 HORA_CONSOLIDACAO = 3
+AGENTES_FINANCEIROS = {"analista_metricas", "estrategista", "gestor_trafego"}  # leem vendas/receita/investimento
 PESO_OUTROS_USUARIOS = 0.75  # tarefa de outro usuário vale 75% da do Thomas (0,45 contra 0,6)
 MAX_CARACTERES_FERRAMENTA = 3000  # resposta da ferramenta (tokens dos agentes)
 MAX_CARACTERES_CONTEXTO = 6000    # trechos na tarefa do próprio Cérebro
@@ -95,13 +96,21 @@ def empresa_da_tarefa(tarefa_id: int) -> str:
     return linha["empresa"] if linha and linha["empresa"] else empresas.PADRAO
 
 
+def _ve_financeiro(tarefa_id: int) -> bool:
+    """Vendas, receita e investimento do painel só entram na busca de quem é da Diretoria (sem tarefa: não entram)."""
+    from auth import ve_financeiro
+
+    linha = tarefas.obter(tarefa_id) if tarefa_id else None
+    return bool(linha) and ve_financeiro(linha["usuario"])
+
+
 def consultar(pergunta: str, agente: str, tarefa_id: int = 0) -> str:
     """Chamado pela ferramenta do agente (em thread). Nunca bloqueia: sem estagiário livre, responde sem visita."""
     estagiario = estagiarios.iniciar_visita(agente) if agente != ID else None
     try:
         if tarefa_id:
             atividade.evento_em_thread(tarefa_id, "consulta_cerebro", agente, detalhe=pergunta)
-        trechos = base.buscar(pergunta, empresa=empresa_da_tarefa(tarefa_id))
+        trechos = base.buscar(pergunta, empresa=empresa_da_tarefa(tarefa_id), financeiro=_ve_financeiro(tarefa_id))
         base.registrar_consulta(tarefa_id, agente, pergunta, [t["id"] for t in trechos])
     except Exception:
         log.exception("Cérebro: falha na consulta.")
@@ -123,7 +132,7 @@ def descricao_tarefa(texto: str, historico: list = (), tarefa_id: int = 0) -> st
     from agents.perfis import contexto  # import tardio: perfis depende do estado
 
     try:
-        trechos = base.buscar(texto, k=6, empresa=empresa_da_tarefa(tarefa_id))
+        trechos = base.buscar(texto, k=6, empresa=empresa_da_tarefa(tarefa_id), financeiro=_ve_financeiro(tarefa_id))
         base.registrar_consulta(tarefa_id, ID, texto, [t["id"] for t in trechos])
     except Exception:
         log.exception("Cérebro: falha ao recuperar trechos.")
@@ -169,7 +178,14 @@ def aprender_tarefa(tarefa_id: int) -> int | None:
         autor = "" if do_dono else f" (de {linha['usuario'].split('@')[0]}, não confirmado pela diretoria)"
         conteudo = (f"Pedido{autor}: {linha['texto'].strip()[:300]}\n\nResposta de {nome}: "
                     f"{resposta[:800]}{'…' if len(resposta) > 800 else ''}")
-        trecho_id = base._inserir("tarefa", f"tarefa:{tarefa_id}", f"{nome}: {linha['texto'].strip()[:70]}", conteudo,
+        # Resposta de quem vê o financeiro, com valores em reais, nos agentes que leem vendas/receita/investimento:
+        # o trecho fica marcado e só volta nas buscas da Diretoria (base.FINANCEIRO_REF).
+        from auth import ve_financeiro
+
+        financeira = (linha["agente"] in AGENTES_FINANCEIROS and ve_financeiro(linha["usuario"])
+                      and "R$" in resposta)
+        referencia = f"tarefa:{tarefa_id}{':financeiro' if financeira else ''}"
+        trecho_id = base._inserir("tarefa", referencia, f"{nome}: {linha['texto'].strip()[:70]}", conteudo,
                                   linha["empresa"] or empresas.PADRAO,
                                   peso=None if do_dono else base.PESOS_FONTE["tarefa"] * PESO_OUTROS_USUARIOS)
         _acordar.set()

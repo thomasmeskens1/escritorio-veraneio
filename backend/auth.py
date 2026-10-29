@@ -77,6 +77,11 @@ def e_master(login: str) -> bool:
     return login == config.DONO_MAX or bool(carregar_usuarios().get(login, {}).get("master"))
 
 
+def ve_financeiro(login: str) -> bool:
+    """Vendas, receita, investimento em tráfego, ROAS e CRM do painel: só a Diretoria (Thomas, 29/10/2026)."""
+    return e_master(login) or carregar_usuarios().get(login, {}).get("role") == "diretoria"
+
+
 def autenticar(login: str, senha: str) -> dict | None:
     """Devolve {login, nome, role} se as credenciais forem válidas (e o usuário estiver ativo)."""
     login = login.strip().lower()

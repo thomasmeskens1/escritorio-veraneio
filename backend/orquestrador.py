@@ -174,7 +174,7 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
     await asyncio.to_thread(cerebro.registrar_resultado, tarefa_id, True)  # trechos usados ganham pontos
     await asyncio.to_thread(cerebro.aprender_tarefa, tarefa_id)            # o trabalho concluído vira conhecimento
     linha = tarefas.obter(tarefa_id)
-    if linha["agente"] == relatorios.AGENTE and linha["usuario"] == config.DONO_MAX:  # "Ver relatório" (em teste)
+    if linha["agente"] == relatorios.AGENTE:  # "Ver relatório" (em teste): só redes sociais, vale para todos
         await asyncio.to_thread(relatorios.gerar, linha)
     await _entregar(linha)
     await entregar_na_origem(linha)

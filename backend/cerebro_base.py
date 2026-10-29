@@ -7,6 +7,7 @@ e pela pontuação aprendida; MMR para não repetir trechos parecidos.
 import json
 import logging
 import math
+import re
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -26,6 +27,8 @@ LIMIAR_VERSAO = 0.90       # novo trecho parecido com um antigo do mesmo assunto
 LIMIAR_DUPLICADO = 0.97    # consolidação: quase idênticos
 COS_MINIMO = 0.40          # sem termo em comum, só entra se o significado for bem próximo
 PESO_COSSENO, PESO_BM25 = 0.65, 0.35
+# Trechos financeiros vindos do painel analítico (Thomas, 29/10/2026: vendas, receita e investimento só para a Diretoria).
+FINANCEIRO_REF = re.compile(r"^analytics/[^/]+/(crm|google-ads|meta-ads)\b|:financeiro$")
 LAMBDA_MMR = 0.7
 PONTUACAO_LIMITE = 2.0
 PASSO_SUCESSO, PASSO_FALHA = 0.10, 0.15
@@ -249,6 +252,8 @@ class Indice:
         self.empresas = [l["empresa"] for l in linhas]
         # Lodges de Orlando: opção raríssima; só entram na busca quando a pergunta cita Orlando.
         self.orlando = np.array([ORLANDO in f"{l['fonte_ref']} {l['titulo']}".lower() for l in linhas], dtype=bool)
+        # Dados financeiros do painel (CRM: vendas e receita; Google/Meta Ads: investimento): só para a Diretoria.
+        self.financeiro = np.array([bool(FINANCEIRO_REF.search(l["fonte_ref"] or "")) for l in linhas], dtype=bool)
         self.datas = [l["atualizado_em"] for l in linhas]
         self.pesos = np.array([l["peso_fonte"] for l in linhas], dtype=np.float32)
         self._bm25 = None
@@ -317,13 +322,16 @@ def _pontuacoes(ids: list[int]) -> dict[int, float]:
     return {l["id"]: l["pontuacao"] for l in linhas}
 
 
-def buscar(pergunta: str, k: int = 5, empresa: str = PADRAO) -> list[dict]:
+def buscar(pergunta: str, k: int = 5, empresa: str = PADRAO, financeiro: bool = True) -> list[dict]:
     """Os k trechos mais relevantes (já diversificados pelo MMR), SÓ da empresa pedida e do que é comum às três.
-    Lodges de Orlando ficam de fora, a menos que a pergunta cite Orlando."""
+    Lodges de Orlando ficam de fora, a menos que a pergunta cite Orlando. `financeiro=False` (quem não é da
+    Diretoria) tira os trechos de vendas, receita e investimento do painel."""
     indice = indice_atual()
     if not indice.ids:
         return []
     permitido = np.array([e in (empresa, COMUM) for e in indice.empresas], dtype=bool)
+    if not financeiro:
+        permitido &= ~indice.financeiro
     if ORLANDO not in pergunta.lower():
         permitido &= ~indice.orlando
     termos_pergunta = termos(pergunta)

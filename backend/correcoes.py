@@ -14,9 +14,8 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
-import config
 import tarefas
-from auth import validar_token
+from auth import carregar_usuarios, validar_token
 from estado import andar_do_agente, buscar_agente
 
 rotas = APIRouter(prefix="/api/correcoes")
@@ -52,8 +51,9 @@ def _db():
 
 
 def registrar_se_correcao(usuario: str, andar: str, agente_id: str, texto: str) -> bool:
-    """Guarda a observação se for o dono corrigindo uma resposta recente deste agente."""
-    if usuario != config.DONO_MAX or not CORRECAO.search(texto or ""):
+    """Guarda a observação quando um usuário corrige uma resposta recente deste agente. Desde 29/10/2026 vale para
+    TODOS os usuários (Thomas); quem aprova e vira regra é só a Diretoria."""
+    if not CORRECAO.search(texto or ""):
         return False
     desde = (datetime.now(timezone.utc) - timedelta(hours=JANELA_H)).strftime("%Y-%m-%dT%H:%M:%SZ")
     anterior = _db().execute(
@@ -98,14 +98,14 @@ def lembrete_semanal() -> str | None:
             "seção \"Correções para revisar\", e aprove ou descarte cada uma.")
 
 
-# --- Rotas (só o dono) -------------------------------------------------------------------------
+# --- Rotas (só a Diretoria) -------------------------------------------------------------------
 
 def _dono(authorization: str) -> dict:
     usuario = validar_token(authorization.removeprefix("Bearer ").strip())
     if not usuario:
         raise HTTPException(status_code=401, detail="Token inválido")
-    if usuario["sub"] != config.DONO_MAX:
-        raise HTTPException(status_code=403, detail="Só o Thomas revisa as correções.")
+    if usuario["role"] != "diretoria" and not usuario.get("master"):
+        raise HTTPException(status_code=403, detail="Só a Diretoria revisa as correções.")
     return usuario
 
 
@@ -127,7 +127,9 @@ def listar(authorization: str = Header("")):
     _dono(authorization)
     novas = _db().execute("SELECT * FROM observacoes WHERE status = 'nova' ORDER BY id DESC LIMIT 50").fetchall()
     regras = _db().execute("SELECT * FROM regras_aprendidas WHERE ativa = 1 ORDER BY id DESC").fetchall()
+    nomes = {login: dados["nome"] for login, dados in carregar_usuarios().items()}
     return {"observacoes": [{"id": o["id"], "em": o["em"], "agente": o["agente"], "agente_nome": _nome(o["agente"]),
+                             "autor": nomes.get(o["usuario"], o["usuario"]),
                              "correcao": o["correcao"], "resposta_anterior": o["resposta_anterior"]} for o in novas],
             "regras": [{"id": r["id"], "agente": r["agente"], "agente_nome": _nome(r["agente"]), "regra": r["regra"],
                         "criada_em": r["criada_em"]} for r in regras]}

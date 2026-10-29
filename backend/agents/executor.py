@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 import agentes_dinamicos
 import atividade
+import auth
 import config
 import empresas
 import encaminhamento
@@ -203,13 +204,15 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
     ferramentas = [] if agente_id == cerebro.ID else [ConsultarCerebro(agente=agente_id, tarefa_id=tarefa_id)]
     if agente_id == "construtor":
         ferramentas.append(CriarAgente(tarefa_id=tarefa_id))
-    # Social Media: ver/criar itens no board. Só em tarefas da conta do Thomas (usa o token do sistema) e fora
-    # de projeto do Gestor (a etapa não cria itens no Monday).
+    # Monday (Social Media) e Brevo (E-mail Marketing) para TODOS os usuários, sempre com as credenciais universais
+    # da empresa (Thomas, 29/10/2026); fora de projeto do Gestor (a etapa não cria itens). Painel analítico: redes
+    # sociais para todos; vendas, receita, investimento e ROAS só para a Diretoria.
     tarefa = tarefas.obter(tarefa_id) if tarefa_id else None
-    if "Sua etapa (" not in descricao and tarefa and tarefa["usuario"] == config.DONO_MAX:
+    if "Sua etapa (" not in descricao and tarefa:
         ferramentas += ferramentas_monday.para(agente_id, tarefa_id)
         ferramentas += ferramentas_brevo.para(agente_id, cerebro.empresa_da_tarefa(tarefa_id), tarefa_id)
-        ferramentas += ferramentas_painel.para(agente_id, tarefa_id)  # Analista: números do painel analítico
+        ferramentas += ferramentas_painel.para(agente_id, tarefa_id,  # Analista: números do painel analítico
+                                               financeiro=auth.ve_financeiro(tarefa["usuario"]))
     perfil = dict(PERFIS[agente_id])
     # Diretrizes da Casa Veraneio (regras, marca e manual da função); versão curta no modelo local.
     if (extras := diretrizes.para(agente_id, compacto=modelo.startswith(("ollama/", "groq/")),
@@ -217,6 +220,10 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
         perfil["backstory"] = f"{perfil['backstory']}\n\n{extras}"
     if any(f.name.startswith("analisar_") for f in ferramentas):  # regras de leitura dos números do painel
         perfil["backstory"] = f"{perfil['backstory']}\n\n{ferramentas_painel.instrucoes()}"
+        if not any(f.name in ferramentas_painel.FINANCEIRAS for f in ferramentas):
+            perfil["backstory"] += ("\n\nVendas, receita, investimento em mídia, custo por resultado e ROAS são da "
+                                    "Diretoria: se pedirem, diga isso com naturalidade e entregue a análise das redes "
+                                    "sociais e dos e-mails, sem estimar valores em reais.")
     # Monday (criar itens) e painel analítico (várias consultas por análise) pedem mais voltas.
     monday_ativo = any(f.name.startswith(("criar_ite", "analisar_", "comparar_")) for f in ferramentas)
     if modelo.startswith("groq/") and (len(perfil["backstory"]) + len(descricao)) // 4 > ORCAMENTO_GROQ:

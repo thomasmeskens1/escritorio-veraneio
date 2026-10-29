@@ -62,7 +62,7 @@ def empresa_do_estudo(agente_id: str, texto: str, empresa: str) -> str:
     return empresa
 
 
-def _painel() -> str:
+def _painel(financeiro: bool = True) -> str:
     """Números internos do painel analítico (texto pronto do próprio painel), para o Estrategista."""
     from agents import ferramentas_painel  # import tardio: carrega o código do painel
 
@@ -70,14 +70,20 @@ def _painel() -> str:
         return ""
     db = ferramentas_painel._db()
     blocos = []
-    for titulo, ler in (("Redes sociais: crescimento em 90 dias", lambda: db.comparar_crescimento(90)),
-                        ("CRM (Monday): leads, vendas, receita, ROAS e ROI em 180 dias", lambda: db.ler_crm(180)),
-                        ("Tráfego pago em 90 dias", lambda: db.ler_anuncios("trafego", 90, 10))):
+    fontes = [("Redes sociais: crescimento em 90 dias", lambda: db.comparar_crescimento(90))]
+    if financeiro:  # vendas, receita, investimento e ROAS: só a Diretoria (Thomas, 29/10/2026)
+        fontes += [("CRM (Monday): leads, vendas, receita, ROAS e ROI em 180 dias", lambda: db.ler_crm(180)),
+                   ("Tráfego pago em 90 dias", lambda: db.ler_anuncios("trafego", 90, 10))]
+    for titulo, ler in fontes:
         try:
             blocos.append(f"### {titulo}\n{str(ler())[:MAX_DADOS]}")
         except Exception as erro:
             blocos.append(f"### {titulo}\n(não foi possível ler: {erro})")
-    blocos.insert(0, _receita_por_empresa())
+    if financeiro:
+        blocos.insert(0, _receita_por_empresa())
+    else:
+        blocos.append("(Vendas, receita e investimento ficam só com a Diretoria: não estime nem cite valores em reais "
+                      "da empresa; use as aproximações de mercado e diga que o recorte financeiro é da Diretoria.)")
     return "DADOS INTERNOS DO PAINEL ANALÍTICO (números reais; use-os e cite \"painel interno\"):\n\n" + \
         "\n\n".join(b for b in blocos if b)
 
@@ -101,7 +107,7 @@ def _receita_por_empresa() -> str:
             "\n- Casa Vero Imóveis: sem vendas registradas no CRM (PENDENTE: informar fora do sistema).")
 
 
-def _cerebro(texto: str, empresa: str) -> str:
+def _cerebro(texto: str, empresa: str, financeiro: bool = True) -> str:
     """O que o Cérebro sabe de cada empresa sobre o pedido (sem misturar: uma busca por empresa)."""
     import cerebro
     import cerebro_base
@@ -110,7 +116,7 @@ def _cerebro(texto: str, empresa: str) -> str:
     partes = []
     for e in alvo:
         try:
-            trechos = cerebro_base.buscar(texto, k=4, empresa=e)
+            trechos = cerebro_base.buscar(texto, k=4, empresa=e, financeiro=financeiro)
         except Exception:
             log.exception("Estudo: busca no Cérebro falhou.")
             continue
@@ -120,7 +126,7 @@ def _cerebro(texto: str, empresa: str) -> str:
         if partes else ""
 
 
-def prompt(agente_id: str, texto: str, empresa: str, historico: list = ()) -> str:
+def prompt(agente_id: str, texto: str, empresa: str, historico: list = (), financeiro: bool = True) -> str:
     from agents.perfis import METODOS, PERFIS
 
     perfil = PERFIS[agente_id]
@@ -139,8 +145,8 @@ def prompt(agente_id: str, texto: str, empresa: str, historico: list = ()) -> st
             "acontecendo (fatos com fonte); 2) sinais e tendências; 3) previsões e os BONS CAMINHOS priorizados, cada "
             "um com prazo pelo calendário acima; 4) o que produzir agora (tema, gancho, formato).")
     else:
-        partes.append(_painel())
-        partes.append(_cerebro(texto, empresa))
+        partes.append(_painel(financeiro))
+        partes.append(_cerebro(texto, empresa, financeiro))
         partes.append(
             "COMO FAZER O ESTUDO: use os modelos que o pedido pede ou que respondem melhor a ele: Matriz BCG "
             "(crescimento do mercado de cada empresa por fontes do setor; participação relativa por indicadores "
@@ -164,7 +170,11 @@ def executar(tarefa_id: int, agente_id: str, texto: str, empresa: str, historico
     import comercial  # o envio ao Max e a espera são os mesmos da prospecção
 
     tarefas.registrar_evento(tarefa_id, "pesquisa_web", agente_id, detalhe="Pesquisa na web pelo Claude Code (Max)")
-    resposta = comercial.pedir_ao_max(prompt(agente_id, texto, empresa, historico), LIMITE_S)
+    from auth import ve_financeiro
+
+    linha = tarefas.obter(tarefa_id)
+    financeiro = ve_financeiro(linha["usuario"]) if linha else False
+    resposta = comercial.pedir_ao_max(prompt(agente_id, texto, empresa, historico, financeiro), LIMITE_S)
     if not resposta.strip():
         raise RuntimeError("O Claude Code não devolveu o estudo.")
     return empresas.sem_precos(segredos.limpar(resposta.strip()), empresa, texto)

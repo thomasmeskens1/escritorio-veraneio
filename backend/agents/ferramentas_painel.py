@@ -4,7 +4,7 @@
 O código do painel (C:\\dev\\social-analytics) e a pasta de dados dele (analytics.db, .env) estão montados SÓ
 LEITURA no container (docker-compose.yml: SISTEMA_DIR e SOCIAL_ANALYTICS_DADOS). Cada ferramenta chama a função
 de leitura do painel (db_manager.ler_*), sem duplicar cálculo nem tocar nas APIs.
-Só na conta do Thomas: há vendas, receita e investimento (executor.py).
+Para todos os usuários; as análises financeiras (vendas, receita, investimento) só para a Diretoria.
 """
 
 import os
@@ -119,9 +119,15 @@ def instrucoes() -> str:
             "trabalho e só compare com as outras se o usuário pedir.\n\n" + "\n\n".join(partes))
 
 
-def para(agente_id: str, tarefa_id: int = 0) -> list[BaseTool]:
-    """Ferramentas do painel (só o Analista de Métricas e só com o painel montado)."""
+# Vendas, receita, investimento em mídia, custo por resultado, ROAS/ROI: só a Diretoria (Thomas, 29/10/2026). As
+# métricas de redes sociais e de e-mail valem para todos.
+FINANCEIRAS = {"analisar_impulsionamentos", "analisar_trafego_pago", "analisar_google_ads", "analisar_crm"}
+
+
+def para(agente_id: str, tarefa_id: int = 0, financeiro: bool = False) -> list[BaseTool]:
+    """Ferramentas do painel (só o Analista de Métricas e só com o painel montado); as financeiras só para a
+    Diretoria (`financeiro`)."""
     if agente_id != "analista_metricas" or not disponivel():
         return []
     return [_ferramenta(nome, descricao, parametros, chamada, tarefa_id)
-            for nome, (descricao, parametros, chamada) in ANALISES.items()]
+            for nome, (descricao, parametros, chamada) in ANALISES.items() if financeiro or nome not in FINANCEIRAS]

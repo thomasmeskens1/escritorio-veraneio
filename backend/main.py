@@ -384,9 +384,9 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
 
     # 'Faça uma legenda para o item "FEED | ..."': os dados do item do Monday entram no pedido.
     # O resultado também vai para o item (comentário e legenda), sem mudar o status dele.
-    # Só a conta do Thomas lê e escreve no Monday pelo chat (usa o token do sistema).
+    # Todos leem e escrevem no Monday pelo chat, com as credenciais universais da empresa (Thomas, 29/10/2026).
     contexto, item_citado = (await asyncio.to_thread(monday.contexto_citado, texto)
-                             if usuario["sub"] == config.DONO_MAX and monday.CITACAO.search(texto) else ("", None))
+                             if monday.CITACAO.search(texto) else ("", None))
 
     def ao_criar(tarefa_id: int) -> None:
         if origem_id:
