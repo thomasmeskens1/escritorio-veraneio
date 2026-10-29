@@ -35,44 +35,94 @@ async function decidirCorrecao(caminho, corpo) {
   if (andar) carregarCorrecoes(andar, agente);
 }
 
+// Pop-up de uma correção ou elogio: a mensagem inteira, a resposta do agente e as três decisões (só aqui).
+function abrirCorrecao(o) {
+  fecharFormularioPopup();
+  const fundo = novoEl('div', 'modal aberto modal-formulario');
+  const janela = novoEl('section', 'janela janela-formulario janela-usuario');
+  janela.setAttribute('role', 'dialog');
+  janela.setAttribute('aria-modal', 'true');
+  const barra = novoEl('header', 'janela-barra');
+  const titulo = novoEl('div', 'janela-titulo');
+  titulo.append(novoEl('h2', null, `${o.tipo === 'elogio' ? '👍 Elogio' : '✏️ Correção'} · ${o.agente_nome}`),
+    novoEl('p', null, `${o.autor ? `por ${o.autor} · ` : ''}${formatarQuando(o.em)}`));
+  const fechar = novoEl('button', 'fechar', '×');
+  fechar.type = 'button';
+  fechar.setAttribute('aria-label', 'Fechar');
+  fechar.addEventListener('click', fecharFormularioPopup);
+  barra.append(titulo, fechar);
+
+  const corpo = novoEl('div', 'formulario-corpo usuario-corpo');
+  const mensagem = novoEl('div', 'reg-mensagem reg-pedido');
+  mensagem.append(novoEl('strong', null, `Mensagem de ${o.autor || 'quem escreveu'}`), novoEl('p', null, o.correcao));
+  corpo.append(mensagem);
+  if (o.resposta_anterior) {
+    const resposta = novoEl('div', 'reg-mensagem reg-resposta');
+    resposta.append(novoEl('strong', null, `Resposta do ${o.agente_nome} que motivou`), novoEl('p', null, o.resposta_anterior));
+    corpo.append(resposta);
+  }
+  const rotulo = novoEl('label', 'form-rotulo', 'Regra que vai valer (edite antes de aprovar)');
+  const regra = novoEl('textarea', 'form-entrada');
+  regra.id = `correcao-regra-${o.id}`;
+  rotulo.htmlFor = regra.id;
+  regra.rows = 3;
+  regra.value = o.tipo === 'elogio' ? `Seguir este padrão aprovado por ${o.autor || 'a equipe'}: ${o.correcao}` : o.correcao;
+  const acoes = novoEl('div', 'usuario-acoes');
+  const decidir = (caminho, corpoPedido) => async () => {
+    acoes.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    await decidirCorrecao(caminho, corpoPedido?.());
+    fecharFormularioPopup();
+  };
+  const botao = (texto, classe, acao) => {
+    const b = novoEl('button', classe, texto);
+    b.type = 'button';
+    b.addEventListener('click', acao);
+    return b;
+  };
+  acoes.append(
+    botao(`Aprovar para o ${o.agente_nome}`, 'botao-primario',
+      decidir(`${o.id}/aprovar`, () => ({ regra: regra.value, escopo: 'agente' }))),
+    botao('Aprovar para o Cérebro (todos os agentes)', 'botao-secundario',
+      decidir(`${o.id}/aprovar`, () => ({ regra: regra.value, escopo: 'todos' }))),
+    botao('Descartar', 'botao-secundario botao-perigo', decidir(`${o.id}/descartar`)),
+  );
+  corpo.append(rotulo, regra, acoes);
+  janela.append(barra, corpo);
+  fundo.append(janela);
+  fundo.addEventListener('click', (e) => { if (e.target === fundo) fecharFormularioPopup(); });
+  fundo.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); fecharFormularioPopup(); } });
+  document.body.append(fundo);
+  popupFormulario = fundo;
+  regra.focus();
+}
+
 function criarCorrecoes() {
   const bloco = novoEl('div', 'perfil-correcoes');
   const d = correcoes.dados;
   const n = d?.observacoes?.length || 0;
-  bloco.append(novoEl('h4', null, n ? `Correções para revisar (${n})` : 'Correções para revisar'));
+  bloco.append(novoEl('h4', null, n ? `Correções e elogios para revisar (${n})` : 'Correções e elogios para revisar'));
   if (correcoes.erro) bloco.append(novoEl('p', 'rotinas-nota erro', correcoes.erro));
   if (!d) return bloco;
   if (!n) {
-    bloco.append(novoEl('p', 'rotinas-nota', 'Nenhuma pendente. Quando você corrigir um agente ("não é assim…", "na '
-      + 'verdade…", "nunca…"), a correção aparece aqui para virar regra.'));
+    bloco.append(novoEl('p', 'rotinas-nota', 'Nenhuma pendente. Quando alguém corrigir um agente ("não é assim…", '
+      + '"na verdade…") ou elogiar uma resposta ("adorei, podemos seguir assim"), aparece aqui para virar regra.'));
   }
+  // Uma linha por observação (como o painel de usuários); o clique abre o pop-up com a mensagem inteira e as
+  // decisões (Thomas, 29/10/2026).
+  const lista = novoEl('ul', 'correcoes-lista');
   d.observacoes.forEach((o) => {
-    const item = novoEl('div', 'correcao-item');
-    item.append(novoEl('small', 'correcao-meta', `${o.tipo === 'elogio' ? '👍 Elogio' : 'Correção'} · ${o.agente_nome} · ${o.autor ? `por ${o.autor} · ` : ''}${formatarQuando(o.em)}`));
-    if (o.resposta_anterior) {
-      const antes = novoEl('details', 'correcao-antes');
-      antes.append(novoEl('summary', null, 'Resposta corrigida'), novoEl('p', null, o.resposta_anterior));
-      item.append(antes);
-    }
-    const regra = novoEl('textarea', 'correcao-regra');
-    regra.rows = 2;
-    regra.value = o.correcao;
-    regra.setAttribute('aria-label', 'Texto da regra');
-    const acoes = novoEl('div', 'correcao-acoes');
-    const botao = (rotulo, classe, acao) => {
-      const b = novoEl('button', classe, rotulo);
-      b.type = 'button';
-      b.addEventListener('click', () => { acoes.querySelectorAll('button').forEach((x) => { x.disabled = true; }); acao(); });
-      return b;
-    };
-    acoes.append(
-      botao(`Aprovar para ${o.agente_nome}`, 'botao-primario', () => decidirCorrecao(`${o.id}/aprovar`, { regra: regra.value, escopo: 'agente' })),
-      botao('Aprovar para todos', 'botao-secundario', () => decidirCorrecao(`${o.id}/aprovar`, { regra: regra.value, escopo: 'todos' })),
-      botao('Descartar', 'botao-secundario', () => decidirCorrecao(`${o.id}/descartar`)),
-    );
-    item.append(regra, acoes);
-    bloco.append(item);
+    const item = novoEl('li');
+    const linha = novoEl('button', 'correcao-linha');
+    linha.type = 'button';
+    linha.title = 'Abrir para aprovar ou descartar';
+    linha.append(novoEl('small', 'correcao-meta', `${o.tipo === 'elogio' ? '👍 Elogio' : '✏️ Correção'} · `
+      + `${o.agente_nome}${o.autor ? ` · por ${o.autor}` : ''} · ${formatarQuando(o.em)}`),
+    novoEl('span', 'correcao-previa', o.correcao.replace(/\s+/g, ' ').slice(0, 110)), novoEl('span', 'usuario-seta', '›'));
+    linha.addEventListener('click', () => abrirCorrecao(o));
+    item.append(linha);
+    lista.append(item);
   });
+  bloco.append(lista);
   if (d.regras?.length) {
     const regras = novoEl('details', 'correcao-regras');
     regras.append(novoEl('summary', null, `Regras aprendidas ativas (${d.regras.length})`));

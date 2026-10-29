@@ -560,3 +560,53 @@
 .janela-agente.sem-chat > #modal-perfil {
   max-height: none !important;
 }
+
+/* Correções e elogios: uma linha por item (o clique abre o pop-up de decisão, js/correcoes.js) */
+.correcoes-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.correcao-linha {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  width: 100%;
+  padding: 8px 10px;
+  background: #1b1e24;
+  border: 1px solid #343a40;
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.correcao-linha:hover,
+.correcao-linha:focus-visible {
+  border-color: #f4a261;
+  outline: none;
+}
+
+.correcao-linha .correcao-meta {
+  grid-column: 1;
+}
+
+.correcao-previa {
+  grid-column: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.8rem;
+  color: #adb5bd;
+}
+
+.correcao-linha .usuario-seta {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}

@@ -27,9 +27,22 @@ CORRECAO = re.compile(
 # Elogio com intenção de repetir (teste real, 29/10/2026, Francielle: "adorei, podemos seguir assim nas próximas,
 # exatamente o que eu quero"): vira observação "elogio" para a Diretoria aprovar como padrão a seguir.
 ELOGIO = re.compile(
-    r"\b(adorei|amei|perfeit[oa]|excelente|ficou (ótim|otim|lind|show|incr[ií]vel)|gostei muito|"
+    r"\b(adorei|amei|ficou (ótim|otim|lind|show|incr[ií]vel)|gostei muito|"
     r"exatamente (o que|isso)|(podemos|pode|vamos) seguir (assim|nesse|neste|desse|deste)|"
-    r"(é|e) (isso|esse) (mesmo|a[ií])|mandou bem|aprovad[oa])", re.IGNORECASE)
+    r"(é|e) (isso|esse) (mesmo|a[ií])|mandou bem)", re.IGNORECASE)
+# Adjetivo solto ("perfeito", "excelente") só é elogio em mensagem curta: num texto colado como exemplo ele é
+# conteúdo ("...área gourmet, perfeita para reunir a família", Francielle, 29/10/2026, falso elogio).
+ELOGIO_CURTO = re.compile(r"\b(perfeit[oa]|excelente|aprovad[oa]|ótimo|otimo|show)\b", re.IGNORECASE)
+TAMANHO_CURTO = 150
+BORDA_COMENTARIO = 250  # o comentário da pessoa fica no começo ou no fim; o meio é o texto colado
+
+
+def e_elogio(texto: str) -> bool:
+    texto = (texto or "").strip()
+    if len(texto) <= TAMANHO_CURTO:
+        return bool(ELOGIO.search(texto) or ELOGIO_CURTO.search(texto))
+    bordas = f"{texto[:BORDA_COMENTARIO]}\n{texto[-BORDA_COMENTARIO:]}"
+    return bool(ELOGIO.search(bordas))
 JANELA_H = 24             # a correção precisa vir até 24 h depois da resposta do agente
 MAX_REGRAS_NO_CONTEXTO = 15
 LEMBRETE_DIAS = 7
@@ -64,7 +77,7 @@ def registrar_se_correcao(usuario: str, andar: str, agente_id: str, texto: str) 
     nunca atrasa a resposta."""
     if CORRECAO.search(texto or ""):
         tipo = "correcao"
-    elif ELOGIO.search(texto or ""):
+    elif e_elogio(texto):
         tipo = "elogio"
     else:
         return False
