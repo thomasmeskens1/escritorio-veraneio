@@ -775,3 +775,59 @@
   font-size: 0.75rem;
   color: #ffa8a8;
 }
+
+/* 👍/👎 nas respostas (js/avaliacao.js) */
+.msg-avaliacao {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.msg-voto {
+  padding: 2px 7px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.msg-voto:hover,
+.msg-voto:focus-visible {
+  opacity: 0.9;
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
+.msg-voto.ativo {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.msg-voto-comentario {
+  display: flex;
+  flex: 1 1 100%;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.msg-voto-comentario[hidden] {
+  display: none;
+}
+
+.msg-voto-comentario input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  color: inherit;
+  font-size: 0.75rem;
+}

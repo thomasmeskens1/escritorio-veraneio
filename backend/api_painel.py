@@ -7,6 +7,7 @@ from fastapi import APIRouter, Header, HTTPException
 import acesso
 import aprendizado
 import config
+import reranker
 import saude
 import tarefas
 from auth import validar_token
@@ -114,6 +115,7 @@ async def treinar_agora(authorization: str = Header("")):
     if not meta:
         return {"ok": False, "modelo": None, "mensagem": "Ainda não há tarefas finalizadas para treinar."}
     relatorio = await asyncio.to_thread(relatorio_aprendizado.montar, meta, anterior, _nome_do_agente)
+    relatorio["rede"] = await asyncio.to_thread(reranker.treinar)  # rede neural do Cérebro (👍/👎, elogios, correções)
     if meta["acuracia"] is None:
         return {"ok": True, "modelo": None, "mensagem": meta.get("observacao", "Dados insuficientes."),
                 "relatorio": relatorio}

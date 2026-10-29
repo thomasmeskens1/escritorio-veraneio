@@ -175,7 +175,8 @@ def listar(authorization: str = Header("")):
     regras = _db().execute("SELECT * FROM regras_aprendidas WHERE ativa = 1 ORDER BY id DESC").fetchall()
     nomes = {login: dados["nome"] for login, dados in carregar_usuarios().items()}
     return {"observacoes": [{"id": o["id"], "em": o["em"], "agente": o["agente"], "agente_nome": _nome(o["agente"]),
-                             "autor": nomes.get(o["usuario"], o["usuario"]), "tipo": o["tipo"],
+                             "autor": "Cérebro" if o["usuario"] == "cerebro" else nomes.get(o["usuario"], o["usuario"]),
+                             "tipo": o["tipo"],
                              "correcao": o["correcao"], "resposta_anterior": o["resposta_anterior"]} for o in novas],
             "regras": [{"id": r["id"], "agente": r["agente"], "agente_nome": _nome(r["agente"]), "regra": r["regra"],
                         "criada_em": r["criada_em"]} for r in regras]}

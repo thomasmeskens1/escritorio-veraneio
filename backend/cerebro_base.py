@@ -346,6 +346,7 @@ def buscar(pergunta: str, k: int = 5, empresa: str = PADRAO, financeiro: bool = 
         relevancia = PESO_COSSENO * np.clip(cosseno, 0, None) + PESO_BM25 * cobertura
     else:  # só lexical (Ollama fora)
         relevancia = bm25 / bm25.max() if bm25.max() > 0 else bm25
+        cobertura = relevancia
     relevancia = np.where(permitido, relevancia, 0)
     candidatos = [i for i in np.argsort(-relevancia)[:40]
                   if permitido[i] and (bm25[i] > 0 or cosseno[i] >= COS_MINIMO)]
@@ -353,10 +354,20 @@ def buscar(pergunta: str, k: int = 5, empresa: str = PADRAO, financeiro: bool = 
         return []
 
     pontos = _pontuacoes([indice.ids[i] for i in candidatos])
-    notas = {}
-    for i in candidatos:
+    notas, sinais = {}, {}
+    for posicao, i in enumerate(candidatos):
         aprendida = max(-PONTUACAO_LIMITE, min(PONTUACAO_LIMITE, pontos.get(indice.ids[i], 0.0)))
-        notas[i] = float(relevancia[i] * indice.pesos[i] * _recencia(indice.datas[i]) * (1 + FATOR_PONTUACAO * aprendida))
+        recencia = _recencia(indice.datas[i])
+        notas[i] = float(relevancia[i] * indice.pesos[i] * recencia * (1 + FATOR_PONTUACAO * aprendida))
+        # Sinais do trecho nesta busca: guardados com a consulta, viram exemplos para a rede neural do Cérebro.
+        sinais[i] = {"cosseno": float(cosseno[i]), "cobertura": float(cobertura[i]), "peso": float(indice.pesos[i]),
+                     "recencia": float(recencia), "pontuacao": float(aprendida), "posicao": posicao,
+                     "fonte": indice.fontes[i]}
+    import reranker  # import tardio: a rede é opcional e só entra quando supera a ordem atual
+
+    if (probabilidades := reranker.prever([sinais[i] for i in candidatos])) is not None:
+        for i, prob in zip(candidatos, probabilidades):
+            notas[i] *= 0.5 + float(prob)  # trecho que a rede acha útil sobe; o que costuma atrapalhar desce
     maior = max(notas.values()) or 1.0
 
     def parecido(a: int, b: int) -> float:
@@ -374,15 +385,31 @@ def buscar(pergunta: str, k: int = 5, empresa: str = PADRAO, financeiro: bool = 
         restantes.remove(melhor)
     return [{"id": indice.ids[i], "titulo": indice.titulos[i], "conteudo": indice.conteudos[i],
              "fonte_tipo": indice.fontes[i], "fonte_ref": indice.refs[i], "data": indice.datas[i][:10],
-             "nota": round(notas[i], 4)} for i in escolhidos]
+             "nota": round(notas[i], 4), "sinais": sinais[i]} for i in escolhidos]
 
 
 # --- Aprendizado ----------------------------------------------------------------------------------
 
-def registrar_consulta(tarefa_id: int | None, agente: str, pergunta: str, ids: list[int]) -> None:
+def registrar_consulta(tarefa_id: int | None, agente: str, pergunta: str, ids: list[int],
+                       sinais: list[dict] | None = None) -> None:
+    """Guarda a consulta e, com os sinais de cada trecho, os exemplos que a rede neural do Cérebro aprende
+    (rotulados depois pelo 👍/👎, elogios e correções da tarefa)."""
     with _trava, db() as conexao:
-        conexao.execute("INSERT INTO consultas_cerebro (tarefa_id, agente, pergunta, ids_conhecimento, em) "
-                        "VALUES (?, ?, ?, ?, ?)", (tarefa_id or None, agente, pergunta[:1000], json.dumps(ids), agora()))
+        cursor = conexao.execute("INSERT INTO consultas_cerebro (tarefa_id, agente, pergunta, ids_conhecimento, em) "
+                                 "VALUES (?, ?, ?, ?, ?)",
+                                 (tarefa_id or None, agente, pergunta[:1000], json.dumps(ids), agora()))
+        if sinais and tarefa_id:
+            conexao.execute("CREATE TABLE IF NOT EXISTS consulta_sinais (consulta_id INTEGER NOT NULL, tarefa_id "
+                            "INTEGER NOT NULL, conhecimento_id INTEGER NOT NULL, sinais TEXT NOT NULL)")
+            conexao.executemany("INSERT INTO consulta_sinais VALUES (?, ?, ?, ?)",
+                                [(cursor.lastrowid, tarefa_id, i, json.dumps(s)) for i, s in zip(ids, sinais)])
+
+
+def ajustar_pontuacao(ids: list[int], passo: float) -> None:
+    """Soma `passo` à pontuação dos trechos (👍/👎 de uma resposta), dentro do limite."""
+    with _trava, db() as conexao:
+        conexao.executemany("UPDATE conhecimento SET pontuacao = MAX(?, MIN(?, pontuacao + ?)) WHERE id = ?",
+                            [(-PONTUACAO_LIMITE, PONTUACAO_LIMITE, passo, i) for i in ids])
 
 
 def registrar_resultado(tarefa_id: int, sucesso: bool) -> int:

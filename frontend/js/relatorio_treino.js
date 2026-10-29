@@ -88,6 +88,24 @@ function abrirRelatorioTreino(r = ultimoRelatorioTreino) {
     : 'Nenhuma correção ou elogio esperando aprovação.'));
 
   corpo.append(rota, cerebro);
+
+  // 3. Rede neural do Cérebro (backend/reranker.py)
+  const rd = r.rede;
+  if (rd) {
+    const rede = blocoTreino('3. Rede neural do Cérebro',
+      'Aprende, com os 👍/👎, elogios e correções, quais conhecimentos realmente ajudam nas respostas. Só passa a '
+      + 'reordenar as buscas quando prova que acerta mais que a ordem atual.');
+    const nums = novoEl('div', 'treino-numeros');
+    [[`${rd.exemplos}/${rd.minimo}`, 'exemplos rotulados'], [rd.positivos, 'ajudaram'], [rd.negativos, 'atrapalharam'],
+      [rd.ativo ? 'Ativa' : 'Aprendendo', 'situação']].forEach(([n, rotulo]) => {
+      const cartao = novoEl('div', 'conhecimento-cartao');
+      cartao.append(novoEl('strong', null, String(n)), novoEl('span', null, rotulo));
+      nums.append(cartao);
+    });
+    rede.append(nums);
+    if (rd.observacao) rede.append(novoEl('p', 'treino-porque', rd.observacao));
+    corpo.append(rede);
+  }
   janela.append(barra, corpo);
   fundo.append(janela);
   fundo.addEventListener('click', (e) => { if (e.target === fundo) fecharFormularioPopup(); });

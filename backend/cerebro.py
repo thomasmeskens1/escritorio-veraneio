@@ -111,7 +111,7 @@ def consultar(pergunta: str, agente: str, tarefa_id: int = 0) -> str:
         if tarefa_id:
             atividade.evento_em_thread(tarefa_id, "consulta_cerebro", agente, detalhe=pergunta)
         trechos = base.buscar(pergunta, empresa=empresa_da_tarefa(tarefa_id), financeiro=_ve_financeiro(tarefa_id))
-        base.registrar_consulta(tarefa_id, agente, pergunta, [t["id"] for t in trechos])
+        base.registrar_consulta(tarefa_id, agente, pergunta, [t["id"] for t in trechos], [t["sinais"] for t in trechos])
     except Exception:
         log.exception("Cérebro: falha na consulta.")
         return "O Cérebro está indisponível agora. Não invente fatos sobre a empresa; avise o usuário se faltar algo."
@@ -133,7 +133,7 @@ def descricao_tarefa(texto: str, historico: list = (), tarefa_id: int = 0) -> st
 
     try:
         trechos = base.buscar(texto, k=6, empresa=empresa_da_tarefa(tarefa_id), financeiro=_ve_financeiro(tarefa_id))
-        base.registrar_consulta(tarefa_id, ID, texto, [t["id"] for t in trechos])
+        base.registrar_consulta(tarefa_id, ID, texto, [t["id"] for t in trechos], [t["sinais"] for t in trechos])
     except Exception:
         log.exception("Cérebro: falha ao recuperar trechos.")
         trechos = []

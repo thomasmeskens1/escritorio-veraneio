@@ -20,6 +20,9 @@ async function carregarCorrecoes(andar, agente) {
   if (chatEstaAberto(andar, agente)) renderizarPerfil();
 }
 
+// Tipos de observação (backend/correcoes.py, avaliacoes.py e consolidacao_semanal.py).
+const rotuloObservacao = (tipo) => ({ elogio: '👍 Elogio', aprendizado: '🧠 Aprendizado da semana' }[tipo] || '✏️ Correção');
+
 async function decidirCorrecao(caminho, corpo) {
   const { andar, agente } = chatAberto || {};
   try {
@@ -44,7 +47,7 @@ function abrirCorrecao(o) {
   janela.setAttribute('aria-modal', 'true');
   const barra = novoEl('header', 'janela-barra');
   const titulo = novoEl('div', 'janela-titulo');
-  titulo.append(novoEl('h2', null, `${o.tipo === 'elogio' ? '👍 Elogio' : '✏️ Correção'} · ${o.agente_nome}`),
+  titulo.append(novoEl('h2', null, `${rotuloObservacao(o.tipo)} · ${o.agente_nome}`),
     novoEl('p', null, `${o.autor ? `por ${o.autor} · ` : ''}${formatarQuando(o.em)}`));
   const fechar = novoEl('button', 'fechar', '×');
   fechar.type = 'button';
@@ -58,7 +61,8 @@ function abrirCorrecao(o) {
   corpo.append(mensagem);
   if (o.resposta_anterior) {
     const resposta = novoEl('div', 'reg-mensagem reg-resposta');
-    resposta.append(novoEl('strong', null, `Resposta do ${o.agente_nome} que motivou`), novoEl('p', null, o.resposta_anterior));
+    resposta.append(novoEl('strong', null, o.tipo === 'aprendizado' ? 'Evidência da semana'
+      : `Resposta do ${o.agente_nome} que motivou`), novoEl('p', null, o.resposta_anterior));
     corpo.append(resposta);
   }
   const rotulo = novoEl('label', 'form-rotulo', 'Regra que vai valer (edite antes de aprovar)');
@@ -67,6 +71,7 @@ function abrirCorrecao(o) {
   rotulo.htmlFor = regra.id;
   regra.rows = 3;
   regra.value = o.tipo === 'elogio' ? `Seguir este padrão aprovado por ${o.autor || 'a equipe'}: ${o.correcao}` : o.correcao;
+  if (o.tipo === 'aprendizado') mensagem.firstChild.textContent = 'Aprendizado proposto pelo Cérebro (consolidação semanal)';
   const acoes = novoEl('div', 'usuario-acoes');
   const decidir = (caminho, corpoPedido) => async () => {
     acoes.querySelectorAll('button').forEach((b) => { b.disabled = true; });
@@ -96,12 +101,31 @@ function abrirCorrecao(o) {
   regra.focus();
 }
 
+// Consolidação semanal (toda segunda, 07:00): o master pode rodar agora. O Max lê a semana e os itens chegam aqui.
+function criarBotaoConsolidar() {
+  const botao = novoEl('button', 'botao-secundario', 'Consolidar a semana agora');
+  botao.type = 'button';
+  botao.title = 'O Max lê as tarefas, 👍/👎, elogios e correções da semana e propõe aprendizados para aprovar';
+  botao.addEventListener('click', async () => {
+    botao.disabled = true;
+    try {
+      const resposta = await fetch('/api/cerebro/consolidar', { method: 'POST', headers: { Authorization: `Bearer ${sessao.token}` } });
+      const dados = await resposta.json().catch(() => ({}));
+      botao.textContent = dados.mensagem || dados.detail || 'Não foi possível iniciar.';
+    } catch {
+      botao.textContent = 'Sem conexão com o servidor.';
+    }
+  });
+  return botao;
+}
+
 function criarCorrecoes() {
   const bloco = novoEl('div', 'perfil-correcoes');
   const d = correcoes.dados;
   const n = d?.observacoes?.length || 0;
   bloco.append(novoEl('h4', null, n ? `Correções e elogios para revisar (${n})` : 'Correções e elogios para revisar'));
   if (correcoes.erro) bloco.append(novoEl('p', 'rotinas-nota erro', correcoes.erro));
+  if (sessao?.master) bloco.append(criarBotaoConsolidar());
   if (!d) return bloco;
   if (!n) {
     bloco.append(novoEl('p', 'rotinas-nota', 'Nenhuma pendente. Quando alguém corrigir um agente ("não é assim…", '
@@ -115,7 +139,7 @@ function criarCorrecoes() {
     const linha = novoEl('button', 'correcao-linha');
     linha.type = 'button';
     linha.title = 'Abrir para aprovar ou descartar';
-    linha.append(novoEl('small', 'correcao-meta', `${o.tipo === 'elogio' ? '👍 Elogio' : '✏️ Correção'} · `
+    linha.append(novoEl('small', 'correcao-meta', `${rotuloObservacao(o.tipo)} · `
       + `${o.agente_nome}${o.autor ? ` · por ${o.autor}` : ''} · ${formatarQuando(o.em)}`),
     novoEl('span', 'correcao-previa', o.correcao.replace(/\s+/g, ' ').slice(0, 110)), novoEl('span', 'usuario-seta', '›'));
     linha.addEventListener('click', () => abrirCorrecao(o));

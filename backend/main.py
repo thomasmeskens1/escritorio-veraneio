@@ -18,6 +18,7 @@ import anexos
 import agentes_dinamicos
 import aprendizado
 import atividade
+import avaliacoes
 import config
 import correcoes
 import empresas
@@ -29,12 +30,14 @@ import monday
 import cerebro
 import cerebro_mapa
 import comercial
+import consolidacao_semanal
 import entrevista
 import historico
 import orquestrador
 import parar
 import producao
 import relatorios
+import reranker
 import tarefas
 import usuarios_admin
 from api_painel import rotas as rotas_painel
@@ -72,6 +75,7 @@ async def ciclo_de_vida(_: FastAPI):
     producao.iniciar()
     agentes_dinamicos.carregar()  # agentes criados pelo Construtor voltam ao prédio
     aprendizado.carregar()
+    reranker.carregar()  # rede neural do Cérebro (ativa só se superou a ordem atual)
     atividade.vincular_loop(asyncio.get_running_loop())
     cerebro.iniciar()  # conhecimento: tabelas, indexação inicial e consolidação diária
     from agents.diretrizes import verificar  # manuais por função: nenhum agente pode ficar sem regra obrigatória
@@ -144,6 +148,8 @@ app.include_router(correcoes.rotas)
 app.include_router(relatorios.rotas)
 app.include_router(usuarios_admin.rotas)
 app.include_router(parar.rotas)
+app.include_router(avaliacoes.rotas)
+app.include_router(consolidacao_semanal.rotas)
 
 
 class Credenciais(BaseModel):

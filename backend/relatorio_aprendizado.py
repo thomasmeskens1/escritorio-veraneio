@@ -81,7 +81,8 @@ def _cerebro(desde: str, nome_do_agente) -> dict:
                         for i, n in usados.most_common(6) if i in titulos],
         "regras_aprovadas": [{"agente": "Todos os agentes" if r["agente"] == "*" else nome_do_agente(r["agente"]),
                               "regra": r["regra"]} for r in regras],
-        "pendentes": {("elogios" if p["tipo"] == "elogio" else "correções"): p["n"] for p in pendentes},
+        "pendentes": {{"elogio": "elogios", "aprendizado": "aprendizados da semana"}.get(p["tipo"], "correções"): p["n"]
+                      for p in pendentes},
     }
 
 

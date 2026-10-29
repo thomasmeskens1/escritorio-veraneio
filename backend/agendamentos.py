@@ -240,6 +240,9 @@ def iniciar() -> None:
     if _agendador is None:
         _agendador = AsyncIOScheduler(timezone=FUSO)
         _agendador.start()
+        import consolidacao_semanal  # consolidação semanal do Cérebro (segunda, 07:00)
+
+        consolidacao_semanal.agendar(_agendador)
     agora = datetime.now(FUSO)
     for linha in _db().execute("SELECT * FROM agendamentos WHERE ativo = 1").fetchall():
         regra = json.loads(linha["regra"])

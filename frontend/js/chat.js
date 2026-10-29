@@ -53,7 +53,7 @@ function textoNatural(texto) {
 }
 
 function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, formulario, link, relatorio,
-  formulario_encerrado: encerrado }) {
+  formulario_encerrado: encerrado, avaliacao }) {
   const div = document.createElement('div');
   div.className = `msg msg-${tipo}`;
   const nome = document.createElement('span');
@@ -73,6 +73,7 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
   if (tipo === 'agente' && relatorio && LINK_RELATORIO.test(relatorio)) div.append(criarBotaoRelatorio(relatorio));
   if (tipo === 'agente' && tarefa_id && /^✅ Pedido concluído/.test(texto)) div.append(criarBotaoAjuste(tarefa_id));
   if (opcoes?.length) div.append(criarOpcoes(opcoes));
+  if (tipo === 'agente' && tarefa_id) div.append(criarAvaliacao(tarefa_id, avaliacao)); // 👍/👎 (js/avaliacao.js)
   if (meta) {
     const linha = document.createElement('span');
     linha.className = 'msg-meta';
@@ -322,7 +323,7 @@ function mensagemDoAgente(andar, agente, dados) {
   const meta = metadadosResposta(dados);
   const autor = !meta && dados.modelo ? `${nome} · ${dados.modelo}` : nome;
   return { autor, texto: dados.texto, tipo: 'agente', meta, tarefa_id: dados.tarefa_id, link: dados.link,
-    relatorio: dados.relatorio, formulario_encerrado: dados.formulario_encerrado };
+    relatorio: dados.relatorio, formulario_encerrado: dados.formulario_encerrado, avaliacao: dados.avaliacao };
 }
 
 function converterDoServidor(andar, agente, m) {
