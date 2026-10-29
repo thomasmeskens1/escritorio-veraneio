@@ -86,3 +86,15 @@ function desconectar() {
   if (ws) ws.close(1000);
   atualizarConexao();
 }
+
+// Presença (status ativo/ausente no painel de usuários): a cada minuto, avisa o servidor se a pessoa mexeu no
+// escritório desde o último aviso, com a aba visível. Sem interação por 5 min o servidor mostra "ausente".
+const INTERVALO_PRESENCA = 60000;
+let interagiuDesdeAviso = true;
+['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'].forEach((evento) => {
+  document.addEventListener(evento, () => { interagiuDesdeAviso = true; }, { passive: true });
+});
+setInterval(() => {
+  enviar({ tipo: 'presenca', interagiu: interagiuDesdeAviso && document.visibilityState === 'visible' });
+  interagiuDesdeAviso = false;
+}, INTERVALO_PRESENCA);

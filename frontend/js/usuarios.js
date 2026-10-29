@@ -6,6 +6,10 @@ const usuariosConteudo = document.getElementById('usuarios-conteudo');
 const NOMES_ANDARES_USUARIOS = { porao: 'Porão', terreo: 'Térreo', marketing: 'Marketing', comercial: 'Comercial',
   cobertura: 'Cobertura' };
 
+const STATUS_USUARIO = { ativo: 'Ativo agora', ausente: 'Ausente (conectado, sem mexer há 5 min)',
+  offline: 'Offline' };
+const INTERVALO_USUARIOS = 30000; // status ao vivo enquanto o painel está aberto
+let timerUsuarios = null;
 let usuariosAbertos = false;
 let dadosUsuarios = null; // { usuarios, agentes, roles }
 let mensagemUsuarios = null; // { texto, erro }
@@ -45,11 +49,14 @@ function abrirUsuarios() {
   janelaUsuarios.classList.add('aberto');
   usuariosConteudo.replaceChildren(novoEl('p', 'usuarios-nota', 'Carregando…'));
   carregarUsuarios();
+  clearInterval(timerUsuarios);
+  timerUsuarios = setInterval(carregarUsuarios, INTERVALO_USUARIOS);
 }
 
 function fecharUsuarios() {
   usuariosAbertos = false;
   mensagemUsuarios = null;
+  clearInterval(timerUsuarios);
   janelaUsuarios.classList.remove('aberto');
 }
 
@@ -83,7 +90,11 @@ function renderizarUsuarios() {
     botao.type = 'button';
     botao.title = `Abrir ${u.nome}: perfil, agentes, senha e acesso`;
     const info = novoEl('div', 'usuario-info');
-    const nome = novoEl('strong', null, u.nome);
+    const nome = novoEl('strong');
+    const status = novoEl('span', `usuario-status ${u.status || 'offline'}`);
+    status.title = STATUS_USUARIO[u.status] || STATUS_USUARIO.offline;
+    status.setAttribute('aria-label', status.title);
+    nome.append(status, document.createTextNode(u.nome));
     if (u.master) nome.append(novoEl('span', 'usuario-selo', 'master'));
     if (!u.ativo) nome.append(novoEl('span', 'usuario-selo inativo', 'desativado'));
     info.append(nome, novoEl('small', null, u.login),

@@ -608,3 +608,21 @@
 .usuario-andar.desativado {
   opacity: 0.4;
 }
+
+/* Status do usuário: ativo (verde), ausente (amarelo), offline (cinza) */
+.usuario-status {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #495057;
+  box-shadow: 0 0 0 2px #15171c;
+}
+
+.usuario-status.ativo {
+  background: #40c057;
+}
+
+.usuario-status.ausente {
+  background: #fab005;
+}

@@ -63,7 +63,8 @@ def listar(authorization: str = Header("")):
     _master(authorization)
     usuarios = [{"login": login, "nome": r["nome"], "role": r["role"], "ativo": r.get("ativo", True),
                  "master": e_master(login), "agentes": acesso.agentes_do_usuario(login),
-                 "andares": acesso.andares_do_usuario(login), **_uso(login)}
+                 "andares": acesso.andares_do_usuario(login), "status": gerenciador.status_de(login),
+                 **_uso(login)}
                 for login, r in sorted(carregar_usuarios().items())]
     return {"usuarios": usuarios, "agentes": acesso.catalogo(), "roles": ROLES, "andares": list(ANDARES)}
 

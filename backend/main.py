@@ -232,8 +232,11 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         msg = json.loads(bruto)
     except ValueError:
         return await erro("JSON inválido.")
+    if isinstance(msg, dict) and msg.get("tipo") == "presenca":  # status ativo/ausente (painel de usuários)
+        return gerenciador.registrar_presenca(ws, bool(msg.get("interagiu")))
     if not isinstance(msg, dict) or msg.get("tipo") != "mensagem":
         return await erro("Tipo de mensagem desconhecido.")
+    gerenciador.registrar_presenca(ws, True)  # enviar um pedido é interação
 
     andar, agente_id = str(msg.get("andar", "")), str(msg.get("agente", ""))
     texto = str(msg.get("texto", "")).strip()
