@@ -1,15 +1,15 @@
-"""Rotinas agendadas: "analise as campanhas todos os dias às 08:00" vira um job do APScheduler.
+"""Rotinas agendadas: criadas SÓ pelo botão "Agendar tarefa" da ficha do agente (formulário estruturado).
 
-O interpretador é determinístico (regex, sem LLM). No horário, a tarefa segue o pipeline normal
-(orquestrador.nova_tarefa): status no canvas, resposta no chat, histórico e registro.
+Antes, um interpretador de frases criava rotinas a partir do texto do chat, e briefings longos com "todos os dias"
+no conteúdo viravam rotina (testes reais de 28 e 29/10/2026). Decisão do Thomas (29/10/2026): mensagem no chat
+nunca agenda nada. No horário, a tarefa segue o pipeline normal (orquestrador.nova_tarefa): status no canvas,
+resposta no chat, histórico e registro.
 """
 
 import asyncio
 import json
 import logging
-import re
-import unicodedata
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -17,7 +17,9 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import APIRouter, Header, HTTPException
+from pydantic import BaseModel, Field
 
+import empresas
 import tarefas
 from auth import validar_token
 from conexoes import gerenciador
@@ -26,7 +28,6 @@ log = logging.getLogger(__name__)
 
 FUSO = ZoneInfo("America/Sao_Paulo")
 MINIMO_MINUTOS = 15
-HORA_PADRAO = (9, 0)  # recorrência sem horário explícito
 ESPERA_OCUPADO_S, TENTATIVAS_OCUPADO = 30, 60  # agente ocupado: tenta por até 30 min
 
 _ESQUEMA = """
@@ -41,7 +42,8 @@ CREATE TABLE IF NOT EXISTS agendamentos (
     ativo INTEGER NOT NULL DEFAULT 1,
     criado_em TEXT NOT NULL,
     ultima_execucao TEXT,
-    execucoes INTEGER NOT NULL DEFAULT 0
+    execucoes INTEGER NOT NULL DEFAULT 0,
+    empresa TEXT                  -- empresa da conversa (Marketing e Cérebro); NULL nas rotinas antigas
 );
 CREATE INDEX IF NOT EXISTS idx_agendamentos_ativo ON agendamentos(ativo);
 """
@@ -55,187 +57,83 @@ def _db():
     db = tarefas._db()
     if not _esquema_ok:
         db.executescript(_ESQUEMA)
+        if "empresa" not in {c[1] for c in db.execute("PRAGMA table_info(agendamentos)")}:
+            db.execute("ALTER TABLE agendamentos ADD COLUMN empresa TEXT")
         _esquema_ok = True
     return db
 
 
-# --- Interpretador ------------------------------------------------------------------------
+# --- Regra a partir do formulário ------------------------------------------------------------
 
-def _normalizar(texto: str) -> str:
-    """Minúsculas e sem acento, com o MESMO comprimento (os índices valem no texto original)."""
-    return "".join((unicodedata.normalize("NFD", c)[:1].lower()[:1] or c) for c in texto)
-
-
-_DIAS = {"segunda": "mon", "terca": "tue", "quarta": "wed", "quinta": "thu", "sexta": "fri",
-         "sabado": "sat", "domingo": "sun"}
-_NOMES_DIAS = {"mon": "segunda", "tue": "terça", "wed": "quarta", "thu": "quinta", "fri": "sexta",
-               "sat": "sábado", "sun": "domingo"}
-_DIA = r"(?:segunda|terca|quarta|quinta|sexta)s?(?:[\s-]feiras?)?|sabados?|domingos?"
-
-_HORA = re.compile(
-    r"(?:\b(?:as|a|ao|pelas)\s+)?(?:"
-    r"(?P<especial>meio[\s-]dia|meia[\s-]noite)"
-    r"|(?P<h1>\d{1,2})\s*(?::|h)\s*(?P<m1>\d{2})\b(?:\s*(?:h|hs|horas?)\b)?"
-    r"|(?P<h2>\d{1,2})\s*(?:h|hs|horas?)\b"
-    r"|(?<=as\s)(?P<h3>\d{1,2})\b(?!\s*(?:/|de\s+\w+\s+de))"
-    r")(?:\s+da\s+(?P<periodo>manha|tarde|noite))?"
-)
-_INTERVALO = re.compile(r"\b(?:a\s+)?cada\s+(?:(?P<meia>meia\s+hora)|(?:(?P<n>\d{1,3})\s*)?"
-                        r"(?P<unidade>minutos?|min|horas?|h)\b)|\bde\s+hora\s+em\s+hora\b")
-_MENSAL = re.compile(r"\b(?:todo\s+dia\s+(?P<d1>\d{1,2})(?!\s*(?::|h\b|hs\b|horas?\b))"
-                     r"(?:\s+(?:do\s+mes|de\s+cada\s+mes|de\s+todo\s+mes))?"
-                     r"|(?:todo\s+mes|mensalmente)\s*,?\s*(?:no\s+)?dia\s+(?P<d2>\d{1,2})\b)")
-_UTEIS = re.compile(r"\b(?:de\s+segunda(?:[\s-]feira)?\s+a\s+sexta(?:[\s-]feira)?|(?:todos\s+os\s+|nos\s+|em\s+)?dias\s+uteis)\b")
-_FDS = re.compile(r"\b(?:(?:nos|no|todos\s+os|todo|aos|em)\s+)?fins?\s+de\s+semana\b|\baos\s+sabados\s+e\s+domingos\b")
-_SEMANAL = re.compile(rf"\b(?:tod[ao]s?\s+(?:as\s+|os\s+)?|nas\s+|aos\s+|as\s+)(?P<dias>(?:{_DIA})"
-                      rf"(?:\s*(?:,|e)\s*(?:as\s+|os\s+|a\s+|o\s+)?(?:{_DIA}))*)\b")
-_DIARIO = re.compile(r"\b(?:todos\s+os\s+dias|todo\s+(?:santo\s+)?dia|diariamente|cada\s+dia)\b")
-_UNICA = re.compile(r"\b(?P<quando>depois\s+de\s+amanha|amanha|hoje)\b")
-# Frequência logo depois destas palavras costuma ser conteúdo ("post para todas as segundas").
-_BLOQUEIO = re.compile(r"\b(?:para|pra|de|do|da|das|dos|sobre)\s*$")
-# Texto longo é briefing: frequência nele é conteúdo ("arrumadeira todos os dias", "3 stories por dia"), não pedido
-# de rotina. Teste real (28/10/2026): o briefing da influenciadora virou rotina diária às 9h. Acima deste tamanho, só
-# vira rotina com pedido explícito: "agende/agendar" ou "crie uma rotina". Palavras soltas como "repetir" ou
-# "rotina" aparecem no conteúdo de briefings (2º teste real, 29/10/2026: "não obrigue a influenciadora a repetir
-# frases" reabriu o erro).
-LIMITE_SEM_PEDIDO = 300
-_PEDE_ROTINA = re.compile(r"\b(?:agend(?:e|ar|ou|ado|ada|amento)|(?:crie|criar|monte|configure)\s+(?:uma\s+)?rotina)\b")
+FREQUENCIAS = ("Uma vez", "Todos os dias", "De segunda a sexta", "Fins de semana", "Toda semana", "Todo mês",
+               "A cada X horas")
+DIAS_SEMANA = {"Segunda": "mon", "Terça": "tue", "Quarta": "wed", "Quinta": "thu", "Sexta": "fri",
+               "Sábado": "sat", "Domingo": "sun"}
 
 
-def _horarios(norm: str, livre: list[tuple[int, int]]) -> list[tuple[int, int, int, int]]:
-    """(hora, minuto, ini, fim) de cada horário encontrado fora dos trechos já usados."""
-    achados = []
-    for m in _HORA.finditer(norm):
-        if any(a < m.end() and m.start() < b for a, b in livre):
-            continue
-        if m["especial"]:
-            h, mi = (12, 0) if m["especial"].startswith("meio") else (0, 0)
-        else:
-            h, mi = int(m["h1"] or m["h2"] or m["h3"]), int(m["m1"] or 0)
-        if m["periodo"] in ("tarde", "noite") and h < 12:
-            h += 12
-        if h > 23 or mi > 59:
-            continue
-        achados.append((h, mi, m.start(), m.end()))
-    return achados
+class Pedido(BaseModel):
+    andar: str
+    agente: str
+    tarefa: str = Field(min_length=3)
+    frequencia: str
+    horario: str = ""      # "HH:MM"
+    data: str = ""         # "AAAA-MM-DD" (Uma vez)
+    dia_semana: str = ""   # Segunda..Domingo (Toda semana)
+    dia_mes: int = 0       # 1..31 (Todo mês)
+    intervalo_horas: int = 0
+    empresa: str = ""
 
 
 def _hhmm(h: int, m: int) -> str:
     return f"{h:02d}:{m:02d}"
 
 
-def _vocativos() -> set[str]:
-    from estado import ANDARES  # import tardio: só nomes
-    nomes = set()
-    for agentes in ANDARES.values():
-        for a in agentes.values():
-            nomes |= {_normalizar(a.nome), _normalizar(a.id.replace("_", " "))}
-    return nomes
+def _horario(texto: str) -> tuple[int, int]:
+    try:
+        valor = time.fromisoformat(texto.strip())
+    except ValueError:
+        raise ValueError("Informe o horário (HH:MM).") from None
+    return valor.hour, valor.minute
 
 
-def _limpar_tarefa(texto: str, trechos: list[tuple[int, int]]) -> str:
-    partes, pos = [], 0
-    for a, b in sorted(trechos):
-        partes.append(texto[pos:a])
-        pos = max(pos, b)
-    resto = "".join(partes) + texto[pos:]
-    resto = re.sub(r"\s+([,.;:!?])", r"\1", re.sub(r"\s+", " ", resto)).strip(" ,;:-–")
-    resto = re.sub(r"^(?:e|,)\s+|\s+(?:e|as|às)$", "", resto, flags=re.IGNORECASE).strip(" ,;:-–")
-    # Vocativo inicial com nome de agente: "Gestor de tráfego, analise..." / "Oi Copywriter: ..."
-    m = re.match(r"^(?:(?:oi|olá|ola|ei)[\s,]+)?([^,:]{2,40})[,:]\s*", resto, flags=re.IGNORECASE)
-    if m and _normalizar(m.group(1)).strip() in _vocativos():
-        resto = resto[m.end():]
-    elif _normalizar(resto).strip(" .!") in _vocativos():
-        resto = ""  # sobrou só o nome do agente
-    resto = resto.strip(" ,;:-–")
-    return resto[:1].upper() + resto[1:]
-
-
-def _bloqueado(norm: str, inicio: int) -> bool:
-    return bool(_BLOQUEIO.search(norm[:inicio]))
-
-
-def _frequencia(norm: str):
-    """(regra, descrição base, trecho, usa_horario) ou None."""
-    if (m := _INTERVALO.search(norm)) and not _bloqueado(norm, m.start()):
-        if m["meia"]:
-            minutos = 30
-        elif m["unidade"] is None:  # "de hora em hora"
-            minutos = 60
-        else:
-            n = int(m["n"] or 1)
-            minutos = n * 60 if m["unidade"].startswith("h") else n
-        minutos = max(minutos, MINIMO_MINUTOS)
-        if minutos % 60 == 0:
-            desc = "A cada hora" if minutos == 60 else f"A cada {minutos // 60} horas"
-        else:
-            desc = f"A cada {minutos} minutos"
-        return {"tipo": "intervalo", "minutos": minutos}, desc, (m.start(), m.end()), False
-    if (m := _MENSAL.search(norm)) and not _bloqueado(norm, m.start()):
-        dia = int(m["d1"] or m["d2"])
-        if not 1 <= dia <= 31:
-            return None
-        return {"tipo": "cron", "dia": dia}, f"Todo dia {dia} do mês", (m.start(), m.end()), True
-    if (m := _UTEIS.search(norm)) and not _bloqueado(norm, m.start()):
-        return {"tipo": "cron", "dia_semana": "mon-fri"}, "De segunda a sexta", (m.start(), m.end()), True
-    if (m := _FDS.search(norm)) and not _bloqueado(norm, m.start()):
-        return {"tipo": "cron", "dia_semana": "sat,sun"}, "Nos fins de semana", (m.start(), m.end()), True
-    if (m := _SEMANAL.search(norm)) and not _bloqueado(norm, m.start()):
-        dias = []
-        for nome in re.findall(r"segunda|terca|quarta|quinta|sexta|sabado|domingo", m["dias"]):
-            if _DIAS[nome] not in dias:
-                dias.append(_DIAS[nome])
-        nomes = [_NOMES_DIAS[d] for d in dias]
-        if len(nomes) == 1:
-            desc = f"{'Todo' if dias[0] in ('sat', 'sun') else 'Toda'} {nomes[0]}" + ("-feira" if dias[0] not in ("sat", "sun") else "")
-        else:
-            desc = "Toda " + ", ".join(nomes[:-1]) + " e " + nomes[-1]
-        return {"tipo": "cron", "dia_semana": ",".join(dias)}, desc, (m.start(), m.end()), True
-    if (m := _DIARIO.search(norm)) and not _bloqueado(norm, m.start()):
-        return {"tipo": "cron"}, "Todos os dias", (m.start(), m.end()), True
-    if (m := _UNICA.search(norm)) and not _bloqueado(norm, m.start()):
-        dias = {"hoje": 0, "amanha": 1}.get(m["quando"], 2)
-        return {"tipo": "data", "dias": dias}, m["quando"], (m.start(), m.end()), True
-    return None
-
-
-def interpretar(texto: str, agora: datetime | None = None) -> dict | None:
-    """{tarefa, regra, descricao} se o texto pede uma rotina; None se é uma tarefa para já."""
-    agora = (agora or datetime.now(FUSO)).astimezone(FUSO)
-    norm = _normalizar(texto)
-    achado = _frequencia(norm)
-    if not achado or (len(norm) > LIMITE_SEM_PEDIDO and not _PEDE_ROTINA.search(norm)):
-        return None
-    regra, desc, trecho, usa_horario = achado
-    trechos = [trecho]
-    if usa_horario:
-        horarios = _horarios(norm, [trecho])
-        trechos += [(a, b) for *_, a, b in horarios]
-        if regra["tipo"] == "data":
-            if not horarios:
-                return None  # "amanhã" sem horário é ambíguo demais
-            h, mi = horarios[0][:2]
-            quando = (agora + timedelta(days=regra.pop("dias"))).replace(hour=h, minute=mi, second=0, microsecond=0)
-            if quando <= agora:
-                return None  # "hoje às 8h" quando já passou: executa agora
-            rotulo = {0: "Hoje", 1: "Amanhã"}.get((quando.date() - agora.date()).days, "Depois de amanhã")
-            regra["quando"] = quando.isoformat()
-            desc = f"{rotulo} ({quando:%d/%m}) às {_hhmm(h, mi)}"
-        else:
-            if not horarios:
-                horarios = [(*HORA_PADRAO, 0, 0)]
-            minuto = horarios[0][1]
-            horas = sorted({h for h, mi, *_ in horarios if mi == minuto})
-            regra.update(hora=",".join(map(str, horas)), minuto=minuto)
-            desc += " às " + " e ".join(_hhmm(h, minuto) for h in horas)
-    tarefa = _limpar_tarefa(texto, trechos)
-    if len(re.sub(r"\W", "", tarefa)) < 3:
-        return None
-    return {"tarefa": tarefa, "regra": regra, "descricao": desc}
-
-
-def e_agendamento(texto: str) -> bool:
-    return interpretar(texto) is not None
+def regra_do_formulario(dados: Pedido, agora: datetime | None = None) -> tuple[dict, str]:
+    """(regra do gatilho, descrição) do formulário; ValueError com a mensagem para o usuário."""
+    agora = agora or datetime.now(FUSO)
+    freq = dados.frequencia
+    if freq not in FREQUENCIAS:
+        raise ValueError("Escolha a frequência.")
+    if freq == "A cada X horas":
+        if not 1 <= dados.intervalo_horas <= 168:
+            raise ValueError("Informe de quantas em quantas horas (1 a 168).")
+        n = dados.intervalo_horas
+        return {"tipo": "intervalo", "minutos": n * 60}, "A cada hora" if n == 1 else f"A cada {n} horas"
+    h, m = _horario(dados.horario)
+    if freq == "Uma vez":
+        try:
+            dia = date.fromisoformat(dados.data)
+        except ValueError:
+            raise ValueError("Informe a data.") from None
+        quando = datetime.combine(dia, time(h, m), FUSO)
+        if quando <= agora:
+            raise ValueError("A data e o horário já passaram.")
+        return {"tipo": "data", "quando": quando.isoformat()}, f"Em {quando:%d/%m/%Y} às {_hhmm(h, m)}"
+    regra = {"tipo": "cron", "hora": str(h), "minuto": m}
+    if freq == "De segunda a sexta":
+        regra["dia_semana"], desc = "mon-fri", "De segunda a sexta"
+    elif freq == "Fins de semana":
+        regra["dia_semana"], desc = "sat,sun", "Nos fins de semana"
+    elif freq == "Toda semana":
+        if dados.dia_semana not in DIAS_SEMANA:
+            raise ValueError("Escolha o dia da semana.")
+        regra["dia_semana"] = DIAS_SEMANA[dados.dia_semana]
+        desc = f"{'Todo' if dados.dia_semana in ('Sábado', 'Domingo') else 'Toda'} {dados.dia_semana.lower()}"
+    elif freq == "Todo mês":
+        if not 1 <= dados.dia_mes <= 31:
+            raise ValueError("Informe o dia do mês (1 a 31).")
+        regra["dia"], desc = dados.dia_mes, f"Todo dia {dados.dia_mes} do mês"
+    else:
+        desc = "Todos os dias"
+    return regra, f"{desc} às {_hhmm(h, m)}"
 
 
 # --- Agendador ----------------------------------------------------------------------------
@@ -281,26 +179,17 @@ def desativar(rotina_id: int) -> None:
     _desagendar(rotina_id)
 
 
-async def criar(login: str, andar: str, agente_id: str, texto: str) -> dict | None:
-    """Cria a rotina se o texto for um agendamento; None = seguir com a tarefa normal."""
-    pedido = interpretar(texto)
-    if not pedido:
-        return None
+def criar(login: str, andar: str, agente_id: str, tarefa: str, regra: dict, descricao: str,
+          empresa: str | None) -> dict:
     with _db() as db:
         cursor = db.execute(
-            "INSERT INTO agendamentos (usuario, andar, agente, tarefa, regra, descricao, criado_em) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (login, andar, agente_id, pedido["tarefa"], json.dumps(pedido["regra"]), pedido["descricao"], tarefas._agora()),
+            "INSERT INTO agendamentos (usuario, andar, agente, tarefa, regra, descricao, criado_em, empresa) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (login, andar, agente_id, tarefa, json.dumps(regra), descricao, tarefas._agora(), empresa),
         )
     linha = _obter(cursor.lastrowid)
     _agendar(linha)
-    proxima = proxima_execucao(pedido["regra"])
-    quando = f" Próxima execução: {proxima:%d/%m} às {proxima:%H:%M}." if proxima else ""
-    desc = pedido["descricao"]
-    await gerenciador.enviar_para_usuario(login, {
-        "tipo": "aviso", "andar": andar, "agente": agente_id, "titulo": "Rotina agendada", "liberar": True,
-        "texto": f"Vou executar \"{pedido['tarefa']}\" {desc[:1].lower() + desc[1:]}.{quando}",
-    })
+    proxima = proxima_execucao(regra)
     return {**_publica(linha), "proxima_execucao": proxima.isoformat() if proxima else None}
 
 
@@ -334,11 +223,12 @@ async def _executar(rotina_id: int) -> None:
         "texto": f"Executando a rotina \"{linha['tarefa']}\" ({linha['descricao']}).",
     })
     try:
+        empresa = linha["empresa"] or empresas.PADRAO
         if agente.id in AGENTES_PRODUCAO:  # PNG/MP4 seguem pela produção, como no chat
             import producao
-            await producao.enfileirar(linha["usuario"], linha["andar"], agente, linha["tarefa"])
+            await producao.enfileirar(linha["usuario"], linha["andar"], agente, linha["tarefa"], empresa=empresa)
         else:
-            await orquestrador.nova_tarefa(linha["usuario"], linha["andar"], agente, linha["tarefa"])
+            await orquestrador.nova_tarefa(linha["usuario"], linha["andar"], agente, linha["tarefa"], empresa=empresa)
     except Exception:
         log.exception("Rotina %s falhou ao iniciar.", rotina_id)
 
@@ -409,6 +299,32 @@ def listar(andar: str | None = None, agente: str | None = None, inativas: bool =
     filtro = ("WHERE " + " AND ".join(condicoes)) if condicoes else ""
     linhas = _db().execute(f"SELECT * FROM agendamentos {filtro} ORDER BY id DESC LIMIT 200", params).fetchall()
     return {"agendamentos": [_publica(linha) for linha in linhas]}
+
+
+@rotas.post("")
+def agendar(dados: Pedido, authorization: str = Header("")):
+    """Botão "Agendar tarefa" da ficha do agente: o ÚNICO jeito de criar uma rotina."""
+    import config
+    from estado import AGENTES_PRODUCAO, buscar_agente, pode_acessar
+
+    usuario = _usuario(authorization)
+    agente = buscar_agente(dados.andar, dados.agente)
+    if not agente or agente.tipo != "ia" or not pode_acessar(usuario["role"], dados.andar):
+        raise HTTPException(status_code=404, detail="Agente não encontrado")
+    if agente.id in AGENTES_PRODUCAO and usuario["sub"] != config.DONO_MAX:
+        raise HTTPException(status_code=403, detail="A produção de imagens e vídeos é exclusiva da conta do Thomas.")
+    limite = 30000 if agente.id == "gestor" else 8000  # os mesmos limites do chat (main.py)
+    tarefa = dados.tarefa.strip()
+    if len(tarefa) > limite:
+        raise HTTPException(status_code=422, detail=f"A tarefa deve ter até {limite} caracteres.")
+    empresa = dados.empresa if (empresas.valida(dados.empresa) or dados.empresa == empresas.COMUM) else None
+    if dados.andar == "marketing" and not empresa:
+        raise HTTPException(status_code=422, detail="Escolha a empresa no seletor do topo do chat antes de agendar.")
+    try:
+        regra, descricao = regra_do_formulario(dados)
+    except ValueError as erro:
+        raise HTTPException(status_code=422, detail=str(erro)) from None
+    return criar(usuario["sub"], dados.andar, agente.id, tarefa, regra, descricao, empresa)
 
 
 @rotas.delete("/{rotina_id}")

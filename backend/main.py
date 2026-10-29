@@ -292,9 +292,6 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         empresa = empresas.PADRAO
     if ensino:  # "Aprenda: ..." (só o dono)
         return await ensinar_cerebro(ws, usuario, andar, agente, texto, empresa)
-    # "...todos os dias às 8h" vira rotina agendada (vale mesmo com o agente ocupado agora).
-    if agendamentos.e_agendamento(texto) and await agendamentos.criar(usuario["sub"], andar, agente.id, texto):
-        return
     # Produção em espera neste chat (o Gestor fez uma pergunta): esta mensagem é a resposta.
     # Correção do Thomas a uma resposta recente vira observação para a revisão semanal (o pedido segue normal).
     correcoes.registrar_se_correcao(usuario["sub"], andar, agente.id, texto)

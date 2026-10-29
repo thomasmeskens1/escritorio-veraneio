@@ -11,7 +11,7 @@ let treinando = false;
 const rotinas = {}; // 'andar/agente' -> lista de GET /api/agendamentos (só as ativas)
 const errosRotinas = {};
 const cancelandoRotinas = new Set(); // ids com DELETE em andamento
-const DICA_ROTINA = 'Para agendar, escreva por exemplo: "Analise as campanhas todos os dias às 08:00".';
+const DICA_ROTINA = 'Nenhuma rotina. Para agendar, use o botão "Agendar tarefa" abaixo.';
 
 const modalPerfil = document.getElementById('modal-perfil');
 const modalRestrito = document.getElementById('modal-restrito');
@@ -95,7 +95,7 @@ function renderizarPerfil() {
   if (dados.tipo === 'ia') corpo.append(criarRotinas(chatAberto.andar, chatAberto.agente));
   const ajustes = dados.aprendizado?.ajustes;
   if (Array.isArray(ajustes) && ajustes.length) corpo.append(criarAjustesAgente(ajustes));
-  if (dados.pode_treinar) corpo.append(criarTreino(k));
+  if (dados.tipo === 'ia' || dados.pode_treinar) corpo.append(criarTreino(k, dados));
 
   modalPerfil.replaceChildren(criarAlternador(dados), corpo);
 }
@@ -177,8 +177,16 @@ function criarAjustesAgente(ajustes) {
   return bloco;
 }
 
-function criarTreino(k) {
+// "Agendar tarefa" (todo agente de IA) e "Treinar agora" (diretoria), lado a lado.
+function criarTreino(k, dados) {
   const bloco = novoEl('div', 'perfil-treino');
+  if (dados.tipo === 'ia') {
+    const agendar = novoEl('button', 'botao-secundario', 'Agendar tarefa');
+    agendar.type = 'button';
+    agendar.addEventListener('click', abrirAgendamento);
+    bloco.append(agendar);
+  }
+  if (!dados.pode_treinar) return bloco;
   const botao = novoEl('button', 'botao-secundario', treinando ? 'Treinando...' : 'Treinar agora');
   botao.type = 'button';
   botao.disabled = treinando;
@@ -296,6 +304,61 @@ function criarRotinas(andar, agente) {
   bloco.append(ul);
   if (errosRotinas[k]) bloco.append(novoEl('p', 'rotinas-nota erro', errosRotinas[k]));
   return bloco;
+}
+
+// O ÚNICO jeito de agendar (Thomas, 29/10/2026): mensagem no chat nunca vira rotina. O formulário aparece na
+// conversa; a empresa é a do seletor do topo do chat.
+const FREQUENCIAS_ROTINA = ['Uma vez', 'Todos os dias', 'De segunda a sexta', 'Fins de semana', 'Toda semana',
+  'Todo mês', 'A cada X horas'];
+
+function abrirAgendamento() {
+  if (!chatAberto || !sessao) return;
+  const { andar, agente } = chatAberto;
+  const formulario = criarFormulario({
+    titulo: 'Agendar tarefa', botao: 'Agendar',
+    campos: [
+      { nome: 'tarefa', rotulo: 'O que o agente deve fazer', tipo: 'texto_longo', obrigatorio: true },
+      { nome: 'frequencia', rotulo: 'Frequência', tipo: 'opcoes', obrigatorio: true, opcoes: FREQUENCIAS_ROTINA },
+      { nome: 'horario', rotulo: 'Horário (menos em "A cada X horas")', tipo: 'hora' },
+      { nome: 'data', rotulo: 'Data (só em "Uma vez")', tipo: 'data' },
+      { nome: 'dia_semana', rotulo: 'Dia da semana (só em "Toda semana")', tipo: 'opcoes',
+        opcoes: ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'] },
+      { nome: 'dia_mes', rotulo: 'Dia do mês (só em "Todo mês")', tipo: 'numero' },
+      { nome: 'intervalo_horas', rotulo: 'De quantas em quantas horas (só em "A cada X horas")', tipo: 'numero' },
+    ],
+  }, (respostas) => agendarTarefa(andar, agente, respostas));
+  const aviso = novoEl('div', 'msg msg-sistema');
+  aviso.append(novoEl('span', 'msg-autor', 'sistema'), formulario);
+  modalHistorico.append(aviso);
+  modalHistorico.scrollTop = modalHistorico.scrollHeight;
+}
+
+async function agendarTarefa(andar, agente, respostas) {
+  const corpo = {
+    andar, agente, tarefa: respostas.tarefa, frequencia: respostas.frequencia, horario: respostas.horario,
+    data: respostas.data, dia_semana: respostas.dia_semana, dia_mes: Number(respostas.dia_mes) || 0,
+    intervalo_horas: Number(respostas.intervalo_horas) || 0, empresa: empresaDaConversa(andar, agente),
+  };
+  let texto;
+  try {
+    const resposta = await fetch('/api/agendamentos', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${sessao.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    if (resposta.status === 401) return encerrarSessao('Sessão expirada. Entre novamente.');
+    const dados = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) {
+      const detalhe = Array.isArray(dados.detail) ? 'Confira os campos do formulário.' : dados.detail;
+      texto = `Não agendei: ${detalhe || 'tente de novo'}. Clique em "Agendar tarefa" para corrigir.`;
+    } else {
+      texto = `Rotina agendada: ${dados.descricao} (${formatarProxima(dados.proxima_execucao)}).`;
+      carregarRotinas(andar, agente);
+    }
+  } catch {
+    texto = 'Servidor indisponível. Tente agendar de novo.';
+  }
+  adicionarMensagem(andar, agente, { autor: 'sistema', texto, tipo: 'sistema' });
 }
 
 async function cancelarRotina(andar, agente, id) {

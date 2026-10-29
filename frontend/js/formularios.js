@@ -1,7 +1,7 @@
 // Formulários no chat: sempre que o sistema precisa de informação do usuário, ela é pedida num formulário curto
 // (nada fica faltando). Vêm de duas fontes: o agente escreve um bloco <<FORMULARIO>>{json}<<FIM DO FORMULARIO>> na
 // resposta, ou o próprio sistema anexa um à mensagem (ex.: escolher a empresa da conversa).
-// JSON: {"titulo": "...", "campos": [{"nome", "rotulo", "tipo": texto|texto_longo|opcoes|multipla|data|numero,
+// JSON: {"titulo": "...", "campos": [{"nome", "rotulo", "tipo": texto|texto_longo|opcoes|multipla|data|numero|hora,
 //        "opcoes": [...], "obrigatorio": true}]}. Ao enviar, as respostas vão como mensagem ao mesmo agente.
 
 const BLOCO_FORMULARIO = /<<FORMULARIO>>([\s\S]*?)<<FIM DO FORMULARIO>>/;
@@ -45,7 +45,7 @@ function campoDoFormulario(campo, indice) {
   } else {
     entrada = document.createElement('input');
     entrada.className = 'form-entrada';
-    entrada.type = { data: 'date', numero: 'number' }[campo.tipo] || 'text';
+    entrada.type = { data: 'date', numero: 'number', hora: 'time' }[campo.tipo] || 'text';
   }
   entrada.id = id;
   const grupo = novoEl('div', 'form-campo');
