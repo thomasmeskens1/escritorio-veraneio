@@ -253,6 +253,9 @@ function limparAndar() {
   elementos.forEach((e) => e.destroy());
   elementos = [];
   avatares = {};
+  pesAgentes = {};
+  Object.values(etiquetasUso).forEach((e) => e.destroy());
+  etiquetasUso = {};
   setoresAndar = {};
   setorDosAgentes = {};
   setorDestacado = null;
@@ -339,6 +342,7 @@ function renderizarAndar(nivel) {
       aoClicar: cliqueDoAgente(nivel, a.id, dados),
     });
     avatares[a.id] = avatar;
+    pesAgentes[a.id] = { ...pes, escala: escalaRotulo };
     if (agenteBloqueado(nivel, a.id)) avatar.definirAlfa?.(0.4); // agente não liberado para este usuário
     elementos.push(...avatar.objetos);
   }));
@@ -348,6 +352,24 @@ function renderizarAndar(nivel) {
   sincronizarVisitas(false, escalaRotulo);
   atualizarUI(nivel);
   aplicarPendencias();
+  aplicarEmUso();
+}
+
+// "Em uso: Francielle" embaixo do agente que outro usuário está usando (chat aberto ou pedido rodando). Thomas,
+// 29/10/2026: quem está usando um agente aparece para os demais; as conversas continuam separadas.
+let pesAgentes = {}; // id -> pés na tela (x, y) e escala do rótulo, do andar renderizado
+let etiquetasUso = {}; // id -> etiqueta "Em uso"
+
+function aplicarEmUso() {
+  Object.values(etiquetasUso).forEach((e) => e.destroy());
+  etiquetasUso = {};
+  Object.entries(pesAgentes).forEach(([id, pes]) => {
+    const outros = estadoAgentes[andarAtual]?.[id]?.em_uso || [];
+    if (!outros.length || !avatares[id]) return;
+    const trabalhando = outros.some((o) => o.acao === 'trabalhando');
+    const texto = `${trabalhando ? 'Trabalhando para' : 'Em uso:'} ${listaNomes(outros.map((o) => o.nome))}`;
+    etiquetasUso[id] = criarEtiqueta(cena, pes.x, pes.y + 22, texto, pes.escala);
+  });
 }
 
 // "!" vermelho nos agentes com algo esperando o usuário (GET /api/pendencias): formulário sem resposta ou produção
@@ -380,6 +402,7 @@ function atualizarStatus() {
     avatar.definirStatus(dadosAgente(andarAtual, id).status);
     avatar.definirAlfa?.(agenteBloqueado(andarAtual, id) ? 0.4 : 1);
   });
+  aplicarEmUso();
   atualizarSetores();
   sincronizarVisitas(true);
 }
@@ -447,6 +470,9 @@ function encerrarEscritorio() {
   cena = null;
   elementos = [];
   avatares = {};
+  pesAgentes = {};
+  Object.values(etiquetasUso).forEach((e) => e.destroy());
+  etiquetasUso = {};
   assinaturaAtual = '';
   estadoAgentes = {};
   posicoesAndar = {};

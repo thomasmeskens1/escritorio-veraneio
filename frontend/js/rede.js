@@ -54,6 +54,7 @@ function conectar() {
 
   ws.addEventListener('open', () => {
     ws.send(JSON.stringify({ tipo: 'auth', token: sessao.token }));
+    if (chatAberto) ws.send(JSON.stringify({ tipo: 'presenca', interagiu: true, chat: chatAtual() })); // reconectou
     atualizarConexao();
     recarregarHistoricos();
   });
@@ -94,7 +95,14 @@ let interagiuDesdeAviso = true;
 ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'].forEach((evento) => {
   document.addEventListener(evento, () => { interagiuDesdeAviso = true; }, { passive: true });
 });
+const chatAtual = () => (chatAberto ? `${chatAberto.andar}/${chatAberto.agente}` : '');
 setInterval(() => {
-  enviar({ tipo: 'presenca', interagiu: interagiuDesdeAviso && document.visibilityState === 'visible' });
+  enviar({ tipo: 'presenca', interagiu: interagiuDesdeAviso && document.visibilityState === 'visible', chat: chatAtual() });
   interagiuDesdeAviso = false;
 }, INTERVALO_PRESENCA);
+
+// Abriu ou fechou um chat: os outros usuários veem "Em uso: <você>" no agente na hora.
+function avisarChatAberto() {
+  interagiuDesdeAviso = true;
+  enviar({ tipo: 'presenca', interagiu: true, chat: chatAtual() });
+}

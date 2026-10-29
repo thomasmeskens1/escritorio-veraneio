@@ -17,6 +17,7 @@ class GerenciadorConexoes:
     def __init__(self) -> None:
         self.ativas: dict[WebSocket, dict] = {}  # websocket -> payload do token
         self.interacao: dict[WebSocket, float] = {}  # websocket -> última interação do usuário (time.time())
+        self.chats: dict[WebSocket, str] = {}  # websocket -> "andar/agente" do chat aberto (quem está usando quem)
 
     def conectar(self, ws: WebSocket, usuario: dict) -> None:
         self.ativas[ws] = usuario
@@ -25,11 +26,30 @@ class GerenciadorConexoes:
     def desconectar(self, ws: WebSocket) -> None:
         self.ativas.pop(ws, None)
         self.interacao.pop(ws, None)
+        self.chats.pop(ws, None)
 
-    def registrar_presenca(self, ws: WebSocket, interagiu: bool) -> None:
-        """Aviso do navegador (ou um pedido enviado): `interagiu` = mexeu no escritório com a aba visível."""
-        if interagiu and ws in self.ativas:
+    def registrar_presenca(self, ws: WebSocket, interagiu: bool, chat: str | None = None) -> bool:
+        """Aviso do navegador (ou um pedido enviado): `interagiu` = mexeu no escritório com a aba visível; `chat` =
+        "andar/agente" aberto ("" = nenhum; None = não informado). Devolve True se o chat aberto mudou."""
+        if ws not in self.ativas:
+            return False
+        if interagiu:
             self.interacao[ws] = time.time()
+        if chat is None or self.chats.get(ws, "") == chat:
+            return False
+        if chat:
+            self.chats[ws] = chat
+        else:
+            self.chats.pop(ws, None)
+        return True
+
+    def conversando(self) -> dict[str, set[str]]:
+        """"andar/agente" -> logins com o chat dele aberto."""
+        quem: dict[str, set[str]] = {}
+        for ws, chat in self.chats.items():
+            if ws in self.ativas:
+                quem.setdefault(chat, set()).add(self.ativas[ws]["sub"])
+        return quem
 
     def status_de(self, login: str) -> str:
         """"ativo", "ausente" ou "offline"."""

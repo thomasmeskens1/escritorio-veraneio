@@ -196,7 +196,10 @@ async def websocket(ws: WebSocket):
     except WebSocketDisconnect:
         pass
     finally:
+        tinha_chat = ws in gerenciador.chats
         gerenciador.desconectar(ws)
+        if tinha_chat:
+            await atividade.transmitir_estado()
 
 
 async def autenticar_ws(ws: WebSocket) -> dict | None:
@@ -232,8 +235,11 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         msg = json.loads(bruto)
     except ValueError:
         return await erro("JSON inválido.")
-    if isinstance(msg, dict) and msg.get("tipo") == "presenca":  # status ativo/ausente (painel de usuários)
-        return gerenciador.registrar_presenca(ws, bool(msg.get("interagiu")))
+    if isinstance(msg, dict) and msg.get("tipo") == "presenca":  # status ativo/ausente e chat aberto
+        chat = msg.get("chat")
+        if gerenciador.registrar_presenca(ws, bool(msg.get("interagiu")), str(chat) if chat is not None else None):
+            await atividade.transmitir_estado()  # "Em uso: ..." aparece/some para os outros na hora
+        return
     if not isinstance(msg, dict) or msg.get("tipo") != "mensagem":
         return await erro("Tipo de mensagem desconhecido.")
     gerenciador.registrar_presenca(ws, True)  # enviar um pedido é interação

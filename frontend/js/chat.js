@@ -31,7 +31,9 @@ const urlsAnexo = {}; // id do anexo -> Promise<blob URL> (miniaturas no histór
 let enviandoAnexos = false;
 
 const chave = (andar, agente) => `${andar}/${agente}`;
-const AGENTES_COM_FILA = new Set(['criador_imagens', 'editor_video']); // mesma lista de AGENTES_PRODUCAO
+// "Ana", "Ana e Bia", "Ana, Bia e Caio".
+const listaNomes = (nomes) => (nomes.length < 2 ? nomes.join('')
+  : `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}`);
 
 const tamanhoLegivel = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
@@ -208,15 +210,18 @@ function atualizarChat() {
   if (!chatAberto) return;
   const { andar, agente } = chatAberto;
   const dados = dadosAgente(andar, agente);
-  // Produção (Criador de Imagens, Editor de Vídeo) tem fila no Max: trabalhando não impede pedir outra peça/ajuste.
-  const comFila = AGENTES_COM_FILA.has(agente);
-  const ocupado = (dados.status === 'trabalhando' && !comFila) || pendentes.has(chave(andar, agente));
+  // Trava só pelo SEU pedido em andamento: o agente trabalhando para outro usuário não bloqueia você (cada pedido
+  // roda separado, com conversa própria). Antes, o chat de B ficava em "pensando..." pelo pedido de A.
+  const ocupado = pendentes.has(chave(andar, agente));
   const online = conectado();
   const restrito = producaoRestrita(andar, agente);
   const carregando = carregandoHistorico.has(chave(andar, agente));
 
   document.getElementById('modal-nome').textContent = dados.nome;
-  document.getElementById('modal-funcao').textContent = dados.funcao || ANDARES[andar].nome;
+  const outros = estadoAgentes[andar]?.[agente]?.em_uso || [];
+  document.getElementById('modal-funcao').textContent = outros.length
+    ? `${listaNomes(outros.map((o) => o.nome))} também ${outros.length > 1 ? 'estão' : 'está'} usando agora · conversas separadas`
+    : (dados.funcao || ANDARES[andar].nome);
   const status = document.getElementById('modal-status');
   status.className = `status status-${dados.status}`;
   status.title = ROTULOS_STATUS[dados.status];
@@ -271,6 +276,7 @@ function abrirChat(andar, agente) {
   renderizarHistorico(andar, agente); // abre na última interação (rolada até o fim)
   carregarPerfil(andar, agente);
   acompanharAndamento(andar, agente);
+  avisarChatAberto(); // os outros veem "Em uso: <você>" neste agente
   atualizarChat();
   if (!modalInput.disabled) modalInput.focus();
 }
@@ -346,6 +352,7 @@ function fecharChat() {
   chatAberto = null;
   modal.classList.remove('aberto');
   pararAndamento();
+  avisarChatAberto(); // some o "Em uso" para os outros
 }
 
 function limparChat() {

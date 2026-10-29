@@ -179,16 +179,38 @@ def andar_do_agente(agente_id: str) -> str | None:
     return next((andar for andar, agentes in ANDARES.items() if agente_id in agentes), None)
 
 
+def _em_uso(login: str) -> dict[str, list[dict]]:
+    """Quem MAIS está usando cada agente (Thomas, 29/10/2026): com o chat aberto ou com um pedido rodando.
+    "andar/agente" -> [{"nome", "acao": "trabalhando" | "conversando"}], sem o próprio usuário."""
+    import tarefas
+    from auth import carregar_usuarios
+    from conexoes import gerenciador
+
+    usuarios = carregar_usuarios()
+    nome = lambda l: usuarios.get(l, {}).get("nome", l.split("@")[0])  # noqa: E731
+    uso: dict[str, dict[str, str]] = {}
+    for linha in tarefas._db().execute("SELECT DISTINCT andar, agente, usuario FROM tarefas WHERE status IN "
+                                       "('executando', 'producao', 'produzindo')"):
+        if linha["usuario"] != login:
+            uso.setdefault(f"{linha['andar']}/{linha['agente']}", {})[linha["usuario"]] = "trabalhando"
+    for chat, logins in gerenciador.conversando().items():
+        for outro in logins - {login}:
+            uso.setdefault(chat, {}).setdefault(outro, "conversando")
+    return {chat: [{"nome": nome(l), "acao": acao} for l, acao in sorted(quem.items())] for chat, quem in uso.items()}
+
+
 def snapshot(usuario: dict) -> dict:
     """Mensagem de estado. Andar sem nenhum agente liberado para o usuário leva só os estagiários (para as visitas
     deles aparecerem nos outros andares). Agente não liberado vai com "bloqueado" (aparece apagado, sem chat)."""
     import acesso  # import tardio: acesso depende do estado
 
+    em_uso = _em_uso(usuario.get("sub", ""))
     return {
         "tipo": "estado",
         "andares": {
             andar: {i: {**a.model_dump(mode="json", exclude=_SO_NO_DETALHE),
-                        "bloqueado": a.tipo != "estagiario" and not acesso.pode_usar(usuario, andar, i)}
+                        "bloqueado": a.tipo != "estagiario" and not acesso.pode_usar(usuario, andar, i),
+                        "em_uso": em_uso.get(f"{andar}/{i}", [])}
                     for i, a in agentes.items()
                     if acesso.pode_ver_andar(usuario, andar) or a.tipo == "estagiario"}
             for andar, agentes in ANDARES.items()
