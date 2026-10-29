@@ -9,7 +9,11 @@ const BLOCO_FORMULARIO = /<<FORMULARIO>>([\s\S]*?)<<FIM DO FORMULARIO>>/;
 // {texto sem o bloco, formulario | null}. Bloco malformado: some do texto e não vira formulário.
 function extrairFormulario(texto) {
   const achado = BLOCO_FORMULARIO.exec(String(texto || ''));
-  if (!achado) return { texto, formulario: null };
+  if (!achado) {
+    // Bloco cortado pelo modelo (sem o fechamento): some do texto em vez de aparecer cru no chat.
+    const inicio = String(texto || '').indexOf('<<FORMULARIO>>');
+    return { texto: inicio >= 0 ? String(texto).slice(0, inicio).trim() : texto, formulario: null };
+  }
   let formulario = null;
   try {
     const dados = JSON.parse(achado[1].trim());

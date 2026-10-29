@@ -5,7 +5,6 @@ Demais: pedido recebido → modelos tentados → consultas ao Cérebro → fila/
 Status de cada etapa: concluida | andamento | pendente | falhou.
 """
 
-import acesso
 import json
 import re
 from collections import Counter
@@ -13,6 +12,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Header, HTTPException
 
+import acesso
 import encaminhamento
 import tarefas
 from api_painel import _filtro, _nome_do_agente, _usuario

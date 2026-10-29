@@ -1,10 +1,11 @@
 """Memória do chat: conversa de cada usuário com um agente, reconstruída a partir das tarefas salvas."""
 
-import acesso
 import json
+import re
 
 from fastapi import APIRouter, Header, HTTPException
 
+import acesso
 import auth
 import encaminhamento
 import producao
@@ -91,6 +92,22 @@ def _limpo_ate(usuario: str, andar: str, agente_id: str) -> int:
     return linha[0] or 0
 
 
+BLOCO_FORMULARIO = re.compile(r"<<FORMULARIO>>(.*?)<<FIM DO FORMULARIO>>", re.S)
+
+
+def _tem_formulario(resposta: str | None) -> bool:
+    """O mesmo critério do navegador (js/formularios.js): bloco completo, JSON válido e com campos. Teste real
+    (29/10/2026): o formulário da #83 veio cortado pelo modelo, o navegador não o mostrava e o "!" ficava travado."""
+    achado = BLOCO_FORMULARIO.search(resposta or "")
+    if not achado:
+        return False
+    try:
+        dados = json.loads(achado.group(1).strip())
+    except ValueError:
+        return False
+    return isinstance(dados, dict) and isinstance(dados.get("campos"), list) and bool(dados["campos"])
+
+
 def pendencias(usuario: str) -> list[dict]:
     """Chats com algo esperando o usuário: formulário sem resposta (a última mensagem do chat pede um formulário)
     ou produção em espera de decisão. Vira o "!" vermelho no agente (Thomas, 29/10/2026).
@@ -112,7 +129,7 @@ def pendencias(usuario: str) -> list[dict]:
             vistos |= chats
             continue
         vistos |= chats
-        if linha["status"] == "concluida" and "<<FORMULARIO>>" in (linha["resposta"] or ""):
+        if linha["status"] == "concluida" and _tem_formulario(linha["resposta"]):
             # Chat limpo depois da tarefa: o formulário saiu da tela e não conta mais como pendência (teste real,
             # 29/10/2026: o "!" do Gestor de Tráfego apontava para um formulário que não aparecia no chat).
             for andar, agente in [c for c in chats if _limpo_ate(usuario, *c) < linha["id"]]:

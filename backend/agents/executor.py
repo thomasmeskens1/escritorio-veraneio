@@ -306,6 +306,10 @@ FORMULARIO_ABERTO = ('<<FORMULARIO>>{"titulo": "Sua resposta", "campos": [{"nome
 
 
 def _garantir_formulario(texto: str) -> str:
+    # Bloco cortado (o modelo parou no meio, sem o fechamento): sai do texto e entra o campo aberto de resposta.
+    # Teste real (29/10/2026, #83): o formulário cortado aparecia cru no chat e não abria o pop-up.
+    if "<<FORMULARIO>>" in texto and "<<FIM DO FORMULARIO>>" not in texto:
+        return f"{texto[:texto.index('<<FORMULARIO>>')].rstrip()}\n\n{FORMULARIO_ABERTO}"
     if "<<FORMULARIO>>" in texto or not PEDE_FORMULARIO.search(texto):
         return texto
     return f"{texto}\n\n{FORMULARIO_ABERTO}"

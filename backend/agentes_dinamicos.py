@@ -4,7 +4,6 @@ O agente nasce com status "construindo", vira "disponivel" após alguns segundos
 reinícios (`carregar()` na subida). A persona vai para `PERFIS`, então o executor o atende como os demais.
 """
 
-import acesso
 import asyncio
 import concurrent.futures
 import json
@@ -16,6 +15,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import ValidationError
 
+import acesso
 import atividade
 import tarefas
 from agents.perfis import PERFIS

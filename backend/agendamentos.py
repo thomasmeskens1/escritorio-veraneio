@@ -6,7 +6,6 @@ nunca agenda nada. No horário, a tarefa segue o pipeline normal (orquestrador.n
 resposta no chat, histórico e registro.
 """
 
-import acesso
 import asyncio
 import json
 import logging
@@ -20,6 +19,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
+import acesso
 import empresas
 import tarefas
 from auth import validar_token

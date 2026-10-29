@@ -1,6 +1,5 @@
 """API do Escritório Veraneio: login, WebSocket em tempo real, painel de tarefas e frontend estático."""
 
-import acesso
 import asyncio
 import hashlib
 import json
@@ -12,6 +11,7 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+import acesso
 import agendamentos
 import andamento
 import anexos
