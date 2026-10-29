@@ -290,9 +290,8 @@ def listar(andar: str | None = None, agente: str | None = None, inativas: bool =
            authorization: str = Header("")):
     usuario = _usuario(authorization)
     condicoes, params = ([] if inativas else ["ativo = 1"]), []
-    if usuario["role"] != "diretoria":  # funcionário vê só as próprias
-        condicoes.append("usuario = ?")
-        params.append(usuario["sub"])
+    condicoes.append("usuario = ?")  # rotinas são do próprio usuário (a ficha do agente é individual)
+    params.append(usuario["sub"])
     for coluna, valor in (("andar", andar), ("agente", agente)):
         if valor:
             condicoes.append(f"{coluna} = ?")

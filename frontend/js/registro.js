@@ -19,6 +19,12 @@ const ROTULOS_EVENTO = {
 const janelaRegistro = document.getElementById('registro');
 const registroConteudo = document.getElementById('registro-conteudo');
 const registroAtualizado = document.getElementById('registro-atualizado');
+// Master (Thomas, 29/10/2026): vê o histórico de todos aqui, com filtro por usuário e agente e a conversa completa
+// de cada pedido. No chat de cada agente, cada um vê só as próprias conversas.
+const filtrosRegistro = document.getElementById('registro-filtros');
+const filtroUsuario = document.getElementById('registro-usuario');
+const filtroAgente = document.getElementById('registro-agente');
+const conversasCarregadas = {}; // tarefa_id -> {pedido, resposta, ...}
 
 let registroAberto = false;
 let timerRegistro = null;
@@ -62,6 +68,7 @@ function abrirRegistro() {
   registroAberto = true;
   janelaRegistro.classList.add('aberto');
   if (!registroConteudo.childElementCount) registroConteudo.append(novoEl('p', 'painel-aviso', 'Carregando registro...'));
+  prepararFiltrosRegistro();
   carregarRegistro();
   clearInterval(timerRegistro);
   timerRegistro = setInterval(carregarRegistro, INTERVALO_REGISTRO);
@@ -84,14 +91,44 @@ function limparRegistro() {
   registroAtualizado.textContent = '';
   assinaturaRegistro = '';
   registrosExpandidos.clear();
+  [filtroUsuario, filtroAgente].forEach((s) => { s.length = 1; s.value = ''; }); // só "Todos"
+  Object.keys(conversasCarregadas).forEach((k) => delete conversasCarregadas[k]);
 }
+
+// Filtros do master: usuários (painel de usuários) e agentes (estado do escritório). Montados uma vez por abertura.
+async function prepararFiltrosRegistro() {
+  filtrosRegistro.hidden = !sessao?.master;
+  if (!sessao?.master || filtroUsuario.options.length > 1) return;
+  try {
+    const resposta = await fetch('/api/usuarios', { headers: { Authorization: `Bearer ${sessao.token}` } });
+    if (!resposta.ok) return;
+    const dados = await resposta.json();
+    dados.usuarios.forEach((u) => filtroUsuario.append(new Option(u.nome, u.login)));
+    const vistos = new Set();
+    dados.agentes.forEach((a) => {
+      if (vistos.has(a.id)) return;
+      vistos.add(a.id);
+      filtroAgente.append(new Option(a.nome, a.id));
+    });
+  } catch {
+    // sem filtros: o registro continua mostrando tudo
+  }
+}
+
+[filtroUsuario, filtroAgente].forEach((s) => s.addEventListener('change', () => {
+  assinaturaRegistro = '';
+  carregarRegistro();
+}));
 
 // ---------- Dados ----------
 async function carregarRegistro() {
   if (!registroAberto || carregandoRegistro || !sessao) return;
   carregandoRegistro = true;
   try {
-    const resposta = await fetch(`/api/registro?limite=${LIMITE_REGISTRO}`, {
+    const filtros = new URLSearchParams({ limite: LIMITE_REGISTRO });
+    if (sessao.master && filtroUsuario.value) filtros.set('usuario_filtro', filtroUsuario.value);
+    if (sessao.master && filtroAgente.value) filtros.set('agente', filtroAgente.value);
+    const resposta = await fetch(`/api/registro?${filtros}`, {
       headers: { Authorization: `Bearer ${sessao.token}` },
     });
     if (resposta.status === 401) {
@@ -199,7 +236,7 @@ function criarDetalheRegistro(item) {
   );
   if (item.custo_usd > 0) fatos.append(fato('Custo', moedaUsd(item.custo_usd, 4)));
   if (item.modelo) fatos.append(fato('Modelo', novoEl('span', 'reg-modelo-completo', item.modelo)));
-  caixa.append(fatos);
+  caixa.append(fatos, criarConversaRegistro(item));
 
   const eventos = Array.isArray(item.eventos) ? item.eventos : [];
   caixa.append(novoEl('h4', null, 'Linha do tempo'));
@@ -224,6 +261,41 @@ function criarDetalheRegistro(item) {
   });
   caixa.append(linhaTempo);
   return caixa;
+}
+
+// Pedido e resposta completos, sob demanda (o texto pode ser longo). Fica guardado enquanto a página estiver aberta.
+function criarConversaRegistro(item) {
+  const bloco = novoEl('div', 'reg-conversa');
+  const id = item.tarefa_id;
+  const mostrar = (c) => {
+    const pedido = novoEl('div', 'reg-mensagem reg-pedido');
+    pedido.append(novoEl('strong', null, `Pedido de ${item.usuario_nome || c.usuario}`), novoEl('p', null, c.pedido));
+    const resposta = novoEl('div', 'reg-mensagem reg-resposta');
+    const texto = c.resposta ? textoNatural(extrairFormulario(c.resposta).texto) : (c.motivo || 'Sem resposta ainda.');
+    resposta.append(novoEl('strong', null, `Resposta de ${c.agente}`), novoEl('p', null, texto));
+    bloco.replaceChildren(pedido, resposta);
+  };
+  if (conversasCarregadas[id]) {
+    mostrar(conversasCarregadas[id]);
+    return bloco;
+  }
+  const botao = novoEl('button', 'botao-secundario', 'Ver conversa completa');
+  botao.type = 'button';
+  botao.addEventListener('click', async () => {
+    botao.disabled = true;
+    botao.textContent = 'Carregando...';
+    try {
+      const resposta = await fetch(`/api/registro/${id}/conversa`, { headers: { Authorization: `Bearer ${sessao.token}` } });
+      if (!resposta.ok) throw new Error();
+      conversasCarregadas[id] = await resposta.json();
+      mostrar(conversasCarregadas[id]);
+    } catch {
+      botao.disabled = false;
+      botao.textContent = 'Não carregou. Tentar de novo';
+    }
+  });
+  bloco.append(botao);
+  return bloco;
 }
 
 document.getElementById('registro-fechar').addEventListener('click', fecharRegistro);

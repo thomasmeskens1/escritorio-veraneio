@@ -310,3 +310,62 @@
     display: none;
   }
 }
+
+/* Filtros do master e conversa completa de cada pedido */
+.registro-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px 16px 0;
+}
+
+.registro-filtros label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: #adb5bd;
+}
+
+.registro-filtros .form-entrada {
+  width: auto;
+  min-width: 160px;
+}
+
+.reg-conversa {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.reg-mensagem {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #1b1e24;
+  border: 1px solid #343a40;
+}
+
+.reg-mensagem strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #868e96;
+  font-size: 0.72rem;
+}
+
+.reg-mensagem p {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 0.8rem;
+  color: #dee2e6;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.reg-pedido {
+  border-left: 3px solid #f4a261;
+}
+
+.reg-resposta {
+  border-left: 3px solid #2a9d8f;
+}

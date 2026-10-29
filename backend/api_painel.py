@@ -21,8 +21,9 @@ def _usuario(authorization: str) -> dict:
 
 
 def _filtro(usuario: dict) -> str | None:
-    """Diretoria vê tudo; os demais, só as próprias tarefas."""
-    return None if usuario["role"] == "diretoria" else usuario["sub"]
+    """Só o master vê as tarefas de todos (Registro de atividade e painel do Despachante); os demais, inclusive a
+    diretoria, só as próprias. Thomas, 29/10/2026: o histórico é único por usuário."""
+    return None if usuario.get("master") else usuario["sub"]
 
 
 def _nome_do_agente(agente_id: str) -> str:
@@ -115,13 +116,24 @@ async def treinar_agora(authorization: str = Header("")):
 
 
 @rotas.get("/registro")
-def registro(limite: int = 50, authorization: str = Header("")):
-    """Registro de atividade: uma linha por pedido, com a linha do tempo dos eventos."""
+def registro(limite: int = 50, usuario_filtro: str = "", agente: str = "", authorization: str = Header("")):
+    """Registro de atividade: uma linha por pedido, com a linha do tempo dos eventos. O master vê todos e filtra por
+    usuário (`usuario_filtro`) e por agente; os demais veem só os próprios pedidos."""
     usuario = _usuario(authorization)
-    linhas = tarefas.listar(_filtro(usuario), min(max(limite, 1), 200))
+    dono = _filtro(usuario) or (usuario_filtro.strip().lower() or None)
+    condicoes, parametros = [], []
+    if dono:
+        condicoes.append("usuario = ?")
+        parametros.append(dono)
+    if agente:
+        condicoes.append("agente = ?")
+        parametros.append(agente)
+    onde = f"WHERE {' AND '.join(condicoes)} " if condicoes else ""
+    linhas = tarefas._db().execute(f"SELECT * FROM tarefas {onde}ORDER BY id DESC LIMIT ?",
+                                   (*parametros, min(max(limite, 1), 200))).fetchall()
     eventos = tarefas.eventos_de([l["id"] for l in linhas])
     nomes = {}
-    if usuario["role"] == "diretoria":
+    if usuario.get("master"):
         from auth import carregar_usuarios
         nomes = {login: dados["nome"] for login, dados in carregar_usuarios().items()}
 
@@ -140,3 +152,16 @@ def registro(limite: int = 50, authorization: str = Header("")):
                          "detalhe": e["detalhe"]} for e in eventos_tarefa],
         })
     return {"itens": itens}
+
+
+@rotas.get("/registro/{tarefa_id}/conversa")
+def conversa(tarefa_id: int, authorization: str = Header("")):
+    """Pedido e resposta completos de uma tarefa (botão "Ver conversa completa" do Registro): o próprio usuário ou o
+    master. No chat de cada agente, cada um continua vendo só as próprias conversas."""
+    usuario = _usuario(authorization)
+    linha = tarefas.obter(tarefa_id)
+    if not linha or (linha["usuario"] != usuario["sub"] and not usuario.get("master")):
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada")
+    return {"tarefa_id": tarefa_id, "usuario": linha["usuario"], "agente": _nome_do_agente(linha["agente"]),
+            "empresa": linha["empresa"], "pedido": linha["texto"], "resposta": linha["resposta"] or "",
+            "status": linha["status"], "motivo": linha["motivo"] or "", "em": linha["criada_em"]}

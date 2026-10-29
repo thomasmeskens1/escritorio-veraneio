@@ -15,7 +15,7 @@ from fastapi import APIRouter, Header, HTTPException
 import acesso
 import encaminhamento
 import tarefas
-from api_painel import _filtro, _nome_do_agente, _usuario
+from api_painel import _nome_do_agente, _usuario
 from estado import buscar_agente
 
 rotas = APIRouter(prefix="/api")
@@ -255,7 +255,7 @@ def andamento(andar: str, agente_id: str, authorization: str = Header("")):
     usuario = _usuario(authorization)
     if not buscar_agente(andar, agente_id) or not acesso.pode_ver_andar(usuario, andar):
         raise HTTPException(status_code=404, detail="Agente não encontrado")
-    filtro = _filtro(usuario)
+    filtro = usuario["sub"]  # o andamento do chat é sempre do próprio usuário (nem o master vê o dos outros aqui)
     marcadores = ",".join("?" * len(ATIVAS))
     # Também a tarefa que nasceu neste chat e roda em outro agente (Gestor, produção no Max).
     vindas = list(encaminhamento.tarefas_do_chat(andar, agente_id))
