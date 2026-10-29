@@ -274,6 +274,19 @@ INSTRUCOES = (f"Responda em português do Brasil, de forma objetiva e acionável
 AGENTES_ESCOLA = {"recepcionista", "professor"}
 
 
+def _quem_faz_o_que() -> str:
+    """Os agentes de hoje, direto do cadastro (estado.ANDARES): a escola nunca fica desatualizada. Teste real
+    (29/10/2026): pedido ao Professor "como pedir ao Social Media" voltou com exemplo de legenda, que é do Copywriter."""
+    linhas = [f"- {a.nome} ({andar}, setor {a.setor}): {a.funcao}. {a.descricao} Exemplo de pedido: \"{a.exemplo}\""
+              for andar, agentes in ANDARES.items() for a in agentes.values()
+              if a.tipo == "ia" and a.exemplo and not a.id.startswith("estagiario")]
+    return ("AGENTES DO ESCRITÓRIO HOJE (quem faz o quê):\n" + "\n".join(linhas) + "\n"
+            "Ao ensinar a pedir algo a um agente, o exemplo tem de estar 100% dentro da função DESSE agente (lista "
+            "acima): ao Social Media se pede calendário, grade, pautas e planejamento; legenda isolada é do "
+            "Copywriter; peça completa é do Gestor. Se o que o usuário quer é trabalho de outro agente, diga qual é "
+            "o agente certo e mostre o pedido para ele.")
+
+
 def _contexto_construtor() -> str:
     from agentes_dinamicos import setores_com_vagas  # import tardio: o módulo depende de PERFIS
 
@@ -366,7 +379,7 @@ def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: st
     if (regras := correcoes.regras_para(agente_id)):  # correções do Thomas aprovadas como regra
         partes.append(regras)
     if agente_id in AGENTES_ESCOLA:
-        partes.append(f"Baseie-se apenas neste manual da ferramenta:\n{MANUAL_ESCOLA}")
+        partes.append(f"Baseie-se apenas neste manual da ferramenta:\n{MANUAL_ESCOLA}\n\n{_quem_faz_o_que()}")
     if agente_id == "construtor":
         partes.append(_contexto_construtor())
     if agente_id == "analista_tendencias":  # datas calculadas: o modelo não inventa a data do Carnaval

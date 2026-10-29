@@ -149,8 +149,12 @@ def _ref_do_link(link: str) -> tuple[str, str] | None:
     """(fonte_ref, empresa) do documento do site cuja linha "Fonte:" traz este link."""
     caminho = re.sub(r"^https?://(?:www\.)?", "", link.strip().rstrip("/.,;")).split("?")[0]
     with base._trava:
-        linha = base.db().execute("SELECT fonte_ref, empresa FROM conhecimento WHERE ativo = 1 AND conteudo LIKE ? "
-                                  "ORDER BY id LIMIT 1", (f"%Fonte: %{caminho}%",)).fetchone()
+        linhas = base.db().execute("SELECT fonte_ref, empresa, conteudo FROM conhecimento WHERE ativo = 1 AND "
+                                   "conteudo LIKE ? ORDER BY id LIMIT 50", (f"%Fonte: %{caminho}%",)).fetchall()
+    # Só a página exata: "casaveraneio.com/lodges" (a listagem) não pode casar com ".../lodges/lodge-112".
+    # Teste real (29/10/2026): a listagem casou com uma ficha "lodge-orlando" e o número virou erro em todo modelo.
+    exato = re.compile(rf"Fonte: \S*{re.escape(caminho)}(?![\w/-])")
+    linha = next((l for l in linhas if exato.search(l["conteudo"])), None)
     return (linha["fonte_ref"], linha["empresa"]) if linha else None
 
 
@@ -173,8 +177,8 @@ def fichas_citadas(texto: str, empresa: str = "casa_veraneio") -> str:
     limite = TAMANHO_FICHA if len(numeros) <= 3 else TAMANHO_FICHA_CURTA
     linhas, cobertos, outras = [], set(), []
     for link in links:
-        if not (achado := _ref_do_link(link)):
-            continue
+        if not (achado := _ref_do_link(link)) or not _numero_da_ref(achado[0]).isdigit():
+            continue  # sem ficha, ou página sem número de imóvel (ex.: lodge-orlando, fora da busca)
         ref, dona = achado
         if dona == empresa:
             cobertos.add(_numero_da_ref(ref))

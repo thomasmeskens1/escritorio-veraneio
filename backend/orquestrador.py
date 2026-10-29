@@ -8,6 +8,8 @@ import asyncio
 import json
 import logging
 import time
+import traceback
+from pathlib import Path
 
 import aprendizado
 import atividade
@@ -65,6 +67,32 @@ def _em_segundo_plano(corrotina) -> None:
     execucao.add_done_callback(_em_andamento.discard)
 
 
+_BACKEND = str(Path(__file__).resolve().parent).replace("\\", "/")
+
+
+class ErroInterno(Exception):
+    """Erro do código do escritório (não do modelo): todos os modelos falhariam igual."""
+
+
+def _erro_nosso(erro: BaseException) -> bool:
+    """O erro nasceu no nosso código (o ponto mais fundo da pilha está no backend), fora do executor, que recusa de
+    propósito as respostas ruins do modelo. Teste real (29/10/2026): um link da listagem de Lodges virou
+    "invalid literal for int(): 'orlando'" antes de chamar o modelo, contou como falha de cada modelo da rota e
+    afastou todos por 7 dias, inclusive o Max."""
+    quadros = traceback.extract_tb(erro.__traceback__)
+    if not quadros:
+        return False
+    arquivo = quadros[-1].filename.replace("\\", "/")
+    return "/site-packages/" not in arquivo and arquivo.endswith(".py") and not arquivo.endswith(
+        "agents/executor.py") and arquivo.startswith(_BACKEND)
+
+
+async def _falhar_interno(tarefa_id: int, erro: Exception) -> None:
+    _falhar(tarefa_id, "Erro interno do escritório ao preparar o pedido (não é do modelo de IA). Ele ficou registrado "
+                       f"para correção; tente reformular o pedido. Detalhe: {str(erro)[:150]}")
+    await _entregar(tarefas.obter(tarefa_id))
+
+
 async def _tentar(tarefa, agente: Agente, etapa: Etapa):
     """Uma tentativa num modelo, com o histórico da conversa. Devolve (resultado ou None, erro)."""
     from agents.executor import LocalOcupado, MaxOcupado, executar  # import tardio: CrewAI é pesado
@@ -87,6 +115,10 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
             saude.registrar_falha(etapa.modelo, erro)  # lento agora: outro modelo assume por 15 min
     except Exception as e:
         erro = str(e)
+        if _erro_nosso(e):  # não é do modelo: não afasta ninguém e não adianta tentar os outros
+            log.exception("Tarefa %s: erro interno antes/fora do modelo.", tarefa["id"])
+            tarefas.registrar_evento(tarefa["id"], "falha_modelo", agente.id, etapa.modelo, f"erro interno: {erro}")
+            raise ErroInterno(erro) from e
         saude.registrar_falha(etapa.modelo, erro)  # sai da rota por um tempo; falha recorrente afasta por 7 dias
     finally:
         tarefas.registrar_tentativa(tarefa["id"], time.monotonic() - inicio)
@@ -115,9 +147,12 @@ async def _executar_imediata(tarefa_id: int, agente: Agente, dificuldade: Dificu
             juntos = "\n\n".join(filter(None, [tarefa["contexto_anexos"], contexto]))  # mantém o contexto extra
             tarefas.atualizar(tarefa_id, contexto_anexos=juntos or None)
             tarefa = tarefas.obter(tarefa_id)
-        if await _executar_etapas(tarefa, agente, _com_max(etapas_imediatas(dificuldade, agente.id),
-                                                            tarefa["usuario"], agente.id)):
-            return
+        try:
+            if await _executar_etapas(tarefa, agente, _com_max(etapas_imediatas(dificuldade, agente.id),
+                                                                tarefa["usuario"], agente.id)):
+                return
+        except ErroInterno as erro:
+            return await _falhar_interno(tarefa_id, erro)
         destino = "fila do Claude" if etapa_fila(dificuldade) else "fila de contingência (gratuitos e local)"
         tarefas.atualizar(tarefa_id, status="adiada", motivo="Os modelos imediatos não concluíram a tarefa a tempo.")
         tarefas.registrar_evento(tarefa_id, "adiada", agente.id, detalhe=destino)
@@ -339,6 +374,9 @@ async def _processar_proxima() -> int:
         await atividade.ocupar(agente.id)
         try:
             concluiu = await _executar_etapas(linha, agente, etapas)
+        except ErroInterno as erro:
+            await _falhar_interno(linha["id"], erro)
+            return 0
         finally:
             await atividade.liberar(agente.id)
 
