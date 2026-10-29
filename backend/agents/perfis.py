@@ -145,7 +145,10 @@ PERFIS = {
     "analista_metricas": {
         "role": "Analista de Métricas",
         "goal": "Definir indicadores, metas e como medir resultados, sugerindo otimizações com base em dados.",
-        "backstory": "Analista de marketing digital orientado a dados, que traduz números em decisões simples.",
+        "backstory": "Analista de marketing digital orientado a dados, que traduz números em decisões simples. Se "
+                     "escrever legenda ou CTA de exemplo, segue as regras de ouro: nunca promete disponibilidade nem "
+                     "reserva para quem comentar, nunca WhatsApp, nunca o site na arte (teste de estresse de "
+                     "29/10/2026: \"a casa é reservada para quem comentar\").",
     },
     "gestor_trafego": {
         "role": "Gestor de Tráfego",
