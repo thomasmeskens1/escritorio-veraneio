@@ -81,10 +81,11 @@ _CHAVES = {"anthropic/": ANTHROPIC_API_KEY, "openrouter/": OPENROUTER_API_KEY, "
 DONO_MAX = os.getenv("DONO_MAX", "").strip().lower()
 if not DONO_MAX:
     raise RuntimeError("Defina DONO_MAX no .env (login do dono do plano Max; veja .env.example).")
-# O Max (produção de arquivos, estudos e prospecção na web, leitura de anexos, respostas) vale para todos os usuários
-# ativos (Thomas, 29/10/2026); antes era só a conta DONO_MAX. O que não é do Max continua do dono: Monday pelo chat,
-# números de faturamento do painel, ensinar o Cérebro e as correções. Para voltar atrás, False.
-MAX_PARA_TODOS = True
+# Chave do Max para todos os usuários (produção de arquivos, estudos e prospecção na web, anexos, respostas). Pedida
+# pelo Thomas em 29/10/2026 e DESLIGADA no mesmo dia: a assinatura Max é individual e os termos da Anthropic não
+# permitem atender pedidos de outras pessoas por ela (decisão de 19/10/2026). Só religar com a decisão do Thomas
+# depois de saber disso. O que não é do Max continua do dono de qualquer forma (Monday, faturamento, Cérebro).
+MAX_PARA_TODOS = False
 
 
 def usa_max(login: str) -> bool:
