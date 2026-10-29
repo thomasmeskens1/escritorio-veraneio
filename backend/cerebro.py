@@ -34,6 +34,7 @@ ID = "cerebro"
 PASTA_CONHECIMENTO = config.PASTA_CONHECIMENTO
 FUSO = ZoneInfo("America/Sao_Paulo")
 HORA_CONSOLIDACAO = 3
+PESO_OUTROS_USUARIOS = 0.75  # tarefa de outro usuário vale 75% da do Thomas (0,45 contra 0,6)
 MAX_CARACTERES_FERRAMENTA = 3000  # resposta da ferramenta (tokens dos agentes)
 MAX_CARACTERES_CONTEXTO = 6000    # trechos na tarefa do próprio Cérebro
 INTERVALO_REVISAO = 600           # o trabalhador de embeddings revisa os pendentes a cada 10 min
@@ -153,20 +154,24 @@ def aprender_tarefa(tarefa_id: int) -> int | None:
     """Tarefa concluída vira um trecho "tarefa" (pedido + resposta resumida). O embedding vem em segundo plano."""
     try:
         linha = tarefas.obter(tarefa_id)
-        # Só as tarefas da conta do Thomas viram conhecimento: o Cérebro é consultado por todos, então tarefa de
-        # outro usuário vazaria pedidos dele ou plantaria "fatos" sem passar pelo ensino (só o dono ensina).
+        # As tarefas de TODOS os usuários viram conhecimento (Thomas, 29/10/2026: o papel do Cérebro é ser rico com o
+        # histórico de todos; o histórico por usuário é só visual). Revisão de 22/10/2026: tarefa de outro usuário
+        # poderia plantar um "fato"; por isso ela entra com o autor e peso menor que a do Thomas, e o ensinado, o
+        # oficial e o site sempre valem mais.
         if (not linha or linha["status"] != "concluida" or not linha["resposta"]
-                or linha["usuario"] != config.DONO_MAX
                 or linha["agente"] == ID or linha["agente"] in AGENTES_PRODUCAO):
             return None
+        do_dono = linha["usuario"] == config.DONO_MAX
         andar = andar_do_agente(linha["agente"])
         agente = buscar_agente(andar, linha["agente"]) if andar else None
         nome = agente.nome if agente else linha["agente"]
         resposta = linha["resposta"].strip()
-        conteudo = (f"Pedido: {linha['texto'].strip()[:300]}\n\nResposta de {nome}: "
+        autor = "" if do_dono else f" (de {linha['usuario'].split('@')[0]}, não confirmado pela diretoria)"
+        conteudo = (f"Pedido{autor}: {linha['texto'].strip()[:300]}\n\nResposta de {nome}: "
                     f"{resposta[:800]}{'…' if len(resposta) > 800 else ''}")
         trecho_id = base._inserir("tarefa", f"tarefa:{tarefa_id}", f"{nome}: {linha['texto'].strip()[:70]}", conteudo,
-                                  linha["empresa"] or empresas.PADRAO)
+                                  linha["empresa"] or empresas.PADRAO,
+                                  peso=None if do_dono else base.PESOS_FONTE["tarefa"] * PESO_OUTROS_USUARIOS)
         _acordar.set()
         return trecho_id
     except Exception:

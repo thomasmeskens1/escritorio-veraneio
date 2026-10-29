@@ -123,13 +123,15 @@ def _mudou() -> None:
 
 # --- Escrita ---------------------------------------------------------------------------------
 
-def _inserir(fonte_tipo: str, fonte_ref: str, titulo: str, conteudo: str, empresa: str = PADRAO) -> int:
+def _inserir(fonte_tipo: str, fonte_ref: str, titulo: str, conteudo: str, empresa: str = PADRAO,
+             peso: float | None = None) -> int:
     momento = agora()
     with _trava, db() as conexao:
         cursor = conexao.execute(
             "INSERT INTO conhecimento (fonte_tipo, fonte_ref, titulo, conteudo, peso_fonte, criado_em, atualizado_em, "
             "empresa) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (fonte_tipo, fonte_ref, titulo[:200], conteudo, PESOS_FONTE[fonte_tipo], momento, momento, empresa))
+            (fonte_tipo, fonte_ref, titulo[:200], conteudo, PESOS_FONTE[fonte_tipo] if peso is None else peso,
+             momento, momento, empresa))
     _mudou()
     return cursor.lastrowid
 
