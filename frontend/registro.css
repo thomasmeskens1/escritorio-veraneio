@@ -369,3 +369,12 @@
 .reg-resposta {
   border-left: 3px solid #2a9d8f;
 }
+
+/* "↻ Atualizar" ao lado do fechar (js/registro.js) */
+.registro-atualizar {
+  margin-left: auto;
+  margin-right: 8px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}

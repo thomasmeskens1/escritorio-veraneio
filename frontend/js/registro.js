@@ -24,7 +24,8 @@ const registroAtualizado = document.getElementById('registro-atualizado');
 const filtrosRegistro = document.getElementById('registro-filtros');
 const filtroUsuario = document.getElementById('registro-usuario');
 const filtroAgente = document.getElementById('registro-agente');
-const conversasCarregadas = {}; // tarefa_id -> {pedido, resposta, ...}
+const conversasCarregadas = {}; // tarefa_id -> {status, dados}: vale enquanto o status do pedido não mudar
+const conversasPedidas = new Set(); // tarefa_id cuja conversa o usuário abriu: recarrega sozinha quando muda
 
 let registroAberto = false;
 let timerRegistro = null;
@@ -93,6 +94,7 @@ function limparRegistro() {
   registrosExpandidos.clear();
   [filtroUsuario, filtroAgente].forEach((s) => { s.length = 1; s.value = ''; }); // só "Todos"
   Object.keys(conversasCarregadas).forEach((k) => delete conversasCarregadas[k]);
+  conversasPedidas.clear();
 }
 
 // Filtros do master: usuários (painel de usuários) e agentes (estado do escritório). Montados uma vez por abertura.
@@ -263,7 +265,8 @@ function criarDetalheRegistro(item) {
   return caixa;
 }
 
-// Pedido e resposta completos, sob demanda (o texto pode ser longo). Fica guardado enquanto a página estiver aberta.
+// Pedido e resposta completos, sob demanda (o texto pode ser longo). Ficam guardados enquanto o status do pedido não
+// muda; quando muda (ex.: o agente respondeu), a conversa já aberta é buscada de novo sozinha.
 function criarConversaRegistro(item) {
   const bloco = novoEl('div', 'reg-conversa');
   const id = item.tarefa_id;
@@ -275,30 +278,45 @@ function criarConversaRegistro(item) {
     resposta.append(novoEl('strong', null, `Resposta de ${c.agente}`), novoEl('p', null, texto));
     bloco.replaceChildren(pedido, resposta);
   };
-  if (conversasCarregadas[id]) {
-    mostrar(conversasCarregadas[id]);
+  const guardada = conversasCarregadas[id];
+  if (guardada && guardada.status === item.status) {
+    mostrar(guardada.dados);
     return bloco;
   }
   const botao = novoEl('button', 'botao-secundario', 'Ver conversa completa');
   botao.type = 'button';
-  botao.addEventListener('click', async () => {
+  const carregar = async () => {
+    conversasPedidas.add(id);
     botao.disabled = true;
     botao.textContent = 'Carregando...';
     try {
       const resposta = await fetch(`/api/registro/${id}/conversa`, { headers: { Authorization: `Bearer ${sessao.token}` } });
       if (!resposta.ok) throw new Error();
-      conversasCarregadas[id] = await resposta.json();
-      mostrar(conversasCarregadas[id]);
+      const dados = await resposta.json();
+      conversasCarregadas[id] = { status: dados.status, dados };
+      mostrar(dados);
     } catch {
       botao.disabled = false;
       botao.textContent = 'Não carregou. Tentar de novo';
     }
-  });
+  };
+  botao.addEventListener('click', carregar);
   bloco.append(botao);
+  if (conversasPedidas.has(id)) {
+    if (guardada) mostrar(guardada.dados); // mostra a anterior enquanto busca a nova
+    carregar();
+  }
   return bloco;
 }
 
 document.getElementById('registro-fechar').addEventListener('click', fecharRegistro);
+// "Atualizar": busca já, refazendo a lista e as conversas abertas (Thomas, 29/10/2026).
+document.getElementById('registro-atualizar').addEventListener('click', () => {
+  assinaturaRegistro = '';
+  Object.keys(conversasCarregadas).forEach((k) => delete conversasCarregadas[k]);
+  registroAtualizado.textContent = 'Atualizando...';
+  carregarRegistro();
+});
 janelaRegistro.addEventListener('click', (e) => {
   if (e.target === janelaRegistro) fecharRegistro();
 });
