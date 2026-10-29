@@ -36,7 +36,7 @@ _em_andamento: set[asyncio.Task] = set()  # referência forte às tarefas em seg
 
 async def atualizar_status(agente: Agente, status: Status) -> None:
     agente.status = status
-    await gerenciador.transmitir(lambda usuario: snapshot(usuario["role"]))
+    await gerenciador.transmitir(lambda usuario: snapshot(usuario))
 
 
 def ha_modelo_disponivel() -> bool:

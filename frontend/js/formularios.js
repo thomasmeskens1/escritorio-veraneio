@@ -2,7 +2,7 @@
 // (nada fica faltando). Vêm de duas fontes: o agente escreve um bloco <<FORMULARIO>>{json}<<FIM DO FORMULARIO>> na
 // resposta, ou o próprio sistema anexa um à mensagem (ex.: escolher a empresa da conversa).
 // JSON: {"titulo": "...", "campos": [{"nome", "rotulo", "tipo": texto|texto_longo|opcoes|multipla|data|numero|hora,
-//        "opcoes": [...], "obrigatorio": true}]}. Ao enviar, as respostas vão como mensagem ao mesmo agente.
+//        "opcoes": [...], "marcados": [...] (multipla), "obrigatorio": true}]}. Ao enviar, as respostas vão como mensagem ao mesmo agente.
 
 const BLOCO_FORMULARIO = /<<FORMULARIO>>([\s\S]*?)<<FIM DO FORMULARIO>>/;
 
@@ -36,6 +36,7 @@ function campoDoFormulario(campo, indice) {
       const marca = document.createElement('input');
       marca.type = 'checkbox';
       marca.value = o;
+      marca.checked = (campo.marcados || []).includes(o); // já marcadas (ex.: agentes liberados de um usuário)
       item.append(marca, document.createTextNode(` ${o}`));
       entrada.append(item);
     });

@@ -1,5 +1,6 @@
 """API do Escritório Veraneio: login, WebSocket em tempo real, painel de tarefas e frontend estático."""
 
+import acesso
 import asyncio
 import hashlib
 import json
@@ -34,10 +35,11 @@ import orquestrador
 import producao
 import relatorios
 import tarefas
+import usuarios_admin
 from api_painel import rotas as rotas_painel
-from auth import autenticar, criar_token, validar_token
+from auth import autenticar, criar_token, e_master, validar_token
 from conexoes import gerenciador
-from estado import AGENTES_PRODUCAO, Status, buscar_agente, pode_acessar, snapshot
+from estado import AGENTES_PRODUCAO, Status, buscar_agente, snapshot
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("veraneio")
@@ -139,6 +141,7 @@ app.include_router(andamento.rotas)
 app.include_router(modelos_uso.rotas)
 app.include_router(correcoes.rotas)
 app.include_router(relatorios.rotas)
+app.include_router(usuarios_admin.rotas)
 
 
 class Credenciais(BaseModel):
@@ -172,7 +175,8 @@ def login(credenciais: Credenciais, request: Request):
         _falhas_ip[ip] = [*falhas_ip, agora]
         raise HTTPException(status_code=401, detail="Usuário ou senha inválidos")
     _falhas_login.pop(chave, None)
-    return {"token": criar_token(usuario), "usuario": usuario["nome"], "role": usuario["role"]}
+    return {"token": criar_token(usuario), "usuario": usuario["nome"], "role": usuario["role"],
+            "master": e_master(usuario["login"])}
 
 
 @app.websocket("/ws")
@@ -184,7 +188,7 @@ async def websocket(ws: WebSocket):
         return
 
     gerenciador.conectar(ws, usuario)
-    await gerenciador.enviar(ws, snapshot(usuario["role"]))
+    await gerenciador.enviar(ws, snapshot(usuario))
     await orquestrador.entregar_pendentes(usuario["sub"])
     try:
         while True:
@@ -243,13 +247,15 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     anexos_ids = [str(i) for i in msg.get("anexos") or [] if isinstance(i, str)][:4]
     alvo = {"andar": andar, "agente": agente_id}
 
-    if not pode_acessar(usuario["role"], andar):
+    if not acesso.pode_ver_andar(usuario, andar):
         return await erro("Acesso negado.", **alvo)
     agente = buscar_agente(andar, agente_id)
     if not agente:
         return await erro("Agente não encontrado.", **alvo)
     if agente.tipo != "ia":
         return await erro(f"{agente.nome} não recebe tarefas pelo chat.", **alvo)
+    if not acesso.pode_usar(usuario, andar, agente.id):  # o master decide quem usa cada agente
+        return await erro(f"Você ainda não tem acesso ao {agente.nome}. Fale com o Thomas para liberar.", **alvo)
     if agente.id in AGENTES_PRODUCAO and usuario["sub"] != config.DONO_MAX:
         return await erro("A produção de imagens e vídeos é exclusiva da conta do Thomas. "
                           "Fale com ele para solicitar.", **alvo)

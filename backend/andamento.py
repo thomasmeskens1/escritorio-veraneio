@@ -5,6 +5,7 @@ Demais: pedido recebido → modelos tentados → consultas ao Cérebro → fila/
 Status de cada etapa: concluida | andamento | pendente | falhou.
 """
 
+import acesso
 import json
 import re
 from collections import Counter
@@ -15,7 +16,7 @@ from fastapi import APIRouter, Header, HTTPException
 import encaminhamento
 import tarefas
 from api_painel import _filtro, _nome_do_agente, _usuario
-from estado import buscar_agente, pode_acessar
+from estado import buscar_agente
 
 rotas = APIRouter(prefix="/api")
 
@@ -252,7 +253,7 @@ def _estimativa(linha, eventos: list) -> dict | None:
 def andamento(andar: str, agente_id: str, authorization: str = Header("")):
     """Tarefa ativa do agente (do usuário; diretoria vê todas) com as etapas e o status de cada uma."""
     usuario = _usuario(authorization)
-    if not buscar_agente(andar, agente_id) or not pode_acessar(usuario["role"], andar):
+    if not buscar_agente(andar, agente_id) or not acesso.pode_ver_andar(usuario, andar):
         raise HTTPException(status_code=404, detail="Agente não encontrado")
     filtro = _filtro(usuario)
     marcadores = ",".join("?" * len(ATIVAS))

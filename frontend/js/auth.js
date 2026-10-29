@@ -48,7 +48,7 @@ function sessaoDoToken(token) {
   const payload = token && lerPayload(token);
   if (!payload?.sub) return null;
   if (payload.exp && payload.exp * 1000 <= Date.now()) return null;
-  return { token, usuario: payload.nome || payload.sub, role: payload.role };
+  return { token, usuario: payload.nome || payload.sub, role: payload.role, master: !!payload.master };
 }
 
 function mostrarErroLogin(texto) {
@@ -100,6 +100,7 @@ function iniciarSessao(nova) {
   document.getElementById('app').hidden = false;
   document.getElementById('usuario-logado').textContent = `${sessao.usuario} · ${sessao.role}`;
   configurarModelos(); // ícone "Modelos de IA" só para a diretoria
+  configurarUsuarios(); // ícone "Usuários" só para o master
   configurarMapa(); // ícone "Mapa do Cérebro" só para a diretoria
   configurarElevador();
   iniciarEscritorio();

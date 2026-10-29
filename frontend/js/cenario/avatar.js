@@ -139,6 +139,11 @@ function criarAvatar(cena, x, y, { id, aparencia, nome, tipo, status, aoClicar, 
   const avatar = cena.add.container(x, y, [sombra, boneco, balao, zzz, martelo]).setDepth(PROF_BASE + y);
   let rotuloDy = CABECA_Y - CABECA_R - 26 - rotuloAcima;
   const { rotulo, bolinha, alerta } = criarRotulo(cena, x, y + rotuloDy, nome, tipo);
+  if (aoClicar) { // o "!" fica na ponta do rótulo, fora da área de clique do corpo: clicar nele também abre o chat
+    alerta.setInteractive(new Phaser.Geom.Circle(0, 0, 10), Phaser.Geom.Circle.Contains);
+    alerta.input.cursor = 'pointer';
+    alerta.on('pointerdown', aoClicar);
+  }
   let pulsoAlerta = null;
   function definirPendente(pendente) {
     if (alerta.visible === pendente) return;

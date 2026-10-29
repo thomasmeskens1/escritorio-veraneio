@@ -95,6 +95,11 @@
             <path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>
           </svg>
         </button>
+        <button id="abrir-usuarios" class="topo-icone" type="button" aria-label="Usuários" title="Usuários: incluir, editar e liberar agentes" hidden>
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.9.7 3.1 2.4 3.5 5.2"/>
+          </svg>
+        </button>
         <button id="abrir-registro" class="topo-icone" type="button" aria-label="Registro de atividade" title="Registro de atividade">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>
@@ -237,6 +242,22 @@
       </section>
     </div>
 
+    <!-- Painel de usuários (só o master) -->
+    <div id="usuarios" class="modal">
+      <section class="janela janela-painel janela-usuarios" role="dialog" aria-modal="true" aria-labelledby="usuarios-titulo">
+        <header class="janela-barra">
+          <span class="janela-luzes" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="janela-titulo">
+            <h2 id="usuarios-titulo">Usuários</h2>
+            <p>Inclua pessoas e escolha os agentes que cada uma pode usar</p>
+          </div>
+          <button id="usuarios-novo" class="botao-secundario" type="button">+ Novo usuário</button>
+          <button id="usuarios-fechar" class="fechar" type="button" aria-label="Fechar">×</button>
+        </header>
+        <div id="usuarios-conteudo" class="usuarios-conteudo"></div>
+      </section>
+    </div>
+
     <!-- Painel de tarefas do Despachante -->
     <div id="painel" class="modal">
       <section class="janela janela-painel" role="dialog" aria-modal="true" aria-labelledby="painel-titulo">
@@ -281,6 +302,7 @@
   <script src="js/perfil.js"></script>
   <script src="js/andamento.js"></script>
   <script src="js/registro.js"></script>
+  <script src="js/usuarios.js"></script>
   <script src="js/equipe.js"></script>
   <script src="js/modelos.js"></script>
   <script src="js/mapa_forma.js"></script>

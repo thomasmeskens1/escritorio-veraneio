@@ -21,7 +21,7 @@ def vincular_loop(loop: asyncio.AbstractEventLoop) -> None:
 
 
 async def transmitir_estado() -> None:
-    await gerenciador.transmitir(lambda usuario: snapshot(usuario["role"]))
+    await gerenciador.transmitir(lambda usuario: snapshot(usuario))
 
 
 def _agente(agente_id: str) -> Agente | None:

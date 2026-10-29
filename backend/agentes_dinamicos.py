@@ -4,6 +4,7 @@ O agente nasce com status "construindo", vira "disponivel" após alguns segundos
 reinícios (`carregar()` na subida). A persona vai para `PERFIS`, então o executor o atende como os demais.
 """
 
+import acesso
 import asyncio
 import concurrent.futures
 import json
@@ -20,7 +21,7 @@ import tarefas
 from agents.perfis import PERFIS
 from auth import carregar_usuarios, validar_token
 from conexoes import gerenciador
-from estado import ANDARES, Agente, Aparencia, Status, andar_do_agente, pode_acessar
+from estado import ANDARES, Agente, Aparencia, Status, andar_do_agente
 
 log = logging.getLogger(__name__)
 
@@ -334,7 +335,7 @@ def _usuario(authorization: str) -> dict:
 def listar(authorization: str = Header("")):
     usuario = _usuario(authorization)
     linhas = _db().execute("SELECT * FROM agentes_criados WHERE ativo = 1 ORDER BY criado_em").fetchall()
-    return {"agentes": [_da_linha(l) for l in linhas if pode_acessar(usuario["role"], l["andar"])]}
+    return {"agentes": [_da_linha(l) for l in linhas if acesso.pode_ver_andar(usuario, l["andar"])]}
 
 
 @rotas.delete("/{agente_id}")

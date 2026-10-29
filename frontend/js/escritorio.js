@@ -75,9 +75,14 @@ let setorDosAgentes = {}; // id -> setor da mesa ocupada no andar renderizado
 const TIPOS_AGENTE = ['ia', 'sistema', 'estagiario'];
 const VISUAIS = ['humano', 'cerebro'];
 
+// O servidor manda só os andares com algum agente liberado para o usuário (painel de usuários do master). Antes do
+// primeiro "estado", vale a regra antiga (Cobertura só para a diretoria).
 function podeAcessar(nivel) {
-  return !ANDARES[nivel]?.restrito || sessao?.role === 'diretoria';
+  if (!Object.keys(estadoAgentes).length) return !ANDARES[nivel]?.restrito || sessao?.role === 'diretoria';
+  return Object.values(estadoAgentes[nivel] || {}).some((a) => a.tipo !== 'estagiario');
 }
+
+const agenteBloqueado = (nivel, id) => !!estadoAgentes[nivel]?.[id]?.bloqueado;
 
 // `visitando` só vale com andar conhecido e id de agente: { andar, agente } ou null.
 function lerVisita(v) {
@@ -235,6 +240,10 @@ function assinatura(nivel) {
 
 // abrirAgente (UI) decide: chat, painel do Despachante ou nada (estagiários).
 function clicarAgente(nivel, id) {
+  if (agenteBloqueado(nivel, id)) {
+    mostrarToast(nivel, id, 'Você ainda não tem acesso a este agente. Fale com o Thomas para liberar.', 'Sem acesso');
+    return;
+  }
   if (typeof abrirAgente === 'function') abrirAgente(nivel, id);
   else abrirChat(nivel, id);
 }
@@ -330,6 +339,7 @@ function renderizarAndar(nivel) {
       aoClicar: cliqueDoAgente(nivel, a.id, dados),
     });
     avatares[a.id] = avatar;
+    if (agenteBloqueado(nivel, a.id)) avatar.definirAlfa?.(0.4); // agente não liberado para este usuário
     elementos.push(...avatar.objetos);
   }));
   atualizarSetores();
@@ -366,7 +376,10 @@ async function atualizarPendencias() {
 
 // Só troca status/animações, brilho dos setores e anima visitas, sem recriar a cena.
 function atualizarStatus() {
-  Object.entries(avatares).forEach(([id, avatar]) => avatar.definirStatus(dadosAgente(andarAtual, id).status));
+  Object.entries(avatares).forEach(([id, avatar]) => {
+    avatar.definirStatus(dadosAgente(andarAtual, id).status);
+    avatar.definirAlfa?.(agenteBloqueado(andarAtual, id) ? 0.4 : 1);
+  });
   atualizarSetores();
   sincronizarVisitas(true);
 }
@@ -381,6 +394,7 @@ function atualizarUI(nivel) {
 // Recebe o estado completo do servidor; recria o andar só se os agentes mudaram.
 function aplicarEstado(andares) {
   estadoAgentes = andares || {};
+  configurarElevador(); // permissões mudam pelo painel de usuários
   if (cena) {
     if (assinatura(andarAtual) === assinaturaAtual) atualizarStatus();
     else renderizarAndar(andarAtual);
@@ -388,14 +402,15 @@ function aplicarEstado(andares) {
   atualizarChat();
 }
 
-// Ajusta o cadeado dos andares restritos conforme a role da sessão.
+// Cadeado nos andares sem nenhum agente liberado para o usuário.
 function configurarElevador() {
   document.querySelectorAll('.andar').forEach((botao) => {
-    if (!ANDARES[botao.dataset.andar]?.restrito) return;
+    const icone = botao.querySelector('.icone');
+    if (!botao.dataset.icone) botao.dataset.icone = icone.textContent.trim();
     const liberado = podeAcessar(botao.dataset.andar);
     botao.classList.toggle('bloqueado', !liberado);
-    botao.querySelector('.icone').textContent = liberado ? botao.dataset.icone : '🔒';
-    botao.title = liberado ? '' : 'Acesso restrito à diretoria';
+    icone.textContent = liberado ? botao.dataset.icone : '🔒';
+    botao.title = liberado ? '' : 'Sem acesso a este andar. Fale com o Thomas.';
   });
 }
 

@@ -171,15 +171,6 @@ ANDARES: dict[str, dict[str, Agente]] = {
 # Agentes que produzem arquivos (PNG/MP4) pelo Claude Code do dono do plano Max.
 AGENTES_PRODUCAO = {"criador_imagens", "editor_video"}
 
-# Andar -> role exigida para acessá-lo.
-ANDARES_RESTRITOS = {"cobertura": "diretoria"}
-
-
-def pode_acessar(role: str, andar: str) -> bool:
-    exigida = ANDARES_RESTRITOS.get(andar)
-    return exigida is None or role == exigida
-
-
 def buscar_agente(andar: str, agente_id: str) -> Agente | None:
     return ANDARES.get(andar, {}).get(agente_id)
 
@@ -188,14 +179,18 @@ def andar_do_agente(agente_id: str) -> str | None:
     return next((andar for andar, agentes in ANDARES.items() if agente_id in agentes), None)
 
 
-def snapshot(role: str) -> dict:
-    """Mensagem de estado. Andar restrito, para quem não tem acesso, leva só os estagiários
-    (para as visitas deles aparecerem nos outros andares)."""
+def snapshot(usuario: dict) -> dict:
+    """Mensagem de estado. Andar sem nenhum agente liberado para o usuário leva só os estagiários (para as visitas
+    deles aparecerem nos outros andares). Agente não liberado vai com "bloqueado" (aparece apagado, sem chat)."""
+    import acesso  # import tardio: acesso depende do estado
+
     return {
         "tipo": "estado",
         "andares": {
-            andar: {i: a.model_dump(mode="json", exclude=_SO_NO_DETALHE) for i, a in agentes.items()
-                    if pode_acessar(role, andar) or a.tipo == "estagiario"}
+            andar: {i: {**a.model_dump(mode="json", exclude=_SO_NO_DETALHE),
+                        "bloqueado": a.tipo != "estagiario" and not acesso.pode_usar(usuario, andar, i)}
+                    for i, a in agentes.items()
+                    if acesso.pode_ver_andar(usuario, andar) or a.tipo == "estagiario"}
             for andar, agentes in ANDARES.items()
         },
     }

@@ -2,12 +2,13 @@
 
 from fastapi import APIRouter, Header, HTTPException
 
+import acesso
 import aprendizado
 import config
 import saude
 import tarefas
 from auth import validar_token
-from estado import ANDARES, AGENTES_PRODUCAO, andar_do_agente, buscar_agente, pode_acessar
+from estado import ANDARES, AGENTES_PRODUCAO, andar_do_agente, buscar_agente
 
 rotas = APIRouter(prefix="/api")
 
@@ -72,7 +73,7 @@ def listar_equipe(authorization: str = Header("")):
         {"andar": andar, "agentes": [
             {"id": a.id, "nome": a.nome, "funcao": a.funcao, "descricao": a.descricao, "tipo": a.tipo}
             for a in agentes.values()]}
-        for andar, agentes in ANDARES.items() if pode_acessar(usuario["role"], andar)]}
+        for andar, agentes in ANDARES.items() if acesso.pode_ver_andar(usuario, andar)]}
 
 
 @rotas.get("/agentes/{andar}/{agente_id}")
@@ -80,7 +81,7 @@ def detalhar_agente(andar: str, agente_id: str, authorization: str = Header(""))
     """Dados do popup do agente."""
     usuario = _usuario(authorization)
     agente = buscar_agente(andar, agente_id)
-    if not agente or not pode_acessar(usuario["role"], andar):
+    if not agente or not acesso.pode_ver_andar(usuario, andar):
         raise HTTPException(status_code=404, detail="Agente não encontrado")
     concluidas, total = tarefas.contagem_do_agente(agente_id)
     resumo = aprendizado.resumo(_nome_do_agente)

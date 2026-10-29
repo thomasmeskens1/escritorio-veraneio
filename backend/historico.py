@@ -1,5 +1,6 @@
 """Memória do chat: conversa de cada usuário com um agente, reconstruída a partir das tarefas salvas."""
 
+import acesso
 import json
 
 from fastapi import APIRouter, Header, HTTPException
@@ -9,7 +10,7 @@ import encaminhamento
 import producao
 import relatorios
 import tarefas
-from estado import buscar_agente, pode_acessar
+from estado import buscar_agente
 
 rotas = APIRouter(prefix="/api")
 
@@ -112,7 +113,9 @@ def pendencias(usuario: str) -> list[dict]:
             continue
         vistos |= chats
         if linha["status"] == "concluida" and "<<FORMULARIO>>" in (linha["resposta"] or ""):
-            for andar, agente in chats:
+            # Chat limpo depois da tarefa: o formulário saiu da tela e não conta mais como pendência (teste real,
+            # 29/10/2026: o "!" do Gestor de Tráfego apontava para um formulário que não aparecia no chat).
+            for andar, agente in [c for c in chats if _limpo_ate(usuario, *c) < linha["id"]]:
                 achados.setdefault((andar, agente), {"andar": andar, "agente": agente, "tarefa_id": linha["id"],
                                                      "motivo": "formulario"})
     return list(achados.values())
@@ -132,7 +135,7 @@ def historico_do_chat(andar: str, agente_id: str, limite: int = 30, authorizatio
     usuario = auth.validar_token(authorization.removeprefix("Bearer ").strip())
     if not usuario:
         raise HTTPException(status_code=401, detail="Token inválido")
-    if not buscar_agente(andar, agente_id) or not pode_acessar(usuario["role"], andar):
+    if not buscar_agente(andar, agente_id) or not acesso.pode_ver_andar(usuario, andar):
         raise HTTPException(status_code=404, detail="Agente não encontrado")
 
     limite = min(max(limite, 1), LIMITE_MAXIMO)

@@ -6,6 +6,7 @@ nunca agenda nada. No horário, a tarefa segue o pipeline normal (orquestrador.n
 resposta no chat, histórico e registro.
 """
 
+import acesso
 import asyncio
 import json
 import logging
@@ -305,11 +306,11 @@ def listar(andar: str | None = None, agente: str | None = None, inativas: bool =
 def agendar(dados: Pedido, authorization: str = Header("")):
     """Botão "Agendar tarefa" da ficha do agente: o ÚNICO jeito de criar uma rotina."""
     import config
-    from estado import AGENTES_PRODUCAO, buscar_agente, pode_acessar
+    from estado import AGENTES_PRODUCAO, buscar_agente
 
     usuario = _usuario(authorization)
     agente = buscar_agente(dados.andar, dados.agente)
-    if not agente or agente.tipo != "ia" or not pode_acessar(usuario["role"], dados.andar):
+    if not agente or agente.tipo != "ia" or not acesso.pode_usar(usuario, dados.andar, agente.id):
         raise HTTPException(status_code=404, detail="Agente não encontrado")
     if agente.id in AGENTES_PRODUCAO and usuario["sub"] != config.DONO_MAX:
         raise HTTPException(status_code=403, detail="A produção de imagens e vídeos é exclusiva da conta do Thomas.")
