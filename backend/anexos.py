@@ -198,7 +198,7 @@ async def descrever(ids: list[str], login: str) -> str:
     linhas = _linhas(ids, login)
     if not linhas:
         return ""
-    pelo_max = login == config.DONO_MAX
+    pelo_max = config.usa_max(login)
     descricoes = await asyncio.gather(*(
         _descricao(linha, pelo_max) for linha in linhas), return_exceptions=True)
     partes = ["Anexos enviados pelo usuário:"]

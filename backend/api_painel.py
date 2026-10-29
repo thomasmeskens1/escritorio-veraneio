@@ -97,7 +97,7 @@ def detalhar_agente(andar: str, agente_id: str, authorization: str = Header(""))
             "ajustes": aprendizado.ajustes_do_agente(agente_id),
         },
         "pode_treinar": usuario["role"] == "diretoria",
-        "producao_restrita": agente_id in AGENTES_PRODUCAO and usuario["sub"] != config.DONO_MAX,
+        "producao_restrita": agente_id in AGENTES_PRODUCAO and not config.usa_max(usuario["sub"]),
     }
 
 

@@ -14,7 +14,7 @@ Um escritório virtual onde cada andar reúne agentes de IA especialistas, a ser
 - 1º Andar – Marketing: Gestão (Gestor, que coordena a equipe), Criação (Designer e Criador de Imagens), Conteúdo (Copywriter, Social Media e E-mail Marketing), Vídeo (Moviemaker e Editor de Vídeo), Performance (Gestor de Tráfego e Analista de Métricas) e a mesa de Reunião (Analista de Tendências).
 - 2º Andar – Comercial: Corporativo (Prospectador) e a mesa de Reunião (Estrategista). O setor Hospedagem tem mesas vagas para os próximos agentes.
 - Cobertura: diretoria, acesso restrito. Lá fica o laboratório do Cérebro, o conhecimento central das três empresas, com 4 Estagiários.
-- A produção de arquivos (imagens, vídeos e PowerPoint) e as pesquisas na web rodam no Claude Code (Max), exclusivo da conta do Thomas; os demais usuários recebem um aviso para falar com ele.
+- A produção de arquivos (imagens, vídeos e PowerPoint) e as pesquisas na web rodam no Claude Code (Max), liberado para todos os usuários. O Thomas escolhe, no painel de usuários, os andares e agentes de cada pessoa.
 
 ## Empresa da conversa
 - No Marketing e no Cérebro, cada conversa trabalha para UMA empresa, escolhida no seletor do topo do chat. Se você citar a empresa no pedido ("...para a Casa Veraneio"), ela é escolhida sozinha.

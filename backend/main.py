@@ -265,7 +265,7 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         return await erro(f"{agente.nome} não recebe tarefas pelo chat.", **alvo)
     if not acesso.pode_usar(usuario, andar, agente.id):  # o master decide quem usa cada agente
         return await erro(f"Você ainda não tem acesso ao {agente.nome}. Fale com o Thomas para liberar.", **alvo)
-    if agente.id in AGENTES_PRODUCAO and usuario["sub"] != config.DONO_MAX:
+    if agente.id in AGENTES_PRODUCAO and not config.usa_max(usuario["sub"]):
         return await erro("A produção de imagens e vídeos é exclusiva da conta do Thomas. "
                           "Fale com ele para solicitar.", **alvo)
     limite = TAMANHO_MAX_GESTOR if agente.id == encaminhamento.GESTOR else TAMANHO_MAX_TEXTO
@@ -316,7 +316,7 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
                                              "texto": texto_aviso})
     # Estudo com pesquisa na web (Analista de Tendências, Estrategista): no Max, só na conta do Thomas. Para as
     # outras contas, ou pergunta simples ("o que é a Matriz BCG?"), o agente responde pelos modelos gratuitos.
-    if usuario["sub"] == config.DONO_MAX and estudos.e_estudo(agente.id, texto):
+    if config.usa_max(usuario["sub"]) and estudos.e_estudo(agente.id, texto):
         await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "liberar": True, "titulo": "Estudo iniciado",
                                       "texto": "Vou pesquisar na web (notícias, dados de mercado e concorrentes) e "
                                                "trazer o estudo aqui, com as fontes. Leva alguns minutos."})
@@ -394,9 +394,10 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         if item_citado:
             monday.vincular(tarefa_id, item_citado, origem="chat")
 
-    # Prospecção (pesquisa na web pelo Max + leads no Monday) ou persona: só a conta do Thomas; o resto é conversa.
+    # Prospecção (pesquisa na web pelo Max + leads no Monday) ou persona. Liberada para quem usa o Max (todos desde
+    # 29/10/2026); quem pode usar o Prospectador se controla no painel de usuários. O resto é conversa.
     if agente.id == comercial.AGENTE and comercial.e_pedido_de_trabalho(texto):
-        if usuario["sub"] != config.DONO_MAX:
+        if not config.usa_max(usuario["sub"]):
             return await erro("A prospecção (pesquisa na web e leads no Monday) é exclusiva da conta do Thomas. "
                               "Aqui você pode tirar dúvidas sobre a persona e a estratégia.", **alvo)
         if not (comercial.PEDE_CRIACAO.search(texto) or comercial.PEDE_PERSONA.search(texto)):

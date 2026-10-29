@@ -4,7 +4,8 @@ Os modelos gratuitos não pesquisam na web. Quando o pedido é um estudo (mercad
 Matriz BCG, SWOT...), o pedido vai ao trabalhador do Max como trabalho "prospeccao" (só WebSearch e WebFetch, sem
 arquivos nem Bash), com tudo o que o agente sabe já no texto: perfil, método, empresa, regras de ouro, calendário de
 eventos (Tendências) e os números internos do painel e do Cérebro (Estrategista). A resposta do Max é a resposta do
-agente. Só na conta do Thomas (Max); para as outras contas, o agente responde sem pesquisa, pelos modelos gratuitos.
+agente. Vale para todos os usuários desde 29/10/2026 (config.usa_max); com o Max desligado, o agente responde sem
+pesquisa, pelos modelos gratuitos.
 """
 
 import asyncio

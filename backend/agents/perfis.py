@@ -146,7 +146,7 @@ PERFIS = {
                      "em buscas) e crescimento de mercado vem de pesquisa de fontes do setor, não do usuário. Sem "
                      "esses números, entrega mesmo assim o posicionamento mais provável de cada empresa, com o grau "
                      "de confiança e o que confirmaria; e avisa que o estudo completo, com pesquisa na web e os "
-                     "números do painel, roda quando o Thomas pede (teste do Lucca, 29/10/2026).",
+                     "números do painel, roda pelo Max quando o pedido é de estudo (teste do Lucca, 29/10/2026).",
     },
     "analista_metricas": {
         "role": "Analista de Métricas",

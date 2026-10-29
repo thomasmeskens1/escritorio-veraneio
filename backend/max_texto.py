@@ -51,7 +51,7 @@ def _ocupado() -> bool:
 
 def pode_usar(usuario: str, agente_id: str) -> bool:
     """O Max entra na rota desta tarefa? (dono, agente sem ferramentas próprias e trabalhador ligado)."""
-    return usuario == config.DONO_MAX and agente_id not in AGENTES_COM_FERRAMENTAS and online()
+    return config.usa_max(usuario) and agente_id not in AGENTES_COM_FERRAMENTAS and online()
 
 
 def reservar() -> int | None:

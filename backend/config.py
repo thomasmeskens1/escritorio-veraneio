@@ -81,6 +81,14 @@ _CHAVES = {"anthropic/": ANTHROPIC_API_KEY, "openrouter/": OPENROUTER_API_KEY, "
 DONO_MAX = os.getenv("DONO_MAX", "").strip().lower()
 if not DONO_MAX:
     raise RuntimeError("Defina DONO_MAX no .env (login do dono do plano Max; veja .env.example).")
+# O Max (produção de arquivos, estudos e prospecção na web, leitura de anexos, respostas) vale para todos os usuários
+# ativos (Thomas, 29/10/2026); antes era só a conta DONO_MAX. O que não é do Max continua do dono: Monday pelo chat,
+# números de faturamento do painel, ensinar o Cérebro e as correções. Para voltar atrás, False.
+MAX_PARA_TODOS = True
+
+
+def usa_max(login: str) -> bool:
+    return MAX_PARA_TODOS or (login or "").strip().lower() == DONO_MAX
 
 # Dados do sistema (tokens, anexos, manuais, projetos): pasta compartilhada com o PC (trabalhador Max, backup).
 DADOS_DIR = Path(__file__).resolve().parent / "dados"

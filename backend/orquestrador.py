@@ -179,7 +179,7 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
     await _entregar(linha)
     await entregar_na_origem(linha)
     producao_a_seguir = False
-    if linha["agente"] == "gestor" and linha["usuario"] == config.DONO_MAX:
+    if linha["agente"] == "gestor" and config.usa_max(linha["usuario"]):
         if (pergunta := espera.pergunta_pendente(resultado.texto)) and _vai_produzir(linha["id"]):
             await _esperar_resposta(linha, pergunta)  # a produção só começa quando o usuário responder
             producao_a_seguir = True                  # o item do Monday não vai para Revisão ainda
