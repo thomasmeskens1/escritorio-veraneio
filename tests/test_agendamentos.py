@@ -10,7 +10,8 @@ BRIEFING = (
     "PARCERIA: hospedagem no Lodge 149. Entregas: 3 stories por dia durante 3 dias e 1 carrossel. Serviços "
     "previstos: chef de cozinha, arrumadeira todos os dias e churrasqueiro no sábado. TOM: escreva direto para "
     "ela, com linguagem próxima e elegante. ESTRUTURA: 6 slides, capa, proposta, ideias para os stories, "
-    "diferenciais, sugestão de carrossel e combinados da entrega.")
+    "diferenciais, sugestão de carrossel e combinados da entrega. Não obrigue a influenciadora a repetir frases "
+    "prontas; a rotina dela na casa deve aparecer de forma natural, programe os temas como achar melhor.")
 
 
 def test_briefing_longo_nao_vira_rotina():

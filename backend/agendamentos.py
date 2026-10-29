@@ -95,9 +95,11 @@ _UNICA = re.compile(r"\b(?P<quando>depois\s+de\s+amanha|amanha|hoje)\b")
 _BLOQUEIO = re.compile(r"\b(?:para|pra|de|do|da|das|dos|sobre)\s*$")
 # Texto longo é briefing: frequência nele é conteúdo ("arrumadeira todos os dias", "3 stories por dia"), não pedido
 # de rotina. Teste real (28/10/2026): o briefing da influenciadora virou rotina diária às 9h. Acima deste tamanho, só
-# vira rotina com pedido explícito ("agende", "rotina", "programe"...).
+# vira rotina com pedido explícito: "agende/agendar" ou "crie uma rotina". Palavras soltas como "repetir" ou
+# "rotina" aparecem no conteúdo de briefings (2º teste real, 29/10/2026: "não obrigue a influenciadora a repetir
+# frases" reabriu o erro).
 LIMITE_SEM_PEDIDO = 300
-_PEDE_ROTINA = re.compile(r"\b(?:agend\w*|rotinas?|program(?:e|ar|ada?)|automati\w*|recorrente|repita|repetir)\b")
+_PEDE_ROTINA = re.compile(r"\b(?:agend(?:e|ar|ou|ado|ada|amento)|(?:crie|criar|monte|configure)\s+(?:uma\s+)?rotina)\b")
 
 
 def _horarios(norm: str, livre: list[tuple[int, int]]) -> list[tuple[int, int, int, int]]:
