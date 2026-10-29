@@ -1,5 +1,7 @@
 """Rotas de leitura da interface: painel do Despachante, detalhes dos agentes, registro e aprendizado."""
 
+import asyncio
+
 from fastapi import APIRouter, Header, HTTPException
 
 import acesso
@@ -105,14 +107,19 @@ def detalhar_agente(andar: str, agente_id: str, authorization: str = Header(""))
 async def treinar_agora(authorization: str = Header("")):
     if _usuario(authorization)["role"] != "diretoria":
         raise HTTPException(status_code=403, detail="Apenas a diretoria pode treinar o modelo.")
+    import relatorio_aprendizado
+
+    anterior = (aprendizado._meta or {}).get("treinado_em")  # o relatório compara com o treino anterior
     meta = await aprendizado.talvez_treinar(forcar=True)
     if not meta:
         return {"ok": False, "modelo": None, "mensagem": "Ainda não há tarefas finalizadas para treinar."}
+    relatorio = await asyncio.to_thread(relatorio_aprendizado.montar, meta, anterior, _nome_do_agente)
     if meta["acuracia"] is None:
-        return {"ok": True, "modelo": None, "mensagem": meta.get("observacao", "Dados insuficientes.")}
+        return {"ok": True, "modelo": None, "mensagem": meta.get("observacao", "Dados insuficientes."),
+                "relatorio": relatorio}
     estado = "ativado" if meta["ativo"] else "mantido inativo (as regras ainda acertam mais)"
     return {"ok": True, "modelo": {k: meta[k] for k in ("amostras", "acuracia", "acuracia_regras", "ativo")},
-            "mensagem": f"Treinado com {meta['amostras']} tarefas: modelo {estado}."}
+            "mensagem": f"Treinado com {meta['amostras']} tarefas: modelo {estado}.", "relatorio": relatorio}
 
 
 @rotas.get("/registro")

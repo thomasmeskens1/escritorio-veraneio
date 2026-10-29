@@ -610,3 +610,62 @@
   grid-row: 1 / span 2;
   align-self: center;
 }
+
+/* Relatório do "Treinar agora" (js/relatorio_treino.js) */
+.janela-treino {
+  max-width: 760px;
+}
+
+.treino-corpo {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 12px;
+}
+
+.treino-bloco h3 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  color: #f4a261;
+}
+
+.treino-bloco h4 {
+  margin: 12px 0 4px;
+  font-size: 0.8rem;
+  color: #dee2e6;
+}
+
+.treino-explica {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #adb5bd;
+}
+
+.treino-porque {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid #2a9d8f;
+  background: #1b1e24;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #dee2e6;
+}
+
+.treino-numeros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.treino-lista {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.78rem;
+  color: #ced4da;
+}
+
+.treino-lista li {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}

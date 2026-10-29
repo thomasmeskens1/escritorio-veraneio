@@ -212,6 +212,12 @@ function criarTreino(k, dados) {
     const resultado = novoEl('p', `perfil-treino-resultado${resultadoTreino.erro ? ' erro' : ''}`, resultadoTreino.texto);
     resultado.setAttribute('role', 'status');
     bloco.append(resultado);
+    if (resultadoTreino.relatorio) {
+      const ver = novoEl('button', 'botao-secundario', 'Ver relatório');
+      ver.type = 'button';
+      ver.addEventListener('click', () => abrirRelatorioTreino(resultadoTreino.relatorio));
+      bloco.append(ver);
+    }
   }
   return bloco;
 }
@@ -243,7 +249,10 @@ async function treinarAgora() {
     const dados = await resposta.json().catch(() => ({}));
     if (resposta.status === 403) resultadoTreino = { chave: k, erro: true, texto: 'Apenas a diretoria pode treinar.' };
     else if (!resposta.ok) resultadoTreino = { chave: k, erro: true, texto: dados.mensagem || 'Não foi possível treinar agora.' };
-    else resultadoTreino = { chave: k, erro: false, texto: textoTreino(dados) };
+    else {
+      resultadoTreino = { chave: k, erro: false, texto: textoTreino(dados), relatorio: dados.relatorio };
+      if (dados.relatorio) abrirRelatorioTreino(dados.relatorio); // o que foi aprendido e por quê
+    }
   } catch {
     resultadoTreino = { chave: k, erro: true, texto: 'Servidor indisponível. Tente novamente.' };
   } finally {
