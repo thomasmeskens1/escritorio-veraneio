@@ -732,3 +732,46 @@
   border: none;
   padding: 0;
 }
+
+/* Botão "Parar" ao lado do "pensando..." (parar.py) */
+.pensando:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.botao-parar {
+  padding: 2px 10px;
+  background: transparent;
+  border: 1px solid rgba(250, 82, 82, 0.55);
+  border-radius: 6px;
+  color: #ffa8a8;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.botao-parar:hover,
+.botao-parar:focus-visible {
+  background: rgba(250, 82, 82, 0.15);
+  outline: none;
+}
+
+.botao-parar:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.msg-encerrado {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: #868e96;
+  font-style: italic;
+}
+
+.form-aviso-fechar {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  color: #ffa8a8;
+}

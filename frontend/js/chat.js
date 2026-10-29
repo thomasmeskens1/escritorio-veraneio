@@ -52,7 +52,8 @@ function textoNatural(texto) {
     .trim();
 }
 
-function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, formulario, link, relatorio }) {
+function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, formulario, link, relatorio,
+  formulario_encerrado: encerrado }) {
   const div = document.createElement('div');
   div.className = `msg msg-${tipo}`;
   const nome = document.createElement('span');
@@ -62,8 +63,11 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
   const extraido = tipo === 'agente' ? extrairFormulario(texto) : { texto, formulario: null };
   div.append(nome, document.createTextNode(tipo === 'agente' ? textoNatural(extraido.texto) : texto));
   const pedido = formulario || extraido.formulario;
-  // O formulário abre em pop-up (js/formularios.js); no chat fica só o botão para reabrir.
-  if (pedido) div.append(criarBotaoFormulario(pedido, tarefa_id));
+  // O formulário abre em pop-up (js/formularios.js); no chat fica só o botão para reabrir. Fechado sem resposta,
+  // a solicitação foi parada e o formulário não reabre.
+  if (pedido && (encerrado || formulariosEncerrados.has(tarefa_id))) {
+    div.append(novoEl('span', 'msg-encerrado', 'Formulário encerrado sem resposta.'));
+  } else if (pedido) div.append(criarBotaoFormulario(pedido, tarefa_id));
   if (anexos?.length) div.append(criarAnexosDaMensagem(anexos));
   if (tipo === 'agente' && link && LINK_DRIVE.test(link)) div.append(criarBotaoVisualizar(link));
   if (tipo === 'agente' && relatorio && LINK_RELATORIO.test(relatorio)) div.append(criarBotaoRelatorio(relatorio));
@@ -84,8 +88,38 @@ function abrirFormularioDaMensagem(pedido, tarefaId) {
   abrirFormularioPopup(pedido, tarefaId ? (respostas, textoRespostas) => {
     respondendoTarefa = tarefaId;
     enviarRespostasDoFormulario(respostas, textoRespostas);
-  } : undefined, nome ? `${nome} precisa destas respostas para seguir` : '');
+  } : undefined, nome ? `${nome} precisa destas respostas para seguir` : '',
+  tarefaId ? () => pararSolicitacao(`/api/tarefas/${tarefaId}/parar`) : null); // fechar sem responder = parar
 }
+
+// "Parar" (botão do chat ou formulário fechado): o servidor para a tarefa ou encerra o formulário (parar.py) e
+// avisa no chat; o aviso tira o "pensando..." e o "!".
+const formulariosEncerrados = new Set(); // tarefa_id dos formulários fechados sem resposta nesta sessão
+
+async function pararSolicitacao(caminho) {
+  if (!sessao) return;
+  const alvo = chatAberto && { ...chatAberto };
+  try {
+    const resposta = await fetch(caminho, { method: 'POST', headers: { Authorization: `Bearer ${sessao.token}` } });
+    if (!resposta.ok && alvo) {
+      const dados = await resposta.json().catch(() => ({}));
+      adicionarMensagem(alvo.andar, alvo.agente, { autor: 'sistema', tipo: 'sistema',
+        texto: dados.detail || 'Não foi possível parar agora. Tente de novo.' });
+    }
+  } catch {
+    if (alvo) adicionarMensagem(alvo.andar, alvo.agente, { autor: 'sistema', tipo: 'sistema', texto: 'Sem conexão com o servidor.' });
+  }
+  atualizarPendencias();
+}
+
+const botaoParar = document.getElementById('modal-parar');
+botaoParar.addEventListener('click', () => {
+  if (!chatAberto) return;
+  botaoParar.disabled = true;
+  const { andar, agente } = chatAberto;
+  pararSolicitacao(`/api/chats/${encodeURIComponent(andar)}/${encodeURIComponent(agente)}/parar`)
+    .finally(() => { botaoParar.disabled = false; });
+});
 
 function criarBotaoFormulario(pedido, tarefaId) {
   const botao = novoEl('button', 'botao-secundario msg-ajuste', 'Responder formulário');
@@ -98,7 +132,7 @@ function criarBotaoFormulario(pedido, tarefaId) {
 const formulariosMostrados = new Set();
 
 function formularioDaMensagem(m) {
-  if (!m || m.tipo === 'voce') return null;
+  if (!m || m.tipo === 'voce' || m.formulario_encerrado || formulariosEncerrados.has(m.tarefa_id)) return null;
   return m.formulario || (m.tipo === 'agente' ? extrairFormulario(m.texto).formulario : null);
 }
 
@@ -288,7 +322,7 @@ function mensagemDoAgente(andar, agente, dados) {
   const meta = metadadosResposta(dados);
   const autor = !meta && dados.modelo ? `${nome} · ${dados.modelo}` : nome;
   return { autor, texto: dados.texto, tipo: 'agente', meta, tarefa_id: dados.tarefa_id, link: dados.link,
-    relatorio: dados.relatorio };
+    relatorio: dados.relatorio, formulario_encerrado: dados.formulario_encerrado };
 }
 
 function converterDoServidor(andar, agente, m) {
@@ -608,12 +642,16 @@ function receberAdiada({ andar, agente, texto, tarefa_id }) {
 // no chat dele e toast se o chat não estiver aberto.
 // `liberar`: o pedido não vai gerar resposta neste chat (ex.: encaminhado ao Gestor, rotina agendada).
 // `opcoes`: botões de resposta rápida ([{rotulo, texto}]); o clique envia o texto como mensagem.
-function receberAviso({ andar, agente, texto, titulo, liberar, opcoes, formulario }) {
+function receberAviso({ andar, agente, texto, titulo, liberar, opcoes, formulario, tarefa_id }) {
   if (!andar || !agente) {
     console.info('Aviso do servidor:', texto);
     return;
   }
   if (liberar) pendentes.delete(chave(andar, agente));
+  if (titulo === 'Solicitação parada' && tarefa_id) { // formulário encerrado: some o botão de responder
+    formulariosEncerrados.add(tarefa_id);
+    if (chatEstaAberto(andar, agente)) renderizarHistorico(andar, agente);
+  }
   adicionarMensagem(andar, agente, { autor: 'sistema', texto, tipo: 'sistema', opcoes, formulario });
   if (!chatEstaAberto(andar, agente)) mostrarToast(andar, agente, texto, titulo || 'Aviso');
   if (titulo === 'Rotina agendada') atualizarRotinas(andar, agente); // lista do popup do agente

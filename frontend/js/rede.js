@@ -37,6 +37,9 @@ function tratarMensagem(msg) {
     case 'aviso':
       receberAviso(msg);
       break;
+    case 'correcao_nova': // ratinho do Cérebro (js/aviso_cerebro.js)
+      mostrarAvisoCerebro(msg.total, msg.ultima);
+      break;
     case 'erro':
       receberErro(msg);
       break;

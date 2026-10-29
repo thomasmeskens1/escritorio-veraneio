@@ -626,3 +626,162 @@
 .usuario-status.ausente {
   background: #fab005;
 }
+
+/* ---------- Ratinho do Cérebro: correções e elogios para aprovar (js/aviso_cerebro.js) ---------- */
+.aviso-cerebro {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 330px;
+  max-width: 100%;
+  padding: 8px 34px 8px 8px;
+  background: linear-gradient(135deg, #2b1f2a, #1b1e24);
+  border: 1px solid rgba(255, 143, 171, 0.55);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 18px rgba(255, 143, 171, 0.18);
+  color: #f1f3f5;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  animation: rato-entra 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both, rato-flutua 3.2s ease-in-out 0.7s infinite;
+}
+
+.aviso-cerebro:hover,
+.aviso-cerebro:focus-visible {
+  border-color: #ff8fab;
+  outline: none;
+}
+
+.aviso-cerebro.saindo {
+  animation: rato-sai 0.35s ease-in forwards;
+}
+
+.aviso-cerebro .rato {
+  flex: none;
+  width: 64px;
+  height: 58px;
+}
+
+.rato-orelha {
+  transform-box: fill-box;
+  transform-origin: 50% 90%;
+  animation: rato-orelha 2.4s ease-in-out infinite;
+}
+
+.rato-orelha-d {
+  animation-delay: 0.25s;
+}
+
+.rato-rabo {
+  transform-box: fill-box;
+  transform-origin: 0% 50%;
+  animation: rato-rabo 1.6s ease-in-out infinite;
+}
+
+.rato-cerebro {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: rato-cerebro 1.8s ease-in-out infinite;
+}
+
+.rato-olhos {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: rato-pisca 4.5s infinite;
+}
+
+.aviso-cerebro-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.aviso-cerebro-texto strong {
+  font-size: 0.86rem;
+}
+
+.aviso-cerebro-texto small {
+  color: #ced4da;
+  font-size: 0.72rem;
+}
+
+.aviso-cerebro-selo {
+  position: absolute;
+  top: -8px;
+  left: 50px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #e03131;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  box-shadow: 0 0 0 2px #15171c;
+  animation: rato-selo 1.4s ease-in-out infinite;
+}
+
+.aviso-cerebro-fechar {
+  position: absolute;
+  top: 4px;
+  right: 10px;
+  color: #868e96;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.aviso-cerebro-fechar:hover {
+  color: #f1f3f5;
+}
+
+@keyframes rato-entra {
+  0% { opacity: 0; transform: translateX(120%) rotate(6deg); }
+  100% { opacity: 1; transform: translateX(0) rotate(0); }
+}
+
+@keyframes rato-sai {
+  to { opacity: 0; transform: translateX(120%); }
+}
+
+@keyframes rato-flutua {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes rato-orelha {
+  0%, 70%, 100% { transform: rotate(0); }
+  78% { transform: rotate(-12deg); }
+  86% { transform: rotate(8deg); }
+}
+
+@keyframes rato-rabo {
+  0%, 100% { transform: rotate(0); }
+  50% { transform: rotate(-14deg); }
+}
+
+@keyframes rato-cerebro {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(255, 143, 171, 0)); }
+  50% { transform: scale(1.06); filter: drop-shadow(0 0 4px rgba(255, 143, 171, 0.9)); }
+}
+
+@keyframes rato-pisca {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+
+@keyframes rato-selo {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aviso-cerebro,
+  .aviso-cerebro *,
+  .aviso-cerebro-selo {
+    animation: none !important;
+  }
+}

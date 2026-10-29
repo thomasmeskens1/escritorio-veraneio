@@ -95,7 +95,9 @@ function fecharFormularioPopup() {
   popupFormulario = null;
 }
 
-function abrirFormularioPopup(definicao, aoEnviar, subtitulo = '') {
+// `aoFechar`: o usuário fechou sem enviar (X, Esc ou clique fora). Nos formulários dos agentes isso PARA a
+// solicitação (Thomas, 29/10/2026), e o pop-up avisa antes.
+function abrirFormularioPopup(definicao, aoEnviar, subtitulo = '', aoFechar = null) {
   fecharFormularioPopup();
   const fundo = novoEl('div', 'modal aberto modal-formulario');
   const janela = novoEl('section', 'janela janela-formulario');
@@ -107,17 +109,22 @@ function abrirFormularioPopup(definicao, aoEnviar, subtitulo = '') {
   const fechar = novoEl('button', 'fechar', '×');
   fechar.type = 'button';
   fechar.setAttribute('aria-label', 'Fechar o formulário');
-  fechar.addEventListener('click', fecharFormularioPopup);
+  const fecharSemEnviar = () => {
+    fecharFormularioPopup();
+    aoFechar?.();
+  };
+  fechar.addEventListener('click', fecharSemEnviar);
   barra.append(titulo, fechar);
   const corpo = novoEl('div', 'formulario-corpo');
+  if (aoFechar) corpo.append(novoEl('p', 'form-aviso-fechar', 'Fechar este formulário sem enviar encerra a solicitação.'));
   corpo.append(criarFormulario({ ...definicao, titulo: '' }, (respostas, texto) => {
     fecharFormularioPopup();
     (aoEnviar || enviarRespostasDoFormulario)(respostas, texto.replace(/^Respostas:/, `Respostas — ${definicao.titulo || 'Formulário'}:`));
   }));
   janela.append(barra, corpo);
   fundo.append(janela);
-  fundo.addEventListener('click', (e) => { if (e.target === fundo) fecharFormularioPopup(); });
-  fundo.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); fecharFormularioPopup(); } });
+  fundo.addEventListener('click', (e) => { if (e.target === fundo) fecharSemEnviar(); });
+  fundo.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); fecharSemEnviar(); } });
   document.body.append(fundo);
   popupFormulario = fundo;
   corpo.querySelector('input, select, textarea')?.focus();

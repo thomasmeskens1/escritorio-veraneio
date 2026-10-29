@@ -8,6 +8,7 @@ from fastapi import APIRouter, Header, HTTPException
 import acesso
 import auth
 import encaminhamento
+import parar
 import producao
 import relatorios
 import tarefas
@@ -55,7 +56,8 @@ def _mensagens_da_tarefa(linha, encaminhada: bool | None = None) -> list[dict]:
                      "tempo_segundos": round(linha["tempo_segundos"], 1), "adiada": linha["motivo"] is not None,
                      **({"por": quem.nome} if quem else {}),
                      **({"link": link} if (link := producao.link_de(tarefa_id)) else {}),  # botão "Visualizar"
-                     **({"relatorio": r} if (r := relatorios.link_de(tarefa_id)) else {})},  # "Ver relatório"
+                     **({"relatorio": r} if (r := relatorios.link_de(tarefa_id)) else {}),  # "Ver relatório"
+                     **({"formulario_encerrado": True} if parar.formulario_encerrado(tarefa_id) else {})},
         })
     elif status == "falhou":
         mensagens.append({"autor": "sistema", "texto": linha["motivo"] or "Falha ao executar a tarefa.",
@@ -129,7 +131,8 @@ def pendencias(usuario: str) -> list[dict]:
             vistos |= chats
             continue
         vistos |= chats
-        if linha["status"] == "concluida" and _tem_formulario(linha["resposta"]):
+        if (linha["status"] == "concluida" and _tem_formulario(linha["resposta"])
+                and not parar.formulario_encerrado(linha["id"])):
             # Chat limpo depois da tarefa: o formulário saiu da tela e não conta mais como pendência (teste real,
             # 29/10/2026: o "!" do Gestor de Tráfego apontava para um formulário que não aparecia no chat).
             for andar, agente in [c for c in chats if _limpo_ate(usuario, *c) < linha["id"]]:

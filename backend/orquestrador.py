@@ -154,6 +154,8 @@ async def _executar_imediata(tarefa_id: int, agente: Agente, dificuldade: Dificu
         except ErroInterno as erro:
             return await _falhar_interno(tarefa_id, erro)
         destino = "fila do Claude" if etapa_fila(dificuldade) else "fila de contingência (gratuitos e local)"
+        if tarefas.parada(tarefa_id):
+            return
         tarefas.atualizar(tarefa_id, status="adiada", motivo="Os modelos imediatos não concluíram a tarefa a tempo.")
         tarefas.registrar_evento(tarefa_id, "adiada", agente.id, detalhe=destino)
         monday.andamento(tarefa_id, "adiada")
@@ -167,6 +169,8 @@ async def _executar_imediata(tarefa_id: int, agente: Agente, dificuldade: Dificu
 
 
 async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
+    if tarefas.parada(tarefa_id):  # o usuário parou enquanto o modelo trabalhava: descarta a resposta
+        return
     tarefas.atualizar(tarefa_id, status="concluida", modelo=modelo, resposta=resultado.texto,
                       tokens_entrada=resultado.tokens_entrada, tokens_saida=resultado.tokens_saida, custo_usd=resultado.custo_usd)
     tarefas.registrar_evento(tarefa_id, "concluida", modelo=modelo)
@@ -283,6 +287,8 @@ async def avisar_na_origem(tarefa_id: int, alvo: dict, texto: str, titulo: str) 
 
 
 def _falhar(tarefa_id: int, motivo: str) -> None:
+    if tarefas.parada(tarefa_id):
+        return
     tarefas.atualizar(tarefa_id, status="falhou", motivo=motivo)
     tarefas.registrar_evento(tarefa_id, "falhou", detalhe=motivo)
     cerebro.registrar_resultado(tarefa_id, False)

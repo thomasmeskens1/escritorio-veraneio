@@ -92,7 +92,26 @@ def registrar_se_correcao(usuario: str, andar: str, agente_id: str, texto: str) 
                    "tipo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                    (tarefas._agora(), usuario, andar, agente_id, anterior["id"], texto.strip()[:1000],
                     (anterior["resposta"] or "")[:400], tipo))
+    import atividade  # import tardio: roda em thread; o aviso vai pelo loop do servidor
+
+    atividade._no_loop(avisar_diretoria(tipo))
     return True
+
+
+def pendentes() -> int:
+    return _db().execute("SELECT COUNT(*) FROM observacoes WHERE status = 'nova'").fetchone()[0]
+
+
+async def avisar_diretoria(tipo: str = "") -> None:
+    """Notificação do ratinho do Cérebro (canto inferior direito) para a Diretoria e o master conectados
+    (Thomas, 29/10/2026): há correções ou elogios esperando aprovação."""
+    from auth import e_master
+    from conexoes import gerenciador
+
+    total = pendentes()
+    for ws, usuario in list(gerenciador.ativas.items()):
+        if usuario.get("role") == "diretoria" or e_master(usuario["sub"]):
+            await gerenciador.enviar(ws, {"tipo": "correcao_nova", "total": total, "ultima": tipo})
 
 
 def regras_para(agente_id: str) -> str:

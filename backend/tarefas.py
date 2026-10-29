@@ -140,7 +140,18 @@ def criar(usuario: str, andar: str, agente: str, texto: str, dificuldade: str, e
         return cursor.lastrowid
 
 
+MOTIVO_PARADA = "Solicitação parada"  # botão "Parar" ou formulário fechado (parar.py)
+
+
+def parada(tarefa_id: int) -> bool:
+    """A tarefa foi parada pelo usuário: nada mais muda o status dela (o resultado que chegar depois é descartado)."""
+    linha = _db().execute("SELECT status, motivo FROM tarefas WHERE id = ?", (tarefa_id,)).fetchone()
+    return bool(linha) and linha["status"] == "falhou" and (linha["motivo"] or "").startswith(MOTIVO_PARADA)
+
+
 def atualizar(tarefa_id: int, **campos) -> None:
+    if "status" in campos and parada(tarefa_id):
+        return  # parada: o modelo, a fila ou o Max terminaram depois do "Parar"; não volta a rodar nem é entregue
     if campos.get("status") in ("concluida", "falhou"):
         campos.setdefault("concluida_em", _agora())
     colunas = ", ".join(f"{c} = ?" for c in campos)

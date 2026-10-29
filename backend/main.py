@@ -32,6 +32,7 @@ import comercial
 import entrevista
 import historico
 import orquestrador
+import parar
 import producao
 import relatorios
 import tarefas
@@ -142,6 +143,7 @@ app.include_router(modelos_uso.rotas)
 app.include_router(correcoes.rotas)
 app.include_router(relatorios.rotas)
 app.include_router(usuarios_admin.rotas)
+app.include_router(parar.rotas)
 
 
 class Credenciais(BaseModel):

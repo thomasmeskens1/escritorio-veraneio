@@ -105,6 +105,7 @@ function iniciarSessao(nova) {
   configurarElevador();
   iniciarEscritorio();
   atualizarPendencias(); // "!" nos agentes com formulário ou produção esperando
+  verificarAvisoCerebro(); // ratinho do Cérebro se houver correções ou elogios para aprovar (Diretoria)
   conectar();
 }
 
@@ -122,6 +123,7 @@ function encerrarSessao(aviso = '') {
   limparPerfis();
   atualizarContadores({});
   limparToasts();
+  limparAvisoCerebro();
   encerrarEscritorio();
   document.getElementById('app').hidden = true;
   telaLogin.hidden = false;
