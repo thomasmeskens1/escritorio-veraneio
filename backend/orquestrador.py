@@ -7,6 +7,7 @@ esgotado ou ritmo diário atingido), segue em contingência com os gratuitos e o
 import asyncio
 import json
 import logging
+import re
 import time
 import traceback
 from pathlib import Path
@@ -16,6 +17,7 @@ import atividade
 import cerebro
 import config
 import correcoes
+import corrida
 import encaminhamento
 import espera
 import max_texto
@@ -128,12 +130,22 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
 
 
 async def _executar_etapas(tarefa, agente: Agente, etapas: list[Etapa]) -> bool:
-    """Troca de modelo a cada falha, até um concluir."""
-    for etapa in etapas:
-        resultado, _ = await _tentar(tarefa, agente, etapa)
+    """Troca de modelo a cada falha, até um concluir. Ordem e limites dos gratuitos aprendidos com o histórico; se o
+    primeiro demora mais do que costuma, o segundo larga em paralelo e vale a primeira resposta (corrida.py)."""
+    etapas = corrida.ajustar(etapas)
+    i = 0
+    while i < len(etapas):
+        etapa, seguinte = etapas[i], etapas[i + 1] if i + 1 < len(etapas) else None
+        if corrida.pode_correr(agente.id, etapa, seguinte):
+            vencedora, resultado, seguinte_rodou = await corrida.correr(
+                lambda e: _tentar(tarefa, agente, e), etapa, seguinte)
+            i += 2 if seguinte_rodou else 1
+        else:
+            (resultado, _), vencedora = await _tentar(tarefa, agente, etapa), etapa
+            i += 1
         if resultado:
-            saude.registrar_sucesso(etapa.modelo)  # modelo em teste depois de afastado: histórico limpo
-            await _concluir(tarefa["id"], etapa.modelo, resultado)
+            saude.registrar_sucesso(vencedora.modelo)  # modelo em teste depois de afastado: histórico limpo
+            await _concluir(tarefa["id"], vencedora.modelo, resultado)
             return True
     return False
 
@@ -184,7 +196,12 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
     await entregar_na_origem(linha)
     producao_a_seguir = False
     if linha["agente"] == "gestor" and config.usa_max(linha["usuario"]):
-        if (pergunta := espera.pergunta_pendente(resultado.texto)) and _vai_produzir(linha["id"]):
+        if _vai_produzir(linha["id"]) and not _pede_arquivo(linha["texto"]):
+            # Plano com Criador de Imagens/Editor de Vídeo, mas o pedido não fala em arquivo: pergunta antes.
+            pergunta = espera.pergunta_pendente(resultado.texto)
+            await _esperar_resposta(linha, pergunta, confirmar_arquivo=True)
+            producao_a_seguir = True
+        elif (pergunta := espera.pergunta_pendente(resultado.texto)) and _vai_produzir(linha["id"]):
             await _esperar_resposta(linha, pergunta)  # a produção só começa quando o usuário responder
             producao_a_seguir = True                  # o item do Monday não vai para Revisão ainda
         else:
@@ -198,9 +215,34 @@ def _vai_produzir(tarefa_id: int) -> bool:
     return bool(agentes_de_producao(tarefa_id))
 
 
-async def _esperar_resposta(linha, pergunta: str) -> None:
-    """Guarda a produção e pergunta no chat onde o pedido nasceu (o do Gestor, se foi pedido direto a ele)."""
+# O pedido fala em arquivo visual? Só a primeira e a última linha (o pedido de verdade): no meio de um briefing
+# longo, "fotografias e vídeos" é conteúdo (persona da Francielle, #224 → produção indevida #226).
+PEDE_ARQUIVO = re.compile(r"\b(fotos?|imagens?|capas?|artes?|banners?|png|mp4|v[ií]deos?|thumbnails?|layouts?|"
+                          r"criativos?|feed)\b", re.IGNORECASE)
+
+
+def _pede_arquivo(texto: str) -> bool:
+    texto = encaminhamento.pedido_original(texto or "")
+    if "FORMATO DA PEÇA" in texto:  # item do Monday: sempre peça
+        return True
+    linhas = [l for l in texto.strip().splitlines() if l.strip()]
+    pontas = f"{linhas[0][:300]}\n{linhas[-1][-300:]}" if linhas else ""  # primeira e última linha
+    return bool(encaminhamento.PECAS.search(pontas) or PEDE_ARQUIVO.search(pontas))
+
+
+async def _esperar_resposta(linha, pergunta: str | None, confirmar_arquivo: bool = False) -> None:
+    """Guarda a produção e pergunta no chat onde o pedido nasceu (o do Gestor, se foi pedido direto a ele).
+    `confirmar_arquivo`: o pedido não falava em arquivo; a pergunta é se deve produzir."""
     andar, agente = encaminhamento.origem(linha["id"]) or (linha["andar"], linha["agente"])
+    if confirmar_arquivo:
+        espera.guardar(linha["id"], linha["usuario"], andar, agente, pergunta or "", confirmar_arquivo=True)
+        return await gerenciador.enviar_para_usuario(linha["usuario"], {
+            "tipo": "aviso", "andar": andar, "agente": agente, "titulo": "Produzir arquivo?",
+            "texto": "O plano do Gestor envolve imagem ou vídeo, mas o seu pedido não fala em arquivo. Quer que eu "
+                     "produza a peça final (PNG/MP4) no Max?" + (f"\n\nSe preferir, responda à pergunta do Gestor "
+                     "normalmente: a conversa segue com ele, sem produzir nada." if pergunta else ""),
+            "opcoes": [{"rotulo": "Produzir a peça final", "texto": "Produzir a peça final."},
+                       {"rotulo": "Não precisa de arquivo", "texto": "Não precisa produzir arquivo."}]})
     espera.guardar(linha["id"], linha["usuario"], andar, agente, pergunta)
     await gerenciador.enviar_para_usuario(linha["usuario"], {
         "tipo": "aviso", "andar": andar, "agente": agente, "titulo": "Produção em espera",
@@ -210,13 +252,21 @@ async def _esperar_resposta(linha, pergunta: str) -> None:
                    {"rotulo": "Cancelar produção", "texto": "Cancelar a produção."}]})
 
 
-async def retomar_producao(pendente, resposta: str) -> str:
-    """Resposta do usuário a uma produção em espera: vira decisão final no briefing (ou cancela)."""
+async def retomar_producao(pendente, resposta: str) -> str | None:
+    """Resposta do usuário a uma produção em espera: vira decisão final no briefing (ou cancela). None: não era
+    sobre a produção (pedido sem arquivo e resposta sem "produzir"); a mensagem segue como conversa normal."""
     espera.remover(pendente["tarefa_id"])
     linha = tarefas.obter(pendente["tarefa_id"])
     if espera.CANCELAR.search(resposta):
         monday.andamento(linha["id"], "concluida", "Produção cancelada pelo usuário.", False)
         return "Combinado: a produção foi cancelada. O plano do Gestor continua aqui no chat."
+    if pendente["confirmar_arquivo"] and not espera.PRODUZIR.search(resposta):
+        monday.andamento(linha["id"], "concluida", "Sem produção de arquivo.", False)
+        return None
+    if pendente["confirmar_arquivo"]:
+        return await _produzir_pecas(linha, linha["resposta"]) and (
+            "Combinado! A peça final foi para a produção no Max. A entrega chega aqui quando ficar pronta.") or (
+            "O plano não tem uma peça para produzir no Max.")
     consolidado = (f"{linha['resposta']}\n\nDECISÃO DO USUÁRIO sobre a pergunta \"{pendente['pergunta']}\" "
                    f"(vale sobre o que estiver acima): {resposta}")
     await _produzir_pecas(linha, consolidado)

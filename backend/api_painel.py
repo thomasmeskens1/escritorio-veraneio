@@ -116,6 +116,9 @@ async def treinar_agora(authorization: str = Header("")):
         return {"ok": False, "modelo": None, "mensagem": "Ainda não há tarefas finalizadas para treinar."}
     relatorio = await asyncio.to_thread(relatorio_aprendizado.montar, meta, anterior, _nome_do_agente)
     relatorio["rede"] = await asyncio.to_thread(reranker.treinar)  # rede neural do Cérebro (👍/👎, elogios, correções)
+    import corrida
+
+    relatorio["modelos"] = await asyncio.to_thread(corrida.resumo)  # ordem e tempos aprendidos de cada modelo
     if meta["acuracia"] is None:
         return {"ok": True, "modelo": None, "mensagem": meta.get("observacao", "Dados insuficientes."),
                 "relatorio": relatorio}

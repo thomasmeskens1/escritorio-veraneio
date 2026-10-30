@@ -15,7 +15,10 @@ PEDE_DECISAO = re.compile(
     r"precis\w*\s+de\s+(uma\s+)?(confirma|defini|resposta|decis)|confirma[çc][aã]o\s+sua|"
     r"aguard\w*\s+(a\s+|sua\s+)?(defini|confirma|resposta|decis)|pendente\s+(de\s+)?defini|"
     r"me\s+(diga|confirme)\b|voc[eê]\s+prefere|prefere\s+que", re.IGNORECASE)
-CANCELAR = re.compile(r"^\s*(cancel\w*|n[aã]o\s+produz\w*|pare\b)", re.IGNORECASE)
+CANCELAR = re.compile(r"^\s*(cancel\w*|n[aã]o\s+produz\w*|n[aã]o\s+precisa\w*|pare\b)", re.IGNORECASE)
+# Confirmação explícita (pedido que não falava em arquivo): só isto dispara a produção.
+PRODUZIR = re.compile(r"^\s*(sim\b|pode\s+(seguir|produzir)|produz\w*|quero\s+(a\s+)?pe[cç]a|pe[cç]a\s+final)",
+                      re.IGNORECASE)
 
 _ESQUEMA = """CREATE TABLE IF NOT EXISTS producao_em_espera (
     tarefa_id INTEGER PRIMARY KEY, usuario TEXT NOT NULL, andar TEXT NOT NULL, agente TEXT NOT NULL,
@@ -28,6 +31,8 @@ def _db():
     db = tarefas._db()
     if not _pronto:
         db.execute(_ESQUEMA)
+        if "confirmar_arquivo" not in {c[1] for c in db.execute("PRAGMA table_info(producao_em_espera)")}:
+            db.execute("ALTER TABLE producao_em_espera ADD COLUMN confirmar_arquivo INTEGER NOT NULL DEFAULT 0")
         _pronto = True
     return db
 
@@ -44,10 +49,14 @@ def pergunta_pendente(texto: str) -> str | None:
     return (com_pergunta or paragrafos or [final])[-1][:500]
 
 
-def guardar(tarefa_id: int, usuario: str, andar: str, agente: str, pergunta: str) -> None:
+def guardar(tarefa_id: int, usuario: str, andar: str, agente: str, pergunta: str,
+            confirmar_arquivo: bool = False) -> None:
+    """`confirmar_arquivo`: o pedido não falava em arquivo (ex.: persona da Francielle, tarefa #224, que virou
+    produção de vídeo na #226). Só um "produzir" explícito dispara a produção; outra resposta segue como conversa."""
     with _db() as db:
-        db.execute("INSERT OR REPLACE INTO producao_em_espera VALUES (?, ?, ?, ?, ?, ?)",
-                   (tarefa_id, usuario, andar, agente, pergunta, tarefas._agora()))
+        db.execute("INSERT OR REPLACE INTO producao_em_espera (tarefa_id, usuario, andar, agente, pergunta, criada_em, "
+                   "confirmar_arquivo) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                   (tarefa_id, usuario, andar, agente, pergunta, tarefas._agora(), int(confirmar_arquivo)))
 
 
 def no_chat(usuario: str, andar: str, agente: str):

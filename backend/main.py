@@ -39,6 +39,7 @@ import producao
 import relatorios
 import reranker
 import tarefas
+import triagem
 import usuarios_admin
 from api_painel import rotas as rotas_painel
 from auth import autenticar, criar_token, e_master, validar_token
@@ -150,6 +151,7 @@ app.include_router(usuarios_admin.rotas)
 app.include_router(parar.rotas)
 app.include_router(avaliacoes.rotas)
 app.include_router(consolidacao_semanal.rotas)
+app.include_router(triagem.rotas)
 
 
 class Credenciais(BaseModel):
@@ -321,8 +323,8 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     # Correção do Thomas a uma resposta recente vira observação para a revisão semanal (o pedido segue normal).
     orquestrador._em_segundo_plano(asyncio.to_thread(  # correção ou elogio: em segundo plano, sem atrasar a resposta
         correcoes.registrar_se_correcao, usuario["sub"], andar, agente.id, texto))
-    if (pendente := espera.no_chat(usuario["sub"], andar, agente.id)):
-        texto_aviso = await orquestrador.retomar_producao(pendente, texto)
+    if (pendente := espera.no_chat(usuario["sub"], andar, agente.id)) and (
+            texto_aviso := await orquestrador.retomar_producao(pendente, texto)) is not None:
         return await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "titulo": "Produção", "liberar": True,
                                              "texto": texto_aviso})
     # Estudo com pesquisa na web (Analista de Tendências, Estrategista): no Max, só na conta do Thomas. Para as
@@ -359,10 +361,14 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     elif encaminhamento.para_o_gestor(andar, agente.id, texto):
         origem_id = agente.id
         gestor = buscar_agente(andar, encaminhamento.GESTOR)
+        peca = encaminhamento.PECAS.search(texto)
         aviso = {"titulo": "Encaminhado ao Gestor",
-                 "texto": f"Isso é uma peça completa, então encaminhei ao Gestor: ele monta o plano e aciona "
-                          f"{agente.nome}, Designer, Criador de Imagens e quem mais precisar. "
-                          "A resposta final chega aqui, nesta conversa, quando a equipe terminar."}
+                 "texto": f"Encaminhei ao Gestor porque o pedido fala em “{peca.group(0) if peca else 'peça'}”, e uma "
+                          f"peça completa precisa de texto, arte e imagem, mais do que o {agente.nome} faz sozinho. "
+                          f"Ele monta o plano e aciona {agente.nome}, Designer, Criador de Imagens e quem mais "
+                          "precisar. A resposta final chega aqui, nesta conversa, quando a equipe terminar. "
+                          f"(Se era só a parte do {agente.nome}, peça de novo dizendo o que ele deve fazer, ex.: "
+                          "“escreva só a legenda”.)"}
         agente, texto = gestor, f"[Pedido feito ao {agente.nome}] {texto}"
         # Pedido de peça pelo chat: o formato pedido (STORIES, POST...) vai explícito, como nos itens do Monday.
         # Teste real: "4 stories" foi respondido depois como REELS.

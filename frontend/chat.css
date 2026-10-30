@@ -831,3 +831,52 @@
   color: inherit;
   font-size: 0.75rem;
 }
+
+/* Triagem (js/triagem.js): porta de entrada única */
+.janela-triagem {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.triagem-corpo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.triagem-acoes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.triagem-dica {
+  font-size: 0.72rem;
+  color: #868e96;
+}
+
+.triagem-sugestao {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(116, 192, 252, 0.35);
+  border-radius: 8px;
+  background: rgba(116, 192, 252, 0.08);
+}
+
+.triagem-sugestao p {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+}
+
+.triagem-funcao {
+  font-size: 0.75rem;
+  color: #adb5bd;
+}
+
+.triagem-resultado {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

@@ -106,6 +106,18 @@ function abrirRelatorioTreino(r = ultimoRelatorioTreino) {
     if (rd.observacao) rede.append(novoEl('p', 'treino-porque', rd.observacao));
     corpo.append(rede);
   }
+
+  // 4. Modelos (backend/corrida.py): ordem, tempo de espera e corrida aprendidos com o histórico
+  if (r.modelos?.length) {
+    const modelos = blocoTreino('4. Modelos: quem responde melhor',
+      'Os modelos gratuitos são tentados na ordem do menor tempo esperado (o tempo típico de resposta + a chance de '
+      + 'falhar). Se o primeiro passa do tempo em que costuma responder, o segundo começa junto e vale a primeira '
+      + 'resposta boa.');
+    modelos.append(listaTreino(r.modelos.slice(0, 8).map((m) => `${m.modelo.split('/').pop()}: `
+      + `${Math.round(m.taxa * 100)}% de acerto em ${m.tentativas} tentativas`
+      + (m.p50 != null ? `, costuma responder em ${Math.round(m.p50)} s` : ', ainda sem resposta boa'))));
+    corpo.append(modelos);
+  }
   janela.append(barra, corpo);
   fundo.append(janela);
   fundo.addEventListener('click', (e) => { if (e.target === fundo) fecharFormularioPopup(); });
