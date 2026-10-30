@@ -155,6 +155,13 @@ def _criar(contador: _Contador, tarefa_id: int, nome: str, grupo: str = "", data
         return (f"Responsável não informado para esta peça avulsa. NÃO crie ainda: termine a resposta com o bloco "
                 f"<<FORMULARIO>> perguntando o responsável (opções: {', '.join(RESPONSAVEIS)}) e crie depois da "
                 "resposta.")
+    # A Conta é a empresa da tarefa, não a que o modelo escreveu (revisão de 30/10/2026, 2.17: sem o modelo dizer,
+    # uma peça da Casa Vero ia como "Casa Veraneio" e era produzida com o Cérebro e a persona da Casa Veraneio).
+    import empresas
+
+    tarefa = tarefas.obter(tarefa_id) if tarefa_id else None
+    if tarefa and tarefa["empresa"] in empresas.EMPRESAS:
+        conta = empresas.EMPRESAS[tarefa["empresa"]]["monday"]
     valores = _valores(data_postagem, data_entrega, horario, objetivo, responsavel, conta or "Casa Veraneio",
                        legenda, nome)
     if isinstance(valores, str):

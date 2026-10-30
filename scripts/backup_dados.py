@@ -16,7 +16,10 @@ from pathlib import Path
 DADOS = Path(__file__).resolve().parents[1] / "backend" / "dados"
 DESTINO = Path(os.getenv("ESCRITORIO_BACKUP", r"G:\Meu Drive\Backups Escritório Veraneio"))
 MANTER = 7
-FORA = {"operador.token"}
+# Segredos não vão para o Drive pessoal sem criptografia (revisão de 30/10/2026, 2.32): tokens de login (YouTube,
+# Monday) e as senhas dos usuários. Para restaurar, eles são recriados (novo login) ou copiados do PC.
+FORA = {"operador.token", "usuarios.json"}
+FORA_SE_NOME_TEM = ("token", "segredo", "secret", "credential", ".env")
 EXTENSOES_FORA = {".log", ".1", ".pyc"}
 LOG = DADOS / "backup.log"
 
@@ -54,6 +57,7 @@ def fazer_backup() -> Path:
             for arquivo in sorted(DADOS.rglob("*")):
                 relativo = arquivo.relative_to(DADOS)
                 if (not arquivo.is_file() or arquivo.name in FORA or arquivo.suffix in EXTENSOES_FORA
+                        or any(p in arquivo.name.lower() for p in FORA_SE_NOME_TEM)
                         or relativo.parts[0] == "__pycache__" or arquivo.name.startswith("escritorio.")):
                     continue
                 pacote.write(arquivo, relativo.as_posix())

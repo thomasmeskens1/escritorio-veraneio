@@ -30,6 +30,7 @@ log = logging.getLogger(__name__)
 FUSO = ZoneInfo("America/Sao_Paulo")
 MINIMO_MINUTOS = 15
 ESPERA_OCUPADO_S, TENTATIVAS_OCUPADO = 30, 60  # agente ocupado: tenta por até 30 min
+MAX_ROTINAS_POR_USUARIO = 5  # revisão de 30/10/2026 (2.21): antes sem limite (o master não tem limite)
 
 _ESQUEMA = """
 CREATE TABLE IF NOT EXISTS agendamentos (
@@ -206,6 +207,14 @@ async def _executar(rotina_id: int) -> None:
     if not agente:
         log.info("Rotina %s: agente %s não existe mais; desativada.", rotina_id, linha["agente"])
         return desativar(rotina_id)
+    # Conta desativada ou sem acesso ao agente: a rotina para (antes seguia gerando tarefas; revisão de 30/10, 2.21).
+    from auth import carregar_usuarios
+
+    dono = carregar_usuarios().get(linha["usuario"])
+    if not dono or dono.get("ativo", True) is False or not acesso.pode_usar({"sub": linha["usuario"]}, linha["andar"],
+                                                                             agente.id):
+        log.warning("Rotina %s desativada: %s sem acesso a %s.", rotina_id, linha["usuario"], agente.id)
+        return desativar(rotina_id)
     unica = json.loads(linha["regra"])["tipo"] == "data"
     for _ in range(TENTATIVAS_OCUPADO):  # agente ocupado: espera em vez de atropelar a tarefa atual
         if agente.status != Status.trabalhando:
@@ -213,6 +222,9 @@ async def _executar(rotina_id: int) -> None:
         await asyncio.sleep(ESPERA_OCUPADO_S)
     else:
         log.warning("Rotina %s pulada: %s ocupado.", rotina_id, agente.id)
+        await gerenciador.enviar_para_usuario(linha["usuario"], {
+            "tipo": "aviso", "andar": linha["andar"], "agente": linha["agente"], "titulo": "Rotina não executada",
+            "texto": f"A rotina \"{linha['tarefa'][:80]}\" não rodou agora: {agente.nome} ficou ocupado por 30 min."})
         if unica:
             desativar(rotina_id)
         return
@@ -327,6 +339,11 @@ def agendar(dados: Pedido, authorization: str = Header("")):
         regra, descricao = regra_do_formulario(dados)
     except ValueError as erro:
         raise HTTPException(status_code=422, detail=str(erro)) from None
+    ativas = _db().execute("SELECT COUNT(*) FROM agendamentos WHERE usuario = ? AND ativo = 1",
+                           (usuario["sub"],)).fetchone()[0]
+    if ativas >= MAX_ROTINAS_POR_USUARIO and not usuario.get("master"):
+        raise HTTPException(status_code=422, detail=f"Você já tem {ativas} rotinas ativas (limite de "
+                                                    f"{MAX_ROTINAS_POR_USUARIO}). Cancele uma antes de criar outra.")
     return criar(usuario["sub"], dados.andar, agente.id, tarefa, regra, descricao, empresa)
 
 
