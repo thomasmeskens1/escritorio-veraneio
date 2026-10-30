@@ -5,10 +5,24 @@
 const INTERVALO_ESPACO_DUPLO = 400;
 let ultimoEspaco = 0;
 
+// Botão focado por clique (ex.: o andar escolhido no elevador) não conta: o foco fica nele depois do clique e
+// bloqueava o atalho (Thomas, 30/10/2026). Só bloqueia quem está digitando ou chegou ao botão pelo teclado (Tab).
+// (:focus-visible não serve: o Chrome passa a considerar "foco de teclado" assim que a tecla é apertada.)
+let botaoClicado = null;
+['pointerdown', 'mousedown'].forEach((tipo) => document.addEventListener(tipo, (e) => {
+  botaoClicado = e.target.closest?.('button, a') || null;
+}, true));
+
+function focoBloqueiaTriagem() {
+  const foco = document.activeElement;
+  if (!foco || foco === document.body) return false;
+  if (foco.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(foco.tagName)) return true;
+  return /^(BUTTON|A)$/.test(foco.tagName) && foco !== botaoClicado;
+}
+
 function podeAbrirTriagem() {
   if (!sessao || onboarding || popupFormulario || document.querySelector('.modal.aberto')) return false;
-  const foco = document.activeElement;
-  return !(foco && (foco.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(foco.tagName)));
+  return !focoBloqueiaTriagem();
 }
 
 document.addEventListener('keydown', (e) => {
@@ -16,6 +30,8 @@ document.addEventListener('keydown', (e) => {
     if (e.code !== 'Space') ultimoEspaco = 0;
     return;
   }
+  e.preventDefault(); // o espaço não "clica" no botão do andar que ficou focado
+  if (/^(BUTTON|A)$/.test(document.activeElement?.tagName)) document.activeElement.blur();
   const agora = Date.now();
   if (agora - ultimoEspaco <= INTERVALO_ESPACO_DUPLO) {
     e.preventDefault();
@@ -150,5 +166,17 @@ function enviarPelaTriagem(andar, agente, texto, motivo) {
   adicionarMensagem(andar, agente, { autor: 'sistema', tipo: 'sistema', texto: `Triagem: trouxe para cá porque ${motivo}.` });
   modalInput.value = texto;
   ajustarAlturaInput();
-  document.getElementById('modal-form').requestSubmit();
+  // O chat só libera o envio depois de carregar o histórico (e com a conexão ao vivo): espera ficar pronto.
+  const limite = Date.now() + 15000;
+  const tentar = () => {
+    if (!chatAberto || chatAberto.agente !== agente) return; // o usuário fechou ou trocou de chat
+    atualizarChat(); // recalcula o bloqueio (histórico carregado, conexão)
+    if (!modalEnviar.disabled) {
+      modalInput.value = texto;
+      document.getElementById('modal-form').requestSubmit();
+    } else if (Date.now() < limite) {
+      setTimeout(tentar, 150);
+    } // passou do limite: o texto fica no campo para o usuário enviar
+  };
+  tentar();
 }
