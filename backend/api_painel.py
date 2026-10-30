@@ -52,7 +52,7 @@ def listar_tarefas(authorization: str = Header("")):
                 "pausado": tarefas.orcamento_pausado(),  # Claude pausado; a fila segue em contingência
             },
             "modelos_fora": saude.resumo(),
-            "avisos": list(filter(None, [saude.aviso_backup()])) if _usuario(authorization)["role"] == "diretoria" else [],
+            "avisos": saude.avisos_da_operacao() if _usuario(authorization)["role"] == "diretoria" else [],
             "modelos_7d": saude.estatisticas(7),  # saúde de cada modelo: tentativas, falhas, tempo médio
             "aprendizado": aprendizado.resumo(_nome_do_agente),
         },

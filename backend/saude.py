@@ -212,3 +212,53 @@ def aviso_backup() -> str | None:
                         + (f"; {falhas} tentativa(s) falharam depois." if falhas else "."))
             return None
     return "Nenhum backup diário bom registrado no backup.log."
+
+
+# --- Diagnóstico da operação (revisão de 30/10/2026, 2.29, 2.30 e 2.31): antes /api/saude sempre dizia "ok" e as
+# falhas do trabalhador, do Ollama e da rota só iam para os logs. Os avisos aparecem no painel da Diretoria.
+TRABALHADOR_FORA_MIN = 5
+ROTA_MINIMA = 2  # gratuitos no ar abaixo disso: a rota encolheu
+
+
+def banco_ok() -> bool:
+    try:
+        _db().execute("SELECT 1").fetchone()
+        return True
+    except Exception:
+        return False
+
+
+def ollama_ok() -> bool:
+    import httpx
+
+    import config
+
+    try:
+        return httpx.get(f"{config.OLLAMA_BASE_URL}/api/tags", timeout=3).status_code == 200
+    except Exception:
+        return False
+
+
+def avisos_da_operacao() -> list[str]:
+    """Problemas de operação agora, em linguagem simples (vazio = tudo certo)."""
+    import config
+    import max_texto
+
+    avisos = [a for a in [aviso_backup()] if a]
+    try:
+        parado_s = time.time() - max_texto.ARQUIVO_CONTATO.stat().st_mtime
+    except OSError:
+        parado_s = None
+    fila = _db().execute("SELECT COUNT(*) FROM tarefas WHERE status = 'producao'").fetchone()[0]
+    if parado_s is None or parado_s > TRABALHADOR_FORA_MIN * 60:
+        quanto = "nunca respondeu" if parado_s is None else f"sem responder há {int(parado_s // 60)} min"
+        avisos.append(f"Trabalhador do Max {quanto}" + (f", com {fila} peça(s) na fila" if fila else "")
+                      + ". Confira se o PC está ligado e se o trabalhador está rodando.")
+    if not ollama_ok():
+        avisos.append("Ollama fora do ar: o Cérebro está só com a busca por palavras e o modelo local de reserva "
+                      "não funciona. Abra o Ollama no PC.")
+    no_ar = [m for m in config.MODELOS_GRATUITOS if config.modelo_disponivel(m) and disponivel(m)]
+    if len(no_ar) < ROTA_MINIMA:
+        avisos.append(f"Só {len(no_ar)} modelo(s) gratuito(s) no ar agora: as tarefas podem cair no modelo local "
+                      "(lento). Veja \"Modelos fora da rota\" abaixo.")
+    return avisos

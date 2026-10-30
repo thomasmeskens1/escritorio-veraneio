@@ -29,6 +29,19 @@ services:
     # Um processo só (estado dos agentes e WebSockets em memória). Atrás do túnel, o IP real do visitante
     # vem nos cabeçalhos X-Forwarded-* (bloqueio de login por IP).
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips "*"
+    # Revisão de 30/10/2026 (2.29): o Docker marca o contêiner como "unhealthy" se o banco parar de responder.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/saude', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Logs do contêiner com tamanho limitado (antes cresciam sem limite no disco do Docker).
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
 
 volumes:
-  banco: # SQLite fora da pasta compartilhada do Windows; cópia a cada 6 h em backend/dados para o backup
+  banco: # SQLite fora da pasta compartilhada do Windows; cópia a cada 1 h e ao desligar em backend/dados

@@ -91,3 +91,16 @@ def test_aviso_de_backup_atrasado(tmp_path, monkeypatch):
 
     log.write_text(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] Backup ok: x.zip (100 KB)\n", encoding="utf-8")
     assert saude.aviso_backup() is None
+
+
+def test_avisos_da_operacao(monkeypatch, tmp_path):
+    import max_texto
+
+    monkeypatch.setattr(config, "ARQUIVO_LOG_BACKUP", tmp_path / "backup.log")
+    monkeypatch.setattr(max_texto, "ARQUIVO_CONTATO", tmp_path / "max.contato")  # trabalhador nunca respondeu
+    monkeypatch.setattr(saude, "ollama_ok", lambda: False)
+    monkeypatch.setattr(config, "MODELOS_GRATUITOS", ["openrouter/a:free"])
+    avisos = " | ".join(saude.avisos_da_operacao())
+    assert "Trabalhador do Max nunca respondeu" in avisos and "Ollama fora do ar" in avisos
+    assert "backup" in avisos.lower() and "gratuito" in avisos
+    assert saude.banco_ok()

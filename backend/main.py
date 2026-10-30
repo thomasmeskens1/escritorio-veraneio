@@ -40,6 +40,7 @@ import parar
 import producao
 import relatorios
 import reranker
+import saude
 import tarefas
 import triagem
 import usuarios_admin
@@ -135,7 +136,10 @@ async def cabecalhos_seguranca(request: Request, chamar_proximo):
 
 @app.get("/api/saude")
 def saude_do_sistema():
-    """Para o monitoramento externo (UptimeRobot): só diz se o sistema está no ar."""
+    """Para o monitoramento externo (UptimeRobot) e o healthcheck do Docker: 503 se o banco não responde. Os detalhes
+    (trabalhador, Ollama, backup, rota) ficam no painel da Diretoria, não nesta rota pública."""
+    if not saude.banco_ok():
+        raise HTTPException(status_code=503, detail="banco indisponível")
     return {"ok": True}
 
 
