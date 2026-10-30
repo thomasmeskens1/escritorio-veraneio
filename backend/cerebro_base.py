@@ -18,6 +18,7 @@ import cerebro_embed as embed
 import config
 import tarefas
 from empresas import COMUM, PADRAO
+from empresas import nome as nome_da_empresa
 from cerebro_texto import BM25, dividir, mesmo_assunto, termos
 
 log = logging.getLogger(__name__)
@@ -329,7 +330,10 @@ def buscar(pergunta: str, k: int = 5, empresa: str = PADRAO, financeiro: bool = 
     indice = indice_atual()
     if not indice.ids:
         return []
-    permitido = np.array([e in (empresa, COMUM) for e in indice.empresas], dtype=bool)
+    # Empresa "*" (Estrategista, Analista com "Todas"): as três empresas, cada trecho com a etiqueta da sua. Antes só
+    # os trechos comuns voltavam e o agente respondia "não registrado" (revisão de 30/10/2026, item 1.8).
+    todas = empresa == COMUM
+    permitido = np.array([todas or e in (empresa, COMUM) for e in indice.empresas], dtype=bool)
     if not financeiro:
         permitido &= ~indice.financeiro
     if ORLANDO not in pergunta.lower():
@@ -383,7 +387,12 @@ def buscar(pergunta: str, k: int = 5, empresa: str = PADRAO, financeiro: bool = 
                      - (1 - LAMBDA_MMR) * max((parecido(i, j) for j in escolhidos), default=0.0))
         escolhidos.append(melhor)
         restantes.remove(melhor)
-    return [{"id": indice.ids[i], "titulo": indice.titulos[i], "conteudo": indice.conteudos[i],
+    def titulo(i: int) -> str:
+        if not todas or indice.empresas[i] == COMUM:
+            return indice.titulos[i]
+        return f"[{nome_da_empresa(indice.empresas[i])}] {indice.titulos[i]}"
+
+    return [{"id": indice.ids[i], "titulo": titulo(i), "conteudo": indice.conteudos[i],
              "fonte_tipo": indice.fontes[i], "fonte_ref": indice.refs[i], "data": indice.datas[i][:10],
              "nota": round(notas[i], 4), "sinais": sinais[i]} for i in escolhidos]
 

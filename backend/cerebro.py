@@ -6,6 +6,7 @@ Base, busca e aprendizado: cerebro_base.py; estagiários: cerebro_estagiarios.py
 """
 
 import asyncio
+import json
 import logging
 import re
 import threading
@@ -35,6 +36,15 @@ PASTA_CONHECIMENTO = config.PASTA_CONHECIMENTO
 FUSO = ZoneInfo("America/Sao_Paulo")
 HORA_CONSOLIDACAO = 3
 AGENTES_FINANCEIROS = {"analista_metricas", "estrategista", "gestor_trafego"}  # leem vendas/receita/investimento
+# Revisão de 30/10/2026 (item 1.6): marcar só pelos agentes financeiros deixava passar CRM e faturamento em outras
+# respostas (trecho 10756: contas ativas e clientes do Corporativo numa resposta do Prospectador, visível para todos).
+# Preço de diária ("R$ 12.100") e imóvel "à venda" são públicos: não marcam.
+TERMOS_FINANCEIROS = re.compile(
+    r"faturamento|\breceitas?\b|investimento em (?:m[íi]dia|an[úu]ncios|tr[áa]fego)|gasto (?:em|com) (?:m[íi]dia|an[úu]ncios)|"
+    r"\bvendas? (?:do|no|de) (?:m[êe]s|per[íi]odo|ano|trimestre)|\bROAS\b|\bCAC\b|\bLTV\b|ticket m[ée]dio|\blucro|"
+    r"margem (?:de lucro|bruta|l[íi]quida|de contribui)|\bCRM\b|contas? (?:ativas|corporativas)|"
+    r"leads? (?:ganhos|fechados)|\bpipeline\b|carteira de clientes",
+    re.IGNORECASE)
 PESO_OUTROS_USUARIOS = 0.75  # tarefa de outro usuário vale 75% da do Thomas (0,45 contra 0,6)
 MAX_CARACTERES_FERRAMENTA = 3000  # resposta da ferramenta (tokens dos agentes)
 MAX_CARACTERES_CONTEXTO = 6000    # trechos na tarefa do próprio Cérebro
@@ -117,6 +127,17 @@ def empresa_da_tarefa(tarefa_id: int) -> str:
     """Empresa do trabalho (a busca no Cérebro nunca mistura empresas); sem tarefa: dado antigo, Casa Veraneio."""
     linha = tarefas.obter(tarefa_id) if tarefa_id else None
     return linha["empresa"] if linha and linha["empresa"] else empresas.PADRAO
+
+
+def _consultou_financeiro(tarefa_id: int) -> bool:
+    """A resposta se apoiou em algum trecho financeiro (painel: CRM, Ads; ou tarefa já marcada)."""
+    ids = {i for l in base.db().execute("SELECT ids_conhecimento FROM consultas_cerebro WHERE tarefa_id = ?",
+                                        (tarefa_id,)) for i in json.loads(l["ids_conhecimento"] or "[]")}
+    if not ids:
+        return False
+    marcas = ",".join("?" * len(ids))
+    refs = base.db().execute(f"SELECT fonte_ref FROM conhecimento WHERE id IN ({marcas})", tuple(ids)).fetchall()
+    return any(base.FINANCEIRO_REF.search(r["fonte_ref"] or "") for r in refs)
 
 
 def _ve_financeiro(tarefa_id: int) -> bool:
@@ -206,8 +227,9 @@ def aprender_tarefa(tarefa_id: int) -> int | None:
         # o trecho fica marcado e só volta nas buscas da Diretoria (base.FINANCEIRO_REF).
         from auth import ve_financeiro
 
-        financeira = (linha["agente"] in AGENTES_FINANCEIROS and ve_financeiro(linha["usuario"])
-                      and "R$" in resposta)
+        financeira = ve_financeiro(linha["usuario"]) and (
+            linha["agente"] in AGENTES_FINANCEIROS or bool(TERMOS_FINANCEIROS.search(resposta))
+            or _consultou_financeiro(tarefa_id))
         referencia = f"tarefa:{tarefa_id}{':financeiro' if financeira else ''}"
         trecho_id = base._inserir("tarefa", referencia, f"{nome}: {linha['texto'].strip()[:70]}", conteudo,
                                   linha["empresa"] or empresas.PADRAO,

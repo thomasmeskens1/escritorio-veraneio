@@ -113,7 +113,7 @@ def ambiente_seguro(base: dict | None = None) -> dict:
 # Plano Max sem cota (janela de 5 h) ou deslogado: não é falha da peça nem do pedido. O trabalhador devolve a peça
 # à fila e espera (revisão de 30/10/2026: antes, 5 peças da fila falhavam em 1 minuto quando a cota acabava).
 SEM_COTA = re.compile(r"usage limit|limit reached|5-hour limit|out of (?:extra )?usage|limit will reset|"
-                      r"not logged in|/login", re.IGNORECASE)
+                      r"not logged in|/login\b", re.IGNORECASE)
 
 
 class MaxSemCota(RuntimeError):

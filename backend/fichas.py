@@ -40,7 +40,8 @@ def _trechos(ref: str, empresa: str = "casa_veraneio") -> list:
 
 def _da_empresa(numero: str, empresa: str, limite: int = TAMANHO_FICHA) -> str | None:
     """Corporativo e Casa Vero: o documento do site inteiro (já é curto e estruturado)."""
-    return _do_documento(REF_FICHA[empresa].format(n=numero), empresa, limite)
+    ref = REF_FICHA.get(empresa)
+    return _do_documento(ref.format(n=numero), empresa, limite) if ref else None
 
 
 def _do_documento(ref: str, empresa: str, limite: int = TAMANHO_FICHA) -> str | None:
@@ -167,6 +168,11 @@ def fichas_citadas(texto: str, empresa: str = "casa_veraneio") -> str:
     Link de OUTRA empresa mandado pelo usuário: a ficha entra marcada como exceção autorizada por ele.
     Citado pelo número e sem ficha nessa empresa: o agente é avisado para não usar dado de outra empresa nem inventar."""
     texto = texto or ""
+    if empresa == "*":  # trabalho das três empresas (ex.: Estrategista): as fichas de cada uma, separadas
+        import empresas
+
+        blocos = [f"EMPRESA: {empresas.nome(e)}\n{f}" for e in REF_FICHA if (f := fichas_citadas(texto, e))]
+        return "\n\n".join(blocos)
     links = list(dict.fromkeys(LINK_SITE.findall(texto)))[:MAX_FICHAS]
     # Na Casa Vero, "Lodge 76" é o Vero 76 (mesma numeração do grupo).
     padroes = [VERO_CITADO, LODGE_CITADO] if empresa == "casa_vero" else [LODGE_CITADO]

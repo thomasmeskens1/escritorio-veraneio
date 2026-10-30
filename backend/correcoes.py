@@ -67,6 +67,9 @@ def _db():
         db.executescript(_ESQUEMA)
         if "tipo" not in {c[1] for c in db.execute("PRAGMA table_info(observacoes)")}:
             db.execute("ALTER TABLE observacoes ADD COLUMN tipo TEXT NOT NULL DEFAULT 'correcao'")
+        # Empresa da regra (revisão de 30/10/2026, item 1.7): regra de uma empresa não vale para as outras.
+        if "empresa" not in {c[1] for c in db.execute("PRAGMA table_info(regras_aprendidas)")}:
+            db.execute("ALTER TABLE regras_aprendidas ADD COLUMN empresa TEXT NOT NULL DEFAULT '*'")
         _pronto = True
     return db
 
@@ -114,11 +117,12 @@ async def avisar_diretoria(tipo: str = "") -> None:
             await gerenciador.enviar(ws, {"tipo": "correcao_nova", "total": total, "ultima": tipo})
 
 
-def regras_para(agente_id: str) -> str:
-    """Regras aprovadas pelo Thomas para este agente e para todos (sempre no contexto)."""
+def regras_para(agente_id: str, empresa: str = "*") -> str:
+    """Regras aprovadas pelo Thomas para este agente e para todos (sempre no contexto), da empresa do trabalho e as
+    que valem para as três."""
     linhas = _db().execute(
-        "SELECT regra FROM regras_aprendidas WHERE ativa = 1 AND agente IN (?, '*') ORDER BY id DESC LIMIT ?",
-        (agente_id, MAX_REGRAS_NO_CONTEXTO)).fetchall()
+        "SELECT regra FROM regras_aprendidas WHERE ativa = 1 AND agente IN (?, '*') AND empresa IN (?, '*') "
+        "ORDER BY id DESC LIMIT ?", (agente_id, empresa, MAX_REGRAS_NO_CONTEXTO)).fetchall()
     if not linhas:
         return ""
     return "Regras aprovadas pelo Thomas a partir de correções (valem sobre os manuais):\n" + "\n".join(
@@ -166,6 +170,16 @@ def _nome(agente_id: str) -> str:
 class Decisao(BaseModel):
     regra: str = Field(min_length=5, max_length=500)
     escopo: str = Field("agente", pattern="^(agente|todos)$")
+    todas_as_empresas: bool = False  # padrão: só a empresa da tarefa que motivou a correção
+
+# Regra que é o texto inteiro da conversa (ex.: uma legenda colada com "adorei") não é regra: vira cópia de um caso.
+REGRA_CRUA_MIN = 200
+
+
+def empresa_da_observacao(obs) -> str:
+    """Empresa da tarefa que motivou a observação; '*' quando não há tarefa (ex.: consolidação semanal)."""
+    tarefa = obs["tarefa_anterior"] and tarefas.obter(obs["tarefa_anterior"])
+    return (tarefa["empresa"] if tarefa and tarefa["empresa"] else "*")
 
 
 @rotas.get("")
@@ -174,12 +188,15 @@ def listar(authorization: str = Header("")):
     novas = _db().execute("SELECT * FROM observacoes WHERE status = 'nova' ORDER BY id DESC LIMIT 50").fetchall()
     regras = _db().execute("SELECT * FROM regras_aprendidas WHERE ativa = 1 ORDER BY id DESC").fetchall()
     nomes = {login: dados["nome"] for login, dados in carregar_usuarios().items()}
+    import empresas
+
     return {"observacoes": [{"id": o["id"], "em": o["em"], "agente": o["agente"], "agente_nome": _nome(o["agente"]),
+                             "empresa_nome": empresas.nome(empresa_da_observacao(o)),
                              "autor": "Cérebro" if o["usuario"] == "cerebro" else nomes.get(o["usuario"], o["usuario"]),
                              "tipo": o["tipo"],
                              "correcao": o["correcao"], "resposta_anterior": o["resposta_anterior"]} for o in novas],
             "regras": [{"id": r["id"], "agente": r["agente"], "agente_nome": _nome(r["agente"]), "regra": r["regra"],
-                        "criada_em": r["criada_em"]} for r in regras]}
+                        "empresa_nome": empresas.nome(r["empresa"]), "criada_em": r["criada_em"]} for r in regras]}
 
 
 @rotas.post("/{observacao_id}/aprovar")
@@ -192,13 +209,18 @@ async def aprovar(observacao_id: int, decisao: Decisao, authorization: str = Hea
         raise HTTPException(status_code=404, detail="Correção não encontrada ou já revisada.")
     agente = "*" if decisao.escopo == "todos" else obs["agente"]
     regra = decisao.regra.strip()
+    crua = (obs["correcao"] or "").strip()
+    if len(crua) >= REGRA_CRUA_MIN and crua in regra:
+        raise HTTPException(status_code=422, detail="Escreva a regra em uma ou duas frases: o texto inteiro da conversa "
+                                                    "não serve de regra para os próximos pedidos.")
+    empresa = "*" if decisao.todas_as_empresas else empresa_da_observacao(obs)
     with _db() as db:
         db.execute("UPDATE observacoes SET status = 'aprovada', regra = ?, escopo = ?, decidido_em = ? WHERE id = ?",
                    (regra, decisao.escopo, tarefas._agora(), observacao_id))
-        db.execute("INSERT INTO regras_aprendidas (agente, regra, criada_em, observacao_id) VALUES (?, ?, ?, ?)",
-                   (agente, regra, tarefas._agora(), observacao_id))
+        db.execute("INSERT INTO regras_aprendidas (agente, regra, criada_em, observacao_id, empresa) "
+                   "VALUES (?, ?, ?, ?, ?)", (agente, regra, tarefas._agora(), observacao_id, empresa))
     alvo = "todos os agentes" if agente == "*" else _nome(agente)
-    await cerebro.ensinar(usuario["sub"], f"Aprenda: Regra aprovada pelo Thomas para {alvo}: {regra}")
+    await cerebro.ensinar(usuario["sub"], f"Aprenda: Regra aprovada pelo Thomas para {alvo}: {regra}", empresa)
     return {"ok": True}
 
 

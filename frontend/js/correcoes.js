@@ -72,6 +72,11 @@ function abrirCorrecao(o) {
   regra.rows = 3;
   regra.value = o.tipo === 'elogio' ? `Seguir este padrão aprovado por ${o.autor || 'a equipe'}: ${o.correcao}` : o.correcao;
   if (o.tipo === 'aprendizado') mensagem.firstChild.textContent = 'Aprendizado proposto pelo Cérebro (consolidação semanal)';
+  // Revisão de 30/10/2026: a regra vale só para a empresa da tarefa, a menos que a caixa seja marcada.
+  const todas = novoEl('label', 'form-rotulo correcao-empresas');
+  const caixaTodas = novoEl('input');
+  caixaTodas.type = 'checkbox';
+  todas.append(caixaTodas, document.createTextNode(` Vale para as três empresas (sem marcar: só ${o.empresa_nome || 'a empresa da tarefa'})`));
   const acoes = novoEl('div', 'usuario-acoes');
   const decidir = (caminho, corpoPedido) => async () => {
     acoes.querySelectorAll('button').forEach((b) => { b.disabled = true; });
@@ -86,12 +91,12 @@ function abrirCorrecao(o) {
   };
   acoes.append(
     botao(`Aprovar para o ${o.agente_nome}`, 'botao-primario',
-      decidir(`${o.id}/aprovar`, () => ({ regra: regra.value, escopo: 'agente' }))),
+      decidir(`${o.id}/aprovar`, () => ({ regra: regra.value, escopo: 'agente', todas_as_empresas: caixaTodas.checked }))),
     botao('Aprovar para o Cérebro (todos os agentes)', 'botao-secundario',
-      decidir(`${o.id}/aprovar`, () => ({ regra: regra.value, escopo: 'todos' }))),
+      decidir(`${o.id}/aprovar`, () => ({ regra: regra.value, escopo: 'todos', todas_as_empresas: caixaTodas.checked }))),
     botao('Descartar', 'botao-secundario botao-perigo', decidir(`${o.id}/descartar`)),
   );
-  corpo.append(rotulo, regra, acoes);
+  corpo.append(rotulo, regra, todas, acoes);
   janela.append(barra, corpo);
   fundo.append(janela);
   fundo.addEventListener('click', (e) => { if (e.target === fundo) fecharFormularioPopup(); });
@@ -155,7 +160,7 @@ function criarCorrecoes() {
       const desativar = novoEl('button', 'botao-secundario', 'Desativar');
       desativar.type = 'button';
       desativar.addEventListener('click', () => { desativar.disabled = true; decidirCorrecao(`regras/${r.id}/desativar`); });
-      linha.append(novoEl('span', null, `${r.agente_nome}: ${r.regra}`), desativar);
+      linha.append(novoEl('span', null, `${r.agente_nome} · ${r.empresa_nome}: ${r.regra}`), desativar);
       regras.append(linha);
     });
     bloco.append(regras);
