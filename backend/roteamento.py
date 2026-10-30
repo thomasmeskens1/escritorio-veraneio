@@ -60,7 +60,7 @@ def _utilizaveis(etapas: list[Etapa]) -> list[Etapa]:
 
 def _gratuitos(maximo: int | None = None) -> list[Etapa]:
     """Gratuitos na ordem da lista; os fora da rota (saude) saem antes de contar o máximo."""
-    disponiveis = [m for m in config.MODELOS_GRATUITOS if config.modelo_disponivel(m) and saude.disponivel(m)]
+    disponiveis = [m for m in config.modelos_gratuitos() if config.modelo_disponivel(m) and saude.disponivel(m)]
     return [Etapa(m, LIMITE_GRATUITO) for m in disponiveis[:maximo]]
 
 

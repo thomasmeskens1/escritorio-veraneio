@@ -257,7 +257,7 @@ def avisos_da_operacao() -> list[str]:
     if not ollama_ok():
         avisos.append("Ollama fora do ar: o Cérebro está só com a busca por palavras e o modelo local de reserva "
                       "não funciona. Abra o Ollama no PC.")
-    no_ar = [m for m in config.MODELOS_GRATUITOS if config.modelo_disponivel(m) and disponivel(m)]
+    no_ar = [m for m in config.modelos_gratuitos() if config.modelo_disponivel(m) and disponivel(m)]
     if len(no_ar) < ROTA_MINIMA:
         avisos.append(f"Só {len(no_ar)} modelo(s) gratuito(s) no ar agora: as tarefas podem cair no modelo local "
                       "(lento). Veja \"Modelos fora da rota\" abaixo.")

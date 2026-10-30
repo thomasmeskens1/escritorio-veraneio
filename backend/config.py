@@ -50,6 +50,30 @@ MODELOS_GRATUITOS = _lista(
     "openrouter/google/gemma-4-31b-it:free,"
     "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
 )
+# Revisão de 30/10/2026 (2.31): a lista acima pede reinício para mudar, e os gratuitos somem sem aviso. Com o
+# arquivo dados/modelos_gratuitos.json (lista JSON de nomes, na ordem), ela muda sem reiniciar.
+ARQUIVO_MODELOS_GRATUITOS = Path(__file__).resolve().parent / "dados" / "modelos_gratuitos.json"
+_modelos_do_arquivo: tuple[float, list[str]] = (0.0, [])
+
+
+def modelos_gratuitos() -> list[str]:
+    """A rota de gratuitos atual: a do arquivo (se existir e for válida) ou a do ambiente/código."""
+    global _modelos_do_arquivo
+    try:
+        marca = ARQUIVO_MODELOS_GRATUITOS.stat().st_mtime
+    except OSError:
+        return MODELOS_GRATUITOS
+    if marca != _modelos_do_arquivo[0]:
+        import json
+
+        try:
+            lista = [str(m).strip() for m in json.loads(ARQUIVO_MODELOS_GRATUITOS.read_text(encoding="utf-8")) if str(m).strip()]
+        except (OSError, ValueError, TypeError):
+            lista = []
+        _modelos_do_arquivo = (marca, lista)
+    return _modelos_do_arquivo[1] or MODELOS_GRATUITOS
+
+
 MODELO_LOCAL = os.getenv("MODELO_LOCAL", "ollama/qwen3:4b").strip()
 # Embeddings do Cérebro (RAG), locais pelo Ollama: custo zero.
 MODELO_EMBEDDING = os.getenv("MODELO_EMBEDDING", "qwen3-embedding:0.6b").strip()

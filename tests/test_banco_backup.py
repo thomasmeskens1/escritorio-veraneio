@@ -104,3 +104,15 @@ def test_avisos_da_operacao(monkeypatch, tmp_path):
     assert "Trabalhador do Max nunca respondeu" in avisos and "Ollama fora do ar" in avisos
     assert "backup" in avisos.lower() and "gratuito" in avisos
     assert saude.banco_ok()
+
+
+def test_lista_de_gratuitos_muda_sem_reiniciar(tmp_path, monkeypatch):
+    arquivo = tmp_path / "modelos_gratuitos.json"
+    monkeypatch.setattr(config, "ARQUIVO_MODELOS_GRATUITOS", arquivo)
+    assert config.modelos_gratuitos() == config.MODELOS_GRATUITOS  # sem arquivo: a lista do código
+    arquivo.write_text('["groq/novo", "openrouter/outro:free"]', encoding="utf-8")
+    assert config.modelos_gratuitos() == ["groq/novo", "openrouter/outro:free"]
+    arquivo.write_text("isto não é json", encoding="utf-8")
+    import os
+    os.utime(arquivo, (1, 1))  # força a releitura
+    assert config.modelos_gratuitos() == config.MODELOS_GRATUITOS  # arquivo quebrado: volta para a do código
