@@ -235,9 +235,26 @@ async def descrever(ids: list[str], login: str) -> str:
     return "\n".join(partes)
 
 
+def _max_sem_vez() -> bool:
+    """Max desligado ou no meio de uma produção (que pode levar 20 a 30 min): o anexo não espera na fila dele.
+    Revisão de 30/10/2026 (2.3): a descrição esperava 180 s, desistia e o agente respondia sem ver a imagem."""
+    import max_texto
+
+    if not max_texto.online():
+        return True
+    return bool(_db().execute("SELECT 1 FROM tarefas WHERE status = 'produzindo' LIMIT 1").fetchone())
+
+
 async def _descricao(linha, pelo_max: bool) -> str:
     if linha["status"] == "descrito" and linha["descricao"]:
         return linha["descricao"]
+    if pelo_max and _max_sem_vez():
+        try:  # pela API agora; se ela não estiver disponível, volta para a fila do Max
+            texto = await _descrever_pela_api(linha)
+            salvar_descricao(linha["id"], texto)
+            return texto
+        except Exception as erro:
+            log.info("Anexo %s: API indisponível (%s); esperando o Max.", linha["id"], erro)
     if pelo_max:
         return await _descrever_pelo_max(linha)
     try:

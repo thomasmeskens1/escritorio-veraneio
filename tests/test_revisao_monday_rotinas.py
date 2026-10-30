@@ -160,3 +160,31 @@ def test_anexos_tem_cota_diaria_e_os_antigos_saem_do_disco(tmp_path, monkeypatch
         db.execute("INSERT INTO anexos (id, usuario, nome_original, mime, tamanho, caminho, status, criado_em) VALUES "
                    "('velho1', 'ana', 'v.png', 'image/png', 1, 'dados/anexos/velho1.png', 'pronto', '2025-01-01T00:00:00Z')")
     assert anexos.limpar_antigos() >= 1 and not antigo.exists()
+
+
+def test_anexo_nao_espera_o_max_ocupado_com_producao(monkeypatch):
+    import anexos
+    import max_texto
+
+    usados = []
+
+    async def api(linha):
+        usados.append("api")
+        return "descrição pela API"
+
+    async def pelo_max(linha):
+        usados.append("max")
+        return "descrição pelo Max"
+
+    monkeypatch.setattr(anexos, "_descrever_pela_api", api)
+    monkeypatch.setattr(anexos, "_descrever_pelo_max", pelo_max)
+    monkeypatch.setattr(anexos, "salvar_descricao", lambda *_a, **_k: None)
+    monkeypatch.setattr(max_texto, "online", lambda: True)
+    linha = {"id": "x1", "status": "pendente", "descricao": None}
+    with tarefas._db() as db:
+        db.execute("UPDATE tarefas SET status = 'falhou' WHERE status = 'produzindo'")
+    assert asyncio.run(anexos._descricao(linha, True)) == "descrição pelo Max"  # Max livre: ele descreve
+    tarefa = tarefas.criar("ana", "marketing", "criador_imagens", "Peça", "media")
+    tarefas.atualizar(tarefa, status="produzindo")
+    assert asyncio.run(anexos._descricao(linha, True)) == "descrição pela API"  # Max produzindo: API na hora
+    assert usados == ["max", "api"]
