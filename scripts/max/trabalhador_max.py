@@ -616,8 +616,9 @@ def conferir_claude_code() -> None:
     except Exception as erro:
         log(f"AVISO: não consegui rodar o Claude Code ({erro}). Confira a instalação.")
         return
-    faltando = [o for o in ("--allowedTools", "--disallowedTools", "--add-dir", "--permission-mode", "--output-format",
-                            "--max-turns") if o not in ajuda]
+    # --max-turns não aparece na ajuda, mas funciona no modo -p (usado em toda produção): fica fora da conferência.
+    faltando = [o for o in ("--allowedTools", "--disallowedTools", "--add-dir", "--permission-mode", "--output-format")
+                if o not in ajuda]
     log(f"Claude Code {versao or '(versão desconhecida)'}"
         + (f" — AVISO: a ajuda não cita {', '.join(faltando)}; a produção pode falhar." if faltando else ""))
 
