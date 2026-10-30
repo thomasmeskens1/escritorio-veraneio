@@ -45,7 +45,7 @@ import tarefas
 import triagem
 import usuarios_admin
 from api_painel import rotas as rotas_painel
-from auth import autenticar, criar_token, e_master, validar_token
+from auth import autenticar, criar_token, e_master, encerrar_sessoes, validar_token
 from conexoes import gerenciador
 from estado import AGENTES_PRODUCAO, Status, buscar_agente, snapshot
 
@@ -67,6 +67,7 @@ EXIGEM_EMPRESA = {"marketing"}  # andares que trabalham para uma empresa (o Cér
 MAX_FALHAS_LOGIN = 5          # senhas erradas seguidas por usuário/IP antes do bloqueio
 MAX_FALHAS_IP = 20            # senhas erradas de um IP (qualquer usuário) antes do bloqueio
 BLOQUEIO_LOGIN_S = 15 * 60
+CONFERIR_TOKEN_S = 60
 INTERVALO_COPIA_BANCO_S = 3600  # e ao desligar (revisão de 30/10/2026: até 6 h de perda)
 
 _falhas_login: dict[tuple[str, str], list[float]] = {}  # (usuário, IP) -> horários das falhas
@@ -201,6 +202,21 @@ def login(credenciais: Credenciais, request: Request):
             "master": e_master(usuario["login"])}
 
 
+@app.post("/api/sair")
+async def sair(request: Request):
+    """"Sair": os tokens deste usuário deixam de valer (inclusive um copiado por outra pessoa) e os chats fecham."""
+    usuario = validar_token(request.headers.get("authorization", "").removeprefix("Bearer ").strip())
+    if usuario:
+        encerrar_sessoes(usuario["sub"])
+        for ws, conectado in list(gerenciador.ativas.items()):
+            if conectado["sub"] == usuario["sub"]:
+                try:
+                    await ws.close(code=4401, reason="Sessão encerrada")
+                except Exception:
+                    pass
+    return {"ok": True}
+
+
 @app.websocket("/ws")
 async def websocket(ws: WebSocket):
     await ws.accept()
@@ -212,12 +228,21 @@ async def websocket(ws: WebSocket):
             pass
         return
 
+    token, conferido = usuario.pop("_token", ""), time.monotonic()
     gerenciador.conectar(ws, usuario)
     await gerenciador.enviar(ws, snapshot(usuario))
     await orquestrador.entregar_pendentes(usuario["sub"])
     try:
         while True:
-            await tratar_mensagem(ws, usuario, await ws.receive_text())
+            texto = await ws.receive_text()
+            # O chat aberto reconfere o token a cada minuto (o ping vem a cada 30 s): senha trocada, "Sair" em outro
+            # aparelho, usuário desativado ou token vencido derrubam a conexão (revisão de 30/10/2026, 2.28).
+            if time.monotonic() - conferido > CONFERIR_TOKEN_S:
+                conferido = time.monotonic()
+                if not validar_token(token):
+                    await ws.close(code=4401, reason="Sessão encerrada")
+                    break
+            await tratar_mensagem(ws, usuario, texto)
     except WebSocketDisconnect:
         pass
     finally:
@@ -235,7 +260,8 @@ async def autenticar_ws(ws: WebSocket) -> dict | None:
         return None
     if not isinstance(msg, dict) or msg.get("tipo") != "auth":
         return None
-    return validar_token(str(msg.get("token", "")))
+    usuario = validar_token(str(msg.get("token", "")))
+    return usuario and {**usuario, "_token": str(msg.get("token", ""))}
 
 
 async def ensinar_cerebro(ws: WebSocket, usuario: dict, andar: str, agente, texto: str, empresa: str) -> None:

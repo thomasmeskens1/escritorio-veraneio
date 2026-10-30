@@ -121,9 +121,9 @@ async def alterar(login: str, dados: Alteracao, authorization: str = Header(""))
         campos["andares"] = _andares_validos(campos["andares"])
     if campos:
         atualizar_usuario(login, **campos)
-    if campos.get("ativo") is False:  # desativado: a sessão aberta cai na hora
+    if campos.get("ativo") is False or "senha" in campos:  # desativado ou senha nova: a sessão aberta cai na hora
         for ws, conectado in list(gerenciador.ativas.items()):
             if conectado["sub"] == login:
-                await ws.close(code=4401, reason="Usuário desativado")
+                await ws.close(code=4401, reason="Usuário desativado" if "senha" not in campos else "Senha trocada")
     await atividade.transmitir_estado()  # andares e agentes liberados mudam na tela de quem está conectado
     return {"ok": True}

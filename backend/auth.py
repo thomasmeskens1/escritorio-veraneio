@@ -67,9 +67,18 @@ def atualizar_usuario(login: str, **campos) -> None:
     registro = dict(usuarios[login])
     if "senha" in campos:
         campos["senha"] = gerar_hash(campos["senha"])
+        campos["sessao"] = registro.get("sessao", 0) + 1  # senha nova: as sessões abertas caem
     registro.update(campos)
     usuarios[login] = registro
     _gravar(usuarios)
+
+
+def encerrar_sessoes(login: str) -> None:
+    """"Sair" (ou sessão suspeita): todos os tokens já emitidos para este usuário deixam de valer."""
+    usuarios = dict(carregar_usuarios())
+    if login in usuarios:
+        usuarios[login] = {**usuarios[login], "sessao": usuarios[login].get("sessao", 0) + 1}
+        _gravar(usuarios)
 
 
 def e_master(login: str) -> bool:
@@ -96,8 +105,11 @@ def autenticar(login: str, senha: str) -> dict | None:
 
 def criar_token(usuario: dict) -> str:
     expira = datetime.now(timezone.utc) + timedelta(hours=config.JWT_VALIDADE_HORAS)
+    # "sv": versão da sessão do usuário (revisão de 30/10/2026, 2.28): trocar a senha ou sair muda a versão e o token
+    # antigo para de valer, mesmo dentro das 8 h (antes um token roubado valia até expirar).
     payload = {"sub": usuario["login"], "nome": usuario["nome"], "role": usuario["role"],
-               "master": e_master(usuario["login"]), "exp": expira}
+               "master": e_master(usuario["login"]), "exp": expira,
+               "sv": carregar_usuarios().get(usuario["login"], {}).get("sessao", 0)}
     return jwt.encode(payload, config.JWT_SECRET, algorithm=config.JWT_ALGORITMO)
 
 
@@ -109,6 +121,6 @@ def validar_token(token: str) -> dict | None:
     except jwt.InvalidTokenError:
         return None
     registro = carregar_usuarios().get(payload.get("sub", ""))
-    if not registro or registro.get("ativo", True) is False:
+    if not registro or registro.get("ativo", True) is False or payload.get("sv", 0) != registro.get("sessao", 0):
         return None
     return {**payload, "role": registro["role"], "nome": registro["nome"], "master": e_master(payload["sub"])}

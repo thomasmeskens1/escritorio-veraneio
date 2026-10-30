@@ -46,3 +46,19 @@ def test_backup_nao_leva_tokens_nem_senhas():
         import pytest
         pytest.skip("scripts não montado")
     assert '"usuarios.json"' in texto and '"token"' in texto
+
+
+def test_senha_trocada_ou_sair_derruba_o_token_antigo(monkeypatch):
+    import auth
+
+    usuarios = {"ana@x.com": {"nome": "Ana", "role": "funcionario", "senha": auth.gerar_hash("velha123")}}
+    monkeypatch.setattr(auth, "carregar_usuarios", lambda: usuarios)
+    monkeypatch.setattr(auth, "_gravar", lambda novos: usuarios.update(novos))
+    token = auth.criar_token({"login": "ana@x.com", "nome": "Ana", "role": "funcionario"})
+    assert auth.validar_token(token)
+    auth.atualizar_usuario("ana@x.com", senha="nova12345")
+    assert auth.validar_token(token) is None  # senha nova: o token antigo cai
+    novo = auth.criar_token({"login": "ana@x.com", "nome": "Ana", "role": "funcionario"})
+    assert auth.validar_token(novo)
+    auth.encerrar_sessoes("ana@x.com")  # "Sair"
+    assert auth.validar_token(novo) is None

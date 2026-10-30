@@ -139,7 +139,11 @@ function encerrarSessao(aviso = '') {
 }
 
 formLogin.addEventListener('submit', entrar);
-document.getElementById('sair').addEventListener('click', () => encerrarSessao());
+// "Sair" invalida o token no servidor (inclusive cópias dele) antes de limpar a tela (revisão de 30/10/2026).
+document.getElementById('sair').addEventListener('click', () => {
+  if (sessao) fetch('/api/sair', { method: 'POST', headers: { Authorization: `Bearer ${sessao.token}` } }).catch(() => {});
+  encerrarSessao();
+});
 
 // Entra direto se já existe um token não expirado.
 const sessaoSalva = sessaoDoToken(lerToken());
