@@ -455,8 +455,14 @@ def _anexos_da_producao(tarefa_id: int) -> list[str]:
     return json.loads(linha["caminhos"]) if linha else []
 
 
+class Descartada(Exception):
+    """A peça foi parada pelo usuário enquanto o Max produzia: a conclusão é aceita e descartada."""
+
+
 async def _finalizar(tarefa_id: int, status: str, resposta: str, evento: str, detalhe: str) -> None:
     linha = tarefas.obter(tarefa_id)
+    if linha and tarefas.parada(tarefa_id):  # antes: 404, e o trabalhador insistia por ~10 min com a fila parada
+        raise Descartada
     if not linha or linha["status"] not in ("produzindo", "producao"):
         raise HTTPException(status_code=404, detail="Produção não encontrada")
     criada = datetime.strptime(linha["criada_em"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
@@ -483,8 +489,11 @@ async def concluir(tarefa_id: int, conclusao: Conclusao, authorization: str = He
     conclusao.resumo = segredos.limpar(conclusao.resumo)  # vai ao chat e ao Monday: nunca leva chave/token
     resposta = (f"✅ Pedido concluído pelo Claude Code (Max).\n\n{conclusao.resumo.strip()}\n\n"
                 f"Arquivos em ESCRITÓRIO VERANEIO/{conclusao.pasta}:\n{arquivos}")
-    await _finalizar(tarefa_id, "concluida", resposta, "concluida",
-                     f"{len(conclusao.arquivos)} arquivo(s) em {conclusao.pasta}")
+    try:
+        await _finalizar(tarefa_id, "concluida", resposta, "concluida",
+                         f"{len(conclusao.arquivos)} arquivo(s) em {conclusao.pasta}")
+    except Descartada:
+        return {"ok": True, "descartada": True}
     monday.andamento(tarefa_id, "produzida", f"🎨 Criativos prontos (Claude Code).\n\n{conclusao.resumo.strip()[:3000]}"
                                              f"\n\nPasta no Drive: ESCRITÓRIO VERANEIO/{conclusao.pasta}\n{arquivos}")
     return {"ok": True}
@@ -513,6 +522,9 @@ async def falhar(tarefa_id: int, falha: Falha, authorization: str = Header("")):
     _exigir_operador(authorization)
     falha.erro = segredos.limpar(falha.erro)
     motivo = f"A produção pelo Claude Code (Max) falhou: {falha.erro[:300]}"
-    await _finalizar(tarefa_id, "falhou", motivo, "falhou", falha.erro[:300])
+    try:
+        await _finalizar(tarefa_id, "falhou", motivo, "falhou", falha.erro[:300])
+    except Descartada:
+        return {"ok": True, "descartada": True}
     monday.andamento(tarefa_id, "falhou", motivo)
     return {"ok": True}

@@ -148,3 +148,55 @@ def test_caixa_de_areia_bloqueia_segredo_repositorio_rede_e_programas(areia):
                          ("socket.connect", (None, ("127.0.0.1", 8080))),
                          ("subprocess.Popen", (None, ["ffmpeg", "-i", str(peca / "a.mp4"), str(peca / "b.mp4")], None, None))]:
         modulo._gancho(evento, args)  # a produção normal continua
+
+
+# --- Item 1.10: "Parar" de verdade --------------------------------------------------------------------------------
+
+def _parar(tarefa_id: int) -> None:
+    tarefas.atualizar(tarefa_id, status="falhou", motivo=f"{tarefas.MOTIVO_PARADA} por Ana.")
+
+
+def test_parar_cancela_execucao_e_trabalho_do_max_na_fila():
+    import max_texto
+
+    tarefa_id = tarefas.criar("ana-parar", "marketing", "copywriter", "Legenda", "simples")
+    with max_texto._db() as db:
+        trabalho = db.execute("INSERT INTO trabalhos_max (tipo, payload, status, criado_em) "
+                              "VALUES ('texto', '{}', 'pendente', ?)", (tarefas._agora(),)).lastrowid
+    max_texto.registrar_trabalho(tarefa_id, trabalho)
+
+    async def cenario():
+        execucao = asyncio.create_task(asyncio.sleep(60))
+        orquestrador._execucoes[tarefa_id] = execucao
+        orquestrador.interromper(tarefa_id)
+        with pytest.raises(asyncio.CancelledError):
+            await execucao
+
+    asyncio.run(cenario())
+    status = max_texto._db().execute("SELECT status FROM trabalhos_max WHERE id = ?", (trabalho,)).fetchone()[0]
+    assert status == "falhou"  # o Max não roda um pedido que ninguém espera mais
+
+
+def test_tarefa_parada_nao_tenta_outro_modelo(monkeypatch):
+    tentativas = []
+
+    async def tentar(*_a):
+        tentativas.append(1)
+        return None, "falhou"
+
+    monkeypatch.setattr(orquestrador, "_tentar", tentar)
+    tarefa_id = tarefas.criar("ana-parar", "marketing", "copywriter", "Legenda", "simples")
+    _parar(tarefa_id)
+    agente = buscar_agente("marketing", "copywriter")
+    assert asyncio.run(orquestrador._executar_etapas(tarefas.obter(tarefa_id), agente,
+                                                     [Etapa("openrouter/a:free", 60), Etapa("ollama/b", 60)]))
+    assert tentativas == []
+
+
+def test_peca_parada_concluida_pelo_max_e_descartada_sem_travar_a_fila(monkeypatch):
+    monkeypatch.setattr(producao, "_exigir_operador", lambda _a: None)
+    tarefa_id = _producao("produzindo")
+    _parar(tarefa_id)
+    conclusao = producao.Conclusao(resumo="ok", pasta="MARKETING/x", arquivos=["a.png"], link="")
+    resposta = asyncio.run(producao.concluir(tarefa_id, conclusao, ""))
+    assert resposta == {"ok": True, "descartada": True}

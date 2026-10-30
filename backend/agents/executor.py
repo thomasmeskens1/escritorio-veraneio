@@ -128,6 +128,14 @@ class CriarAgente(BaseTool):
 
 
 _trava_local = asyncio.Lock()
+# "Parar" (revisão de 30/10/2026, item 1.10): a etapa em andamento do projeto vê o sinal e para; o resultado que
+# ainda chegar é descartado (tarefas.parada).
+_cancelamentos: dict[int, set[threading.Event]] = {}
+
+
+def cancelar_tarefa(tarefa_id: int) -> None:
+    for evento in list(_cancelamentos.get(tarefa_id, ())):
+        evento.set()
 
 
 def _llm(modelo: str, limite_s: int) -> LLM:
@@ -160,6 +168,7 @@ def _rodar_no_max(agente_id: str, descricao: str, esperado: str, limite_s: int, 
     trabalho = max_texto.reservar()
     if trabalho is None:
         raise MaxOcupado
+    max_texto.registrar_trabalho(tarefa_id, trabalho)
     etapa = re.search(r"Sua etapa \(\d+\): (.+)", descricao)  # projeto do Gestor: a pergunta é a etapa
     consulta = (etapa.group(1) if etapa else descricao)[:500]
     contexto_cerebro = cerebro.consultar(consulta, agente_id, tarefa_id) if agente_id != cerebro.ID else ""
@@ -368,9 +377,11 @@ async def executar(agente_id: str, texto: str, etapa: Etapa, historico: list = (
         await _trava_local.acquire()
 
     cancelar = threading.Event()
+    _cancelamentos.setdefault(tarefa_id, set()).add(cancelar)
     execucao = asyncio.ensure_future(asyncio.to_thread(
         _executar_sincrono, tarefa_id, agente_id, texto, etapa, historico, cancelar))
     execucao.add_done_callback(_descartar_erro)
+    execucao.add_done_callback(lambda _: _cancelamentos.get(tarefa_id, set()).discard(cancelar))
     if local:
         execucao.add_done_callback(lambda _: _trava_local.release())
     try:

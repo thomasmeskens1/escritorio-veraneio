@@ -60,14 +60,32 @@ async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str, anexos
         ao_criar(tarefa_id)
     tarefas.registrar_evento(tarefa_id, "recebida", agente.id, detalhe=f"Dificuldade: {dificuldade.value}")
     await atividade.ocupar(agente.id)
-    _em_segundo_plano(_executar_imediata(tarefa_id, agente, dificuldade))
+    execucao = _em_segundo_plano(_executar_imediata(tarefa_id, agente, dificuldade))
+    _execucoes[tarefa_id] = execucao
+    execucao.add_done_callback(lambda _: _execucoes.pop(tarefa_id, None))
     return tarefa_id
 
 
-def _em_segundo_plano(corrotina) -> None:
+def _em_segundo_plano(corrotina) -> asyncio.Task:
     execucao = asyncio.create_task(corrotina)
     _em_andamento.add(execucao)
     execucao.add_done_callback(_em_andamento.discard)
+    return execucao
+
+
+_execucoes: dict[int, asyncio.Task] = {}  # tarefa -> execução imediata em andamento (para o "Parar")
+
+
+def interromper(tarefa_id: int) -> None:
+    """"Parar" de verdade (revisão de 30/10/2026, item 1.10): antes o agente seguia tentando os próximos modelos por
+    até 30 min, ficava "trabalhando" e recusava o pedido corrigido. Agora a execução é cancelada (o agente é liberado
+    no finally), a etapa do projeto em andamento para e o trabalho do Max que ainda não começou sai da fila."""
+    from agents.executor import cancelar_tarefa  # import tardio: CrewAI é pesado
+
+    cancelar_tarefa(tarefa_id)
+    max_texto.cancelar_da_tarefa(tarefa_id)
+    if (execucao := _execucoes.get(tarefa_id)) and not execucao.done():
+        execucao.cancel()
 
 
 _BACKEND = str(Path(__file__).resolve().parent).replace("\\", "/")
@@ -147,6 +165,8 @@ async def _executar_etapas(tarefa, agente: Agente, etapas: list[Etapa]) -> bool:
     etapas = corrida.ajustar(etapas)
     i = 0
     while i < len(etapas):
+        if tarefas.parada(tarefa["id"]):  # o usuário parou: nenhum modelo a mais, nem fila
+            return True
         etapa, seguinte = etapas[i], etapas[i + 1] if i + 1 < len(etapas) else None
         if corrida.pode_correr(agente.id, etapa, seguinte):
             vencedora, resultado, seguinte_rodou = await corrida.correr(
@@ -197,6 +217,8 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
         return
     tarefas.atualizar(tarefa_id, status="concluida", modelo=modelo, resposta=resultado.texto,
                       tokens_entrada=resultado.tokens_entrada, tokens_saida=resultado.tokens_saida, custo_usd=resultado.custo_usd)
+    if tarefas.obter(tarefa_id)["status"] != "concluida":  # parada entre a checagem e a gravação: nada é entregue
+        return
     tarefas.registrar_evento(tarefa_id, "concluida", modelo=modelo)
     # Fora do loop: o Cérebro usa uma trava própria e não pode congelar o WebSocket e as rotas.
     await asyncio.to_thread(cerebro.registrar_resultado, tarefa_id, True)  # trechos usados ganham pontos

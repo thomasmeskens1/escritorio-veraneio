@@ -50,8 +50,12 @@ async def parar(linha, usuario: dict) -> str:
     if linha["status"] in EM_ANDAMENTO:
         tarefas.atualizar(linha["id"], status="falhou", motivo=f"{tarefas.MOTIVO_PARADA} por {quem}.")
         tarefas.registrar_evento(linha["id"], "parada", linha["agente"], detalhe=f"Parada por {quem}")
-        if linha["status"] == "produzindo":  # o Max já tinha ocupado o agente; a entrega não vai acontecer
-            await atividade.liberar(linha["agente"])
+        if linha["status"] == "executando":
+            import orquestrador  # import tardio: o orquestrador é carregado pelo main
+
+            orquestrador.interromper(linha["id"])
+        # Agente livre na hora: o pedido corrigido não é mais recusado com "já está trabalhando em outra tarefa".
+        await atividade.liberar(linha["agente"])
         feito = "Solicitação parada. O que o agente produzir depois disso é descartado."
     else:
         with _db() as db:

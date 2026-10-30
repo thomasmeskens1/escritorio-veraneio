@@ -71,6 +71,24 @@ def reservar() -> int | None:
             return cursor.lastrowid
 
 
+_trabalhos_da_tarefa: dict[int, set[int]] = {}
+
+
+def registrar_trabalho(tarefa_id: int, trabalho_id: int) -> None:
+    _trabalhos_da_tarefa.setdefault(tarefa_id, set()).add(trabalho_id)
+
+
+def cancelar_da_tarefa(tarefa_id: int) -> int:
+    """"Parar": o trabalho de texto que o Max ainda não começou sai da fila (o Max fica livre para os outros)."""
+    ids = _trabalhos_da_tarefa.pop(tarefa_id, set())
+    if not ids:
+        return 0
+    marcas = ",".join("?" * len(ids))
+    with _db() as db:
+        return db.execute(f"UPDATE trabalhos_max SET status = 'falhou', resultado = 'parada pelo usuário' "
+                          f"WHERE id IN ({marcas}) AND status IN ('reservado', 'pendente')", tuple(ids)).rowcount
+
+
 def executar(trabalho_id: int, prompt: str, limite_s: int = LIMITE_S) -> str:
     """Entrega o pedido ao trabalho reservado e espera a resposta (em thread). Levanta TimeoutError/saude.FalhaDoModelo."""
     with _db() as db:
