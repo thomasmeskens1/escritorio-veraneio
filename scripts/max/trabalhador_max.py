@@ -16,7 +16,6 @@ import re
 import shutil
 import socket
 import subprocess
-import sys
 import threading
 import time
 import traceback
@@ -424,6 +423,8 @@ def produzir(producao: dict) -> None:
                                         rascunho, TEMPO_LIMITE, ambiente,
                                         ao_progresso=lambda linhas: comum.chamar(
                                             "POST", f"/api/producao/{producao['tarefa_id']}/progresso", {"linhas": linhas}))
+        except comum.MaxSemCota:
+            raise  # sem cota: a peça inteira volta para a fila (o rascunho fica para a próxima tentativa)
         except (RuntimeError, subprocess.TimeoutExpired) as parada:
             # Parou no meio, mas com artes prontas: entrega o que existe (antes, 19 PNGs prontos viraram "falha").
             prontos = [n for n, m in entregaveis(rascunho).items()
@@ -446,6 +447,13 @@ def produzir(producao: dict) -> None:
             log(f"   {conferencia}")
         if producao.get("monday"):  # antes de concluir: o item já recebe os criativos quando vira "Revisão"
             enviar_criativos(producao, entrega, arquivos)
+    except comum.MaxSemCota as erro:
+        log(f"   Max sem cota agora; a peça volta para a fila ({erro})")
+        try:
+            comum.chamar("POST", f"/api/producao/{producao['tarefa_id']}/devolver", {"erro": str(erro)})
+        except Exception as erro_api:  # se o aviso falhar, o backend devolve a peça como órfã na próxima consulta
+            log(f"   não foi possível devolver a peça ao backend: {erro_api}")
+        raise
     except Exception as erro:
         log(f"   falhou: {erro}")
         try:
@@ -515,39 +523,74 @@ def instancia_unica() -> socket.socket | None:
         return None
 
 
+# Revisão de 30/10/2026: sem o Drive o trabalhador saía (sys.exit) e ninguém o religava; sem cota, a fila inteira
+# falhava. Agora ele espera o Drive (atendendo só os textos) e, sem cota, pausa a fila com espera crescente.
+PAUSA_COTA_MIN, PAUSA_COTA_MAX = 5 * 60, 30 * 60
+AVISO_DRIVE_S = 5 * 60
+
+
+def faltando_no_drive() -> list[str]:
+    """O que a produção precisa do Drive e não está acessível agora ([] = pronto)."""
+    exigidos = {"Drive do escritório": DRIVE, "acervo dos Lodges": comum.ACERVO, "marcas": PASTA_MARCAS,
+                "fontes": PASTA_MARCAS / "FONTES"}
+    return [nome for nome, pasta in exigidos.items() if not pasta.is_dir()]
+
+
 def main() -> None:
     trava = instancia_unica()  # mantida aberta enquanto o trabalhador roda
     if not trava:
         log("Já existe um Trabalhador Max rodando neste PC; esta cópia foi encerrada.")
         return
-    if not DRIVE.exists():
-        log(f"Pasta do Drive não encontrada: {DRIVE}")
-        sys.exit(1)
     log(f"Trabalhador Max ativo. Fila: {comum.BACKEND} | Drive: {DRIVE} | log: {comum.ARQUIVO_LOG}")
-    migrar_rascunhos()
-    limpar_rascunhos()
+    preparado = False
     proximo_catalogo = 0.0
+    pausa_ate, pausa_s = 0.0, PAUSA_COTA_MIN
+    proximo_aviso_drive = 0.0
     while True:
-        if time.monotonic() >= proximo_catalogo:
-            catalogo_em_segundo_plano()
-            proximo_catalogo = time.monotonic() + INTERVALO_CATALOGO
+        if time.monotonic() < pausa_ate:  # sem cota: nem pede a fila (o backend tira o Max da rota sozinho)
+            time.sleep(INTERVALO)
+            continue
+        faltando = faltando_no_drive()
+        if faltando and time.monotonic() >= proximo_aviso_drive:
+            log(f"Drive incompleto ({', '.join(faltando)}): só trabalhos de texto até ele voltar; as peças esperam.")
+            proximo_aviso_drive = time.monotonic() + AVISO_DRIVE_S
+        if not faltando:
+            if not preparado:  # na primeira vez em que o Drive está pronto
+                migrar_rascunhos()
+                limpar_rascunhos()
+                preparado = True
+            if time.monotonic() >= proximo_catalogo:
+                catalogo_em_segundo_plano()
+                proximo_catalogo = time.monotonic() + INTERVALO_CATALOGO
         try:
-            item = comum.chamar("GET", "/api/producao/proxima")
+            item = comum.chamar("GET", "/api/producao/proxima" + ("?sem_producao=true" if faltando else ""))
         except Exception as erro:  # backend fora do ar: tenta de novo
             log(f"Backend indisponível ({erro}); nova tentativa em {INTERVALO * 3} s.")
             time.sleep(INTERVALO * 3)
             continue
-        if item.get("producao"):
-            produzir(item["producao"])
-        elif item.get("trabalho"):
-            trabalhos_max.executar(item["trabalho"])
-        else:
-            time.sleep(INTERVALO)
+        try:
+            if item.get("producao"):
+                produzir(item["producao"])
+            elif item.get("trabalho"):
+                trabalhos_max.executar(item["trabalho"])
+            else:
+                time.sleep(INTERVALO)
+                continue
+            pausa_s = PAUSA_COTA_MIN  # o Max voltou a responder
+        except comum.MaxSemCota:
+            log(f"Plano Max sem cota (ou deslogado): fila pausada por {pausa_s // 60} min.")
+            pausa_ate = time.monotonic() + pausa_s
+            pausa_s = min(pausa_s * 2, PAUSA_COTA_MAX)
 
+
+REINICIO_APOS_ERRO_S = 60
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception:  # sem janela (pythonw), o erro só fica no log
-        log("Trabalhador Max parou por um erro inesperado:\n" + traceback.format_exc())
-        raise
+    # Erro inesperado não encerra mais o trabalhador (ninguém o religava até o próximo login): registra e recomeça.
+    while True:
+        try:
+            main()
+            break  # outra cópia já roda neste PC
+        except Exception:  # sem janela (pythonw), o erro só fica no log
+            log("Trabalhador Max parou por um erro inesperado; recomeça em 1 min:\n" + traceback.format_exc())
+            time.sleep(REINICIO_APOS_ERRO_S)

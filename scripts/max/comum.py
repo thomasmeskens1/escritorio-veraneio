@@ -110,6 +110,16 @@ def ambiente_seguro(base: dict | None = None) -> dict:
     return {k: v for k, v in (base or os.environ).items() if not _SEGREDO_NO_NOME.search(k)}
 
 
+# Plano Max sem cota (janela de 5 h) ou deslogado: não é falha da peça nem do pedido. O trabalhador devolve a peça
+# à fila e espera (revisão de 30/10/2026: antes, 5 peças da fila falhavam em 1 minuto quando a cota acabava).
+SEM_COTA = re.compile(r"usage limit|limit reached|5-hour limit|out of (?:extra )?usage|limit will reset|"
+                      r"not logged in|/login", re.IGNORECASE)
+
+
+class MaxSemCota(RuntimeError):
+    """O Claude Code recusou por cota ou login do plano Max."""
+
+
 ARQUIVO_PROGRESSO = "progresso.txt"  # o Claude Code anota cada peça que começa ("1/4 | Criando Story 1")
 INTERVALO_PROGRESSO = 10
 
@@ -159,8 +169,9 @@ def rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: 
     if processo.returncode != 0 or saida.get("is_error"):
         motivo = {"error_max_turns": "atingiu o limite de rodadas",
                   "error_during_execution": "erro durante a execução"}.get(saida.get("subtype"), saida.get("subtype"))
-        raise RuntimeError(saida.get("result") or texto_erro[-500:]
-                           or f"Claude Code terminou com erro{f' ({motivo})' if motivo else ''}.")
+        mensagem = (saida.get("result") or texto_erro[-500:]
+                    or f"Claude Code terminou com erro{f' ({motivo})' if motivo else ''}.")
+        raise (MaxSemCota if SEM_COTA.search(mensagem) else RuntimeError)(mensagem)
     return saida.get("result", "")
 
 

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Callable
 
 import config
+import saude
 from agents.perfis import ESTILO_CHAT
 from estado import ANDARES
 
@@ -79,19 +80,23 @@ def _extrair_plano(texto: str) -> tuple[list[dict], str]:
     """(etapas, título curto do projeto). Etapas: agente, instrução e fase (mesma fase = rodam juntas)."""
     bloco = re.search(r"\[.*\]", texto, re.DOTALL)
     if not bloco:
-        raise ValueError("O Gestor não devolveu um plano em JSON.")
+        raise saude.FalhaDoModelo("O Gestor não devolveu um plano em JSON.")
     # Aceita o id ("gestor_trafego") ou o nome ("Gestor de Tráfego"), sem diferenciar maiúsculas/acentos.
     time = equipe()
     ids_por_chave = {**{_chave(i): i for i in time}, **{_chave(n): i for i, n in time.items()}}
     plano = []
-    for passo in json.loads(bloco.group(0)):
+    try:
+        passos = json.loads(bloco.group(0))
+    except ValueError as erro:  # JSON quebrado é resposta ruim do modelo: o próximo modelo tenta
+        raise saude.FalhaDoModelo(f"O Gestor devolveu um plano com JSON inválido ({erro}).") from erro
+    for passo in passos:
         agente = ids_por_chave.get(_chave(passo.get("agente", ""))) if isinstance(passo, dict) else None
         if agente:
             fase = passo.get("fase")
             plano.append({"agente": agente, "instrucao": str(passo.get("instrucao", "")),
                           "fase": int(fase) if str(fase).isdigit() and int(fase) > 0 else len(plano) + 1})
     if not plano:
-        raise ValueError("Plano sem etapas válidas.")
+        raise saude.FalhaDoModelo("Plano sem etapas válidas.")
     titulo = re.search(r'"titulo"\s*:\s*"([^"]{3,80})"', texto)
     return plano[:MAX_ETAPAS], (titulo.group(1).strip() if titulo else "")
 

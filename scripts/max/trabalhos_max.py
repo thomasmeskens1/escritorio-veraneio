@@ -89,7 +89,7 @@ EXECUTORES = {"anexo": executar_anexo, "site": executar_site, "texto": executar_
 
 
 def executar(trabalho: dict) -> None:
-    """Roda o trabalho e informa o backend (concluir/falhar), sem nunca derrubar o trabalhador."""
+    """Roda o trabalho e informa o backend (concluir/falhar). Só repassa comum.MaxSemCota (o trabalhador pausa)."""
     log(f"Trabalho #{trabalho['id']} ({trabalho['tipo']})")
     try:
         executor = EXECUTORES.get(trabalho["tipo"])
@@ -104,3 +104,5 @@ def executar(trabalho: dict) -> None:
             comum.chamar("POST", f"/api/producao/trabalhos/{trabalho['id']}/falhar", {"erro": str(erro)})
         except Exception as erro_api:
             log(f"   não foi possível avisar a falha ao backend: {erro_api}")
+        if isinstance(erro, comum.MaxSemCota):
+            raise  # o trabalhador pausa a fila até a cota voltar

@@ -13,6 +13,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import config
+import saude
 from agents.perfis import ESTILO_CHAT
 
 MODELO = "claude-code/max"
@@ -71,7 +72,7 @@ def reservar() -> int | None:
 
 
 def executar(trabalho_id: int, prompt: str, limite_s: int = LIMITE_S) -> str:
-    """Entrega o pedido ao trabalho reservado e espera a resposta (em thread). Levanta TimeoutError/RuntimeError."""
+    """Entrega o pedido ao trabalho reservado e espera a resposta (em thread). Levanta TimeoutError/saude.FalhaDoModelo."""
     with _db() as db:
         db.execute("UPDATE trabalhos_max SET payload = ?, status = 'pendente' WHERE id = ?",
                    (json.dumps({"prompt": prompt, "limite_s": limite_s}, ensure_ascii=False), trabalho_id))
@@ -79,11 +80,11 @@ def executar(trabalho_id: int, prompt: str, limite_s: int = LIMITE_S) -> str:
     while time.monotonic() < fim:
         linha = _db().execute("SELECT status, resultado FROM trabalhos_max WHERE id = ?", (trabalho_id,)).fetchone()
         if not linha:
-            raise RuntimeError("Trabalho do Max não encontrado.")
+            raise saude.FalhaDoModelo("Trabalho do Max não encontrado.")
         if linha["status"] == "concluido":
             return linha["resultado"] or ""
         if linha["status"] == "falhou":
-            raise RuntimeError(f"Claude Code (Max): {linha['resultado'] or 'falhou'}")
+            raise saude.FalhaDoModelo(f"Claude Code (Max): {linha['resultado'] or 'falhou'}")
         time.sleep(2)
     with _db() as db:  # ainda na fila: cancela para o trabalhador não rodar à toa
         db.execute("UPDATE trabalhos_max SET status = 'falhou', resultado = 'tempo esgotado' "

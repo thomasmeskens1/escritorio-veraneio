@@ -24,6 +24,7 @@ from pydantic import BaseModel
 import atividade
 import config
 import max_texto
+import saude
 import fichas
 import monday
 import segredos
@@ -407,8 +408,9 @@ def _retomar_orfaos() -> list[str]:
 
 
 @rotas.get("/proxima")
-async def proxima(authorization: str = Header("")):
-    """Reserva o próximo item: anexo/texto (alguém esperando) > produção > demais trabalhos. Ambos nulos = fila vazia."""
+async def proxima(sem_producao: bool = False, authorization: str = Header("")):
+    """Reserva o próximo item: anexo/texto (alguém esperando) > produção > demais trabalhos. Ambos nulos = fila vazia.
+    `sem_producao`: o Drive do PC está fora; o trabalhador só atende trabalhos (as peças esperam na fila)."""
     _exigir_operador(authorization)
     max_texto.registrar_contato()  # o trabalhador está ligado
     for agente in _retomar_orfaos():  # produção que ficou pela metade não prende mais o agente nem o Max
@@ -416,6 +418,8 @@ async def proxima(authorization: str = Header("")):
         await atividade.liberar(agente)
     if (trabalho := _reservar_trabalho(("anexo", "texto"))):
         return {"producao": None, "trabalho": trabalho}
+    if sem_producao:
+        return {"producao": None, "trabalho": None}
     linha = _db().execute(
         "SELECT * FROM tarefas WHERE status = 'producao' ORDER BY id LIMIT 1").fetchone()
     if not linha:
@@ -483,6 +487,24 @@ async def concluir(tarefa_id: int, conclusao: Conclusao, authorization: str = He
                      f"{len(conclusao.arquivos)} arquivo(s) em {conclusao.pasta}")
     monday.andamento(tarefa_id, "produzida", f"🎨 Criativos prontos (Claude Code).\n\n{conclusao.resumo.strip()[:3000]}"
                                              f"\n\nPasta no Drive: ESCRITÓRIO VERANEIO/{conclusao.pasta}\n{arquivos}")
+    return {"ok": True}
+
+
+@rotas.post("/{tarefa_id}/devolver")
+async def devolver(tarefa_id: int, falha: Falha, authorization: str = Header("")):
+    """Max sem cota (ou deslogado) no meio da peça: ela volta para a fila em vez de virar falha e o Max sai da rota
+    até a janela voltar (revisão de 30/10/2026: 5 peças da fila falhavam em 1 minuto quando a cota acabava)."""
+    _exigir_operador(authorization)
+    linha = tarefas.obter(tarefa_id)
+    if not linha or linha["status"] != "produzindo":
+        raise HTTPException(status_code=404, detail="Produção não encontrada")
+    erro = segredos.limpar(falha.erro)[:300]
+    tarefas.atualizar(tarefa_id, status="producao")
+    tarefas.registrar_evento(tarefa_id, "adiada", linha["agente"], MODELO_MAX,
+                             f"Max sem cota agora; a peça voltou para a fila ({erro})")
+    saude.registrar_falha(MODELO_MAX, erro)
+    await atividade.liberar(linha["agente"])
+    monday.andamento(tarefa_id, "adiada")  # item do Monday volta para "Na fila"
     return {"ok": True}
 
 

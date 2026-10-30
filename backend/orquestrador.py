@@ -117,7 +117,7 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
             saude.registrar_falha(etapa.modelo, erro)  # lento agora: outro modelo assume por 15 min
     except Exception as e:
         erro = str(e)
-        if _erro_nosso(e):  # não é do modelo: não afasta ninguém e não adianta tentar os outros
+        if not isinstance(e, saude.FalhaDoModelo) and _erro_nosso(e):  # não é do modelo: não afasta ninguém e não adianta tentar os outros
             log.exception("Tarefa %s: erro interno antes/fora do modelo.", tarefa["id"])
             tarefas.registrar_evento(tarefa["id"], "falha_modelo", agente.id, etapa.modelo, f"erro interno: {erro}")
             raise ErroInterno(erro) from e

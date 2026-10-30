@@ -33,6 +33,19 @@ CREATE TABLE IF NOT EXISTS falhas_modelos (
 CREATE INDEX IF NOT EXISTS idx_falhas_modelos ON falhas_modelos (modelo, tipo, em);
 """
 
+# Plano Max sem cota (janela de 5 h) ou deslogado: o Max volta sozinho; 30 min fora e tenta de novo.
+SEM_COTA_MAX = ("usage limit", "limit reached", "5-hour limit", "out of usage", "limit will reset",
+                "not logged in", "/login")
+PAUSA_SEM_COTA_MAX_S = 30 * 60
+NUNCA_AFASTAR = ("claude-code/",)  # o Max é nosso: falha dele pausa, mas não o tira da rota por 7 dias
+
+
+class FalhaDoModelo(Exception):
+    """O modelo respondeu mal ou o Max devolveu falha: a tarefa segue para o próximo modelo da rota. Sem esta
+    marca, o erro nasce num arquivo do backend e o orquestrador o tomaria por "erro interno" (revisão de 30/10/2026:
+    Max sem cota ou plano sem JSON encerravam a tarefa em vez de tentar outro modelo)."""
+
+
 _trava = threading.Lock()
 _cache: dict[str, float] | None = None  # modelo -> até quando fica fora (lido do banco uma vez)
 
@@ -73,6 +86,8 @@ def _classificar(erro: str) -> tuple[str, float, str]:
     """(tipo, até quando fica fora, motivo) conforme o erro."""
     texto = erro.lower()
     agora = time.time()
+    if any(m in texto for m in SEM_COTA_MAX):              # plano Max: janela de uso esgotada ou login vencido
+        return "cota", agora + PAUSA_SEM_COTA_MAX_S, "plano Max sem cota agora (ou deslogado)"
     if "credit balance" in texto:                          # crédito Anthropic do mês acabou
         return "credito", _proximo_mes_utc(), "crédito do mês esgotado"
     if "per-day" in texto or "per day" in texto:          # cota diária gratuita (OpenRouter)
@@ -97,7 +112,7 @@ def registrar_falha(modelo: str, erro: str) -> None:
         atual = db.execute("SELECT afastamentos, em_teste_ate FROM saude_modelos WHERE modelo = ?",
                            (modelo,)).fetchone()
         afastamentos, em_teste_ate = (atual["afastamentos"], atual["em_teste_ate"]) if atual else (0, 0)
-        if tipo in RECORRENTES:
+        if tipo in RECORRENTES and not modelo.startswith(NUNCA_AFASTAR):
             repeticoes = db.execute("SELECT COUNT(*) FROM falhas_modelos WHERE modelo = ? AND tipo = ? AND em >= ?",
                                     (modelo, tipo, agora - JANELA_S)).fetchone()[0]
             em_teste = em_teste_ate > agora
