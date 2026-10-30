@@ -96,3 +96,42 @@ def test_producao_so_com_pedido_de_arquivo():
     assert orquestrador._pede_arquivo("[Pedido feito ao Copywriter] Faça um post para o Lodge 1")
     assert orquestrador._pede_arquivo("Preciso de uma nova foto de capa para o Youtube da Casa Vero")
     assert orquestrador._pede_arquivo("Produza a peça do item abaixo\n\nFORMATO DA PEÇA: CARROSSEL")
+
+
+def test_fila_de_adiadas_roda_ate_tres_juntas(monkeypatch):
+    import atividade
+    from estado import buscar_agente
+
+    rodando, liberar = [], asyncio.Event()
+
+    async def executar(linha, agente, etapas):
+        rodando.append(linha["id"])
+        await liberar.wait()
+        return True
+
+    async def nada(*_a):
+        return None
+
+    monkeypatch.setattr(orquestrador, "_executar_etapas", executar)
+    monkeypatch.setattr(orquestrador, "_etapas_fila", lambda *_a: [Etapa("openrouter/x:free", 60)])
+    monkeypatch.setattr(atividade, "ocupar", nada)
+    monkeypatch.setattr(atividade, "liberar", nada)
+    with tarefas._db() as db:
+        db.execute("UPDATE tarefas SET status = 'falhou' WHERE status = 'adiada'")
+    agentes = ["copywriter", "social_media", "designer", "gestor"]
+    ids = []
+    for agente in agentes:
+        tarefa = tarefas.criar("ana-fila", "marketing", agente, "Pedido", "simples")
+        tarefas.atualizar(tarefa, status="adiada")
+        ids.append(tarefa)
+    for agente in agentes:
+        buscar_agente("marketing", agente).status = orquestrador.Status.disponivel
+
+    async def cenario():
+        await orquestrador._processar_proxima()
+        await asyncio.sleep(0.05)
+        assert len(rodando) == 3  # três juntas, a quarta espera a vez
+        liberar.set()
+        await asyncio.sleep(0.05)
+
+    asyncio.run(cenario())

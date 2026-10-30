@@ -452,9 +452,21 @@ def _etapas_fila(dificuldade: Dificuldade, usuario: str = "", agente_id: str = "
     return max_ + ([claude] if claude else []) + etapas_contingencia()
 
 
+# Revisão de 30/10/2026 (2.9): a fila de adiadas rodava uma por vez e, depois de um reinício, a 4ª tarefa esperava de
+# 1 a 3 h. Agora até 3 rodam juntas (um agente nunca pega duas; o modelo local e o Max já se protegem sozinhos:
+# LocalOcupado e reserva do Max).
+MAX_FILA_EM_PARALELO = 3
+_fila_rodando: set[int] = set()
+
+
 async def _processar_proxima() -> int:
-    """Processa uma tarefa adiada; devolve quantos segundos esperar antes da próxima."""
+    """Inicia as tarefas adiadas que cabem agora; devolve quantos segundos esperar antes de olhar a fila de novo."""
+    iniciou = False
     for linha in tarefas.proximas_adiadas():
+        if len(_fila_rodando) >= MAX_FILA_EM_PARALELO:
+            break
+        if linha["id"] in _fila_rodando:
+            continue
         agente = buscar_agente(linha["andar"], linha["agente"])
         if not agente:
             _falhar(linha["id"], "Agente não existe mais.")
@@ -466,17 +478,23 @@ async def _processar_proxima() -> int:
 
         tarefas.atualizar(linha["id"], status="executando")
         await atividade.ocupar(agente.id)
-        try:
-            concluiu = await _executar_etapas(linha, agente, etapas)
-        except ErroInterno as erro:
-            await _falhar_interno(linha["id"], erro)
-            return 0
-        finally:
-            await atividade.liberar(agente.id)
+        _fila_rodando.add(linha["id"])
+        execucao = _em_segundo_plano(_rodar_da_fila(linha, agente, etapas))
+        execucao.add_done_callback(lambda _, tarefa_id=linha["id"]: _fila_rodando.discard(tarefa_id))
+        iniciou = True
+    return 0 if iniciou else INTERVALO_FILA
 
-        if not concluiu and not tarefas.reagendar(linha["id"]):
-            _falhar(linha["id"], "Nenhum modelo conseguiu concluir a tarefa após várias tentativas.")
-            await _entregar(tarefas.obter(linha["id"]))
-        return 0
 
-    return INTERVALO_FILA
+async def _rodar_da_fila(linha, agente: Agente, etapas: list[Etapa]) -> None:
+    try:
+        concluiu = await _executar_etapas(linha, agente, etapas)
+    except ErroInterno as erro:
+        return await _falhar_interno(linha["id"], erro)
+    except Exception:  # em segundo plano o erro não chega mais ao laço da fila: registra e reagenda
+        log.exception("Erro ao processar a tarefa %s da fila.", linha["id"])
+        concluiu = False
+    finally:
+        await atividade.liberar(agente.id)
+    if not concluiu and not tarefas.reagendar(linha["id"]):
+        _falhar(linha["id"], "Nenhum modelo conseguiu concluir a tarefa após várias tentativas.")
+        await _entregar(tarefas.obter(linha["id"]))
