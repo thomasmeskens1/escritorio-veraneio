@@ -1,5 +1,7 @@
 """Trabalhos do Max além da produção: ler anexos do chat, reler o site e responder tarefas de texto (no lugar da API)."""
 
+import shutil
+import tempfile
 from pathlib import Path
 
 import comum
@@ -23,8 +25,12 @@ def arquivo_do_anexo(payload: dict) -> Path:
 
 
 def montar_anexo(payload: dict) -> tuple[list[str], str, Path]:
-    """(comando, prompt, pasta de trabalho) para o Claude Code ler o anexo."""
-    arquivo = arquivo_do_anexo(payload)
+    """(comando, prompt, pasta de trabalho) para o Claude Code ler o anexo. Revisão de 30/10/2026: a pasta de trabalho
+    era a dos anexos de TODOS os usuários; agora é uma pasta temporária só com este arquivo (apagada no fim)."""
+    original = arquivo_do_anexo(payload)
+    pasta = Path(tempfile.mkdtemp(prefix="anexo-", dir=comum.TRABALHO))
+    arquivo = pasta / original.name
+    shutil.copy2(original, arquivo)
     comando = [comum.claude_exe(), "-p", "--output-format", "json", "--max-turns", "4", "--tools", "Read",
                "--allowedTools", "Read"]
     tipo = "PDF" if payload.get("mime") == "application/pdf" else "imagem"
@@ -36,7 +42,10 @@ def montar_anexo(payload: dict) -> tuple[list[str], str, Path]:
 
 def executar_anexo(payload: dict) -> str:
     comando, prompt, pasta = montar_anexo(payload)
-    descricao = comum.rodar_claude(comando, prompt, pasta, TEMPO_ANEXO, cancelado=_cancelado).strip()
+    try:
+        descricao = comum.rodar_claude(comando, prompt, pasta, TEMPO_ANEXO, cancelado=_cancelado).strip()
+    finally:
+        shutil.rmtree(pasta, ignore_errors=True)
     if not descricao:
         raise RuntimeError("O Claude Code não devolveu descrição.")
     return descricao

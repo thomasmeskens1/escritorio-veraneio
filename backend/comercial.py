@@ -411,8 +411,10 @@ def prospectar(tarefa_id: int, pedido: str) -> str:
 
 
 def _qual_previa(texto: str, usuario: str) -> int | None:
+    # Só prévias do próprio usuário (revisão de 30/10/2026: dava para criar os leads da prévia de outra pessoa).
     if (citada := re.search(r"#\s*(\d+)", texto)) and _previa(int(citada.group(1))).exists():
-        return int(citada.group(1))
+        dono = json.loads(_previa(int(citada.group(1))).read_text(encoding="utf-8"))["usuario"]
+        return int(citada.group(1)) if dono == usuario else None
     previas = sorted((int(a.stem) for a in PASTA_PREVIAS.glob("*.json")), reverse=True) if PASTA_PREVIAS.exists() else []
     return next((n for n in previas if json.loads(_previa(n).read_text(encoding="utf-8"))["usuario"] == usuario), None)
 
@@ -424,7 +426,11 @@ def criar_da_previa(tarefa_id: int, texto: str) -> str:
     if numero is None:
         return "Não achei nenhuma prévia de prospecção sua. Peça uma prospecção primeiro; eu mostro a lista antes."
     previa = json.loads(_previa(numero).read_text(encoding="utf-8"))
-    escolhidos = {int(n) for n in re.findall(r"\b(\d{1,2})\b", re.sub(r"#\s*\d+", "", texto))}
+    sem_numero_da_previa = re.sub(r"#\s*\d+", "", texto)
+    if (primeiros := re.search(r"\b(\d{1,2})\s+primeir[oa]s\b", sem_numero_da_previa, re.IGNORECASE)):
+        escolhidos = set(range(1, int(primeiros.group(1)) + 1))  # "os 3 primeiros" = 1, 2 e 3 (não o lead 3)
+    else:
+        escolhidos = {int(n) for n in re.findall(r"\b(\d{1,2})\b", sem_numero_da_previa)}
     leads = [(n, l) for n, l in enumerate(previa["leads"], 1) if not escolhidos or n in escolhidos]
     nomes, dominios = ja_conhecidos()  # alguém pode ter cadastrado a empresa depois da prévia
     criados, fora = [], []

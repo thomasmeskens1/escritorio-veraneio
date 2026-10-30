@@ -116,3 +116,24 @@ def test_atualizacao_do_monday_tenta_de_novo_so_em_falha_passageira(monkeypatch)
 
     asyncio.run(monday._seguro(recusa, 1))
     assert len(chamadas) == 1  # erro de validação não adianta repetir
+
+
+def test_previa_de_outra_pessoa_nao_e_usada(tmp_path, monkeypatch):
+    import json
+
+    import comercial
+
+    monkeypatch.setattr(comercial, "PASTA_PREVIAS", tmp_path)
+    (tmp_path / "50.json").write_text(json.dumps({"usuario": "bia", "leads": [], "criados": []}), encoding="utf-8")
+    assert comercial._qual_previa("Crie os leads da prévia #50", "ana") is None
+    assert comercial._qual_previa("Crie os leads da prévia #50", "bia") == 50
+
+
+def test_busca_de_item_ambigua_nao_escolhe_o_primeiro(monkeypatch):
+    import monday
+
+    itens = [{"name": "POST | Lodge 10 Réveillon"}, {"name": "POST | Lodge 10 Carnaval"}]
+    monkeypatch.setattr(monday, "_api", lambda *_a, **_k: {"boards": [{"items_page": {"items": itens}}]})
+    monkeypatch.setattr(monday, "_com_descricao", lambda item: item)
+    assert monday.buscar_item("Lodge 10") is None  # dois parecidos: o agente pergunta qual
+    assert monday.buscar_item("POST | Lodge 10 Carnaval")["name"] == "POST | Lodge 10 Carnaval"

@@ -181,13 +181,15 @@ def _com_descricao(item: dict) -> dict:
 
 
 def buscar_item(nome: str) -> dict | None:
-    """Item do board pelo nome (exato; senão, o primeiro que contém o texto)."""
+    """Item do board pelo nome (exato; senão, o único que contém o texto)."""
     regras = {"rules": [{"column_id": "name", "compare_value": [nome], "operator": "contains_text"}]}
     itens = _api(f"query ($board: [ID!], $q: ItemsQuery) {{ boards(ids: $board) {{ items_page(limit: 5, query_params: $q) "
                  f"{{ items {{ {_CAMPOS_ITEM} }} }} }} }}", {"board": [str(BOARD)], "q": regras})
     candidatos = (itens["boards"] or [{}])[0].get("items_page", {}).get("items", [])
     exato = [i for i in candidatos if i["name"].strip().lower() == nome.strip().lower()]
-    achado = (exato or candidatos or [None])[0]
+    # Vários parecidos e nenhum exato: None, para o agente perguntar qual (revisão de 30/10/2026: antes pegava o
+    # primeiro, às vezes o item errado).
+    achado = exato[0] if exato else (candidatos[0] if len(candidatos) == 1 else None)
     return _com_descricao(achado) if achado else None
 
 

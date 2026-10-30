@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import time
 from contextlib import asynccontextmanager
 
@@ -50,6 +51,19 @@ from conexoes import gerenciador
 from estado import AGENTES_PRODUCAO, Status, buscar_agente, snapshot
 
 logging.basicConfig(level=logging.INFO)
+
+
+class _SemSegredoNoLog(logging.Filter):
+    """O segredo do webhook do Monday vai na URL; no log de acesso ele aparece como *** (revisão de 30/10/2026)."""
+
+    def filter(self, registro: logging.LogRecord) -> bool:
+        if isinstance(registro.args, tuple):
+            registro.args = tuple(re.sub(r"(/webhook/)[^/\s?]+", r"\1***", a) if isinstance(a, str) else a
+                                  for a in registro.args)
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_SemSegredoNoLog())
 log = logging.getLogger("veraneio")
 
 # 8 mil caracteres (~2 mil tokens): cabem nos modelos gratuitos; o Groq pula sozinho pedido grande (executor.py).
