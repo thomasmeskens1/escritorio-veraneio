@@ -194,7 +194,10 @@ async def websocket(ws: WebSocket):
     await ws.accept()
     usuario = await autenticar_ws(ws)
     if not usuario:
-        await ws.close(code=4401, reason="Token inválido")
+        try:
+            await ws.close(code=4401, reason="Token inválido")
+        except Exception:  # o navegador já saiu (ex.: aba fechada logo depois de abrir): nada a encerrar
+            pass
         return
 
     gerenciador.conectar(ws, usuario)
