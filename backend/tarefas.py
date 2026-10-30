@@ -240,7 +240,7 @@ def historico(usuario: str, andar: str, agente: str, antes_de: int, limite: int 
     """Últimas trocas concluídas com o mesmo agente e da MESMA empresa (contexto para qualquer modelo)."""
     filtro, extra = ("AND empresa = ? ", (empresa,)) if empresa else ("", ())
     linhas = _db().execute(
-        "SELECT texto, resposta FROM tarefas WHERE usuario = ? AND andar = ? AND agente = ? "
+        "SELECT texto, resposta, criada_em FROM tarefas WHERE usuario = ? AND andar = ? AND agente = ? "
         f"AND status = 'concluida' AND id < ? {filtro}ORDER BY id DESC LIMIT ?",
         (usuario, andar, agente, antes_de, *extra, limite),
     ).fetchall()

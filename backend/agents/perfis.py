@@ -332,14 +332,7 @@ def _historico_relevante(historico: list, pedido: str) -> list:
     Teste real: "ideia de post para o Lodge 20" virou "Lodge 20 em Jundiaí" por causa da conversa do Lodge 1."""
     citados = _lodges(pedido)
     if not citados:
-        # Pedido sem Lodge ("agora monte o carrossel"): continua a troca mais recente que citou Lodges.
-        # Teste real (30/10/2026, Francielle): os 6 Lodges do #231 viraram um carrossel só do Lodge 35, que vinha
-        # de um pedido antigo (#113) que ainda estava no histórico.
-        recentes = next((l for h in reversed(historico) if (l := _lodges(f"{h['texto']} {h['resposta'] or ''}"))),
-                        set())
-        if not recentes:
-            return list(historico)
-        citados = recentes
+        return list(historico)
     return [h for h in historico
             if not (outros := _lodges(f"{h['texto']} {h['resposta'] or ''}")) or outros & citados]
 
@@ -356,13 +349,28 @@ def _sem_formulario(resposta: str) -> str:
     return BLOCO_FORMULARIO.sub(resumir, resposta or "")
 
 
+def _quando(troca) -> str:
+    """" (29/10 17:36)" quando a troca tem data (UTC; só para mostrar a ordem e a distância no tempo)."""
+    try:
+        em = troca["criada_em"]
+    except (KeyError, IndexError):
+        return ""
+    return f" ({em[8:10]}/{em[5:7]} {em[11:16]})" if em and len(em) >= 16 else ""
+
+
 def _resumo_historico(historico: list) -> str:
     """Trocas anteriores. As mensagens do usuário vêm (quase) inteiras: são o briefing e as respostas dos
     formulários. Teste real (26/10/2026): cortadas em 300 caracteres, o agente perdeu a lista dos imóveis e as
     respostas e voltou a perguntar tudo. As respostas do agente vêm resumidas."""
-    trocas = [f"- Usuário: {h['texto'][:TAMANHO_USUARIO]}\n  Você: {_sem_formulario(h['resposta'])[:TAMANHO_RESPOSTA]}"
-              for h in historico]
-    return ("Conversa recente com este usuário (só contexto: o PEDIDO ATUAL prevalece; se ele falar de outro "
+    trocas = [f"- Troca {n}{_quando(h)}{' (A MAIS RECENTE)' if n == len(historico) else ''}\n"
+              f"  Usuário: {h['texto'][:TAMANHO_USUARIO]}\n  Você: {_sem_formulario(h['resposta'])[:TAMANHO_RESPOSTA]}"
+              for n, h in enumerate(historico, 1)]
+    # Interpretar, não regra fixa (Thomas, 30/10/2026): "agora monte o carrossel... essa casa" depois de pedir 6 Lodges
+    # virou carrossel do Lodge 35, de uma troca antiga (#232). A ordem e a data deixam claro o que está em andamento.
+    return ("Conversa recente com este usuário, da mais antiga para a mais recente. Leia como uma pessoa leria: um "
+            "pedido curto ou que se refere a algo sem nomear (\"agora monte\", \"essa casa\", \"o carrossel\", "
+            "\"pode seguir\") continua a troca MAIS RECENTE; trocas antigas só valem se o usuário as retomar. "
+            "(Só contexto: o PEDIDO ATUAL prevalece; se ele falar de outro "
             "Lodge, produto ou assunto, não misture com os dados desta conversa; se o pedido atual é um pedido novo "
             "e não a resposta a uma pergunta sua, não retome pendências antigas; dados da ficha oficial valem mais "
             "que o que foi dito na conversa). Se o pedido atual continua o mesmo trabalho, o briefing que o usuário "
@@ -383,7 +391,8 @@ def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: st
         import fichas  # import tardio: o Cérebro carrega o banco
 
         # Imóveis citados no pedido e no briefing da conversa (a resposta a um formulário não repete a lista).
-        citados = "\n".join([pedido, *(h["texto"] for h in historico)])
+        # A troca mais recente primeiro: é a que o pedido atual mais provavelmente continua.
+        citados = "\n".join([pedido, *(h["texto"] for h in reversed(historico))])
         if (fichas_lodges := fichas.fichas_citadas(citados, empresa)):
             partes.append(fichas_lodges)
     partes.append(INSTRUCOES)

@@ -12,24 +12,60 @@ from agents import perfis
 tarefas.iniciar()
 
 
-def _troca(texto: str, resposta: str = "") -> dict:
-    return {"texto": texto, "resposta": resposta}
+def _troca(texto: str, resposta: str = "", criada_em: str = "") -> dict:
+    return {"texto": texto, "resposta": resposta, "criada_em": criada_em}
 
 
-def test_pedido_sem_lodge_continua_os_lodges_da_conversa_recente():
-    # Caso real (#232): "agora monte o carrossel" depois de pedir 6 Lodges virou carrossel do Lodge 35 (pedido antigo).
-    historico = [_troca("Legenda nesse estilo para o Lodge 35", "Legenda do Lodge 35..."),
-                 _troca("PERSONA | CASA VERANEIO ...", "Persona consolidada"),
-                 _troca("Carrossel com as casas: Lodge 02, Lodge 119, Lodge 18", "Carrossel com os 3 Lodges")]
-    relevante = perfis._historico_relevante(historico, "Peça final: agora monte o carrossel e venda essa casa")
-    textos = [h["texto"] for h in relevante]
-    assert not any("Lodge 35" in t for t in textos)
-    assert any("Lodge 119" in t for t in textos) and any("PERSONA" in t for t in textos)
+def test_conversa_em_ordem_com_a_troca_mais_recente_marcada():
+    # Caso real (#232): o agente precisa ver qual troca está em andamento, não só uma lista solta.
+    historico = [_troca("Legenda nesse estilo para o Lodge 35", "Legenda...", "2026-10-29T17:36:08Z"),
+                 _troca("Carrossel com as casas: Lodge 02, Lodge 119, Lodge 18", "Carrossel...", "2026-10-30T18:10:05Z")]
+    texto = perfis._resumo_historico(historico)
+    assert "Troca 1 (29/10 17:36)" in texto and "Troca 2 (30/10 18:10) (A MAIS RECENTE)" in texto
+    assert texto.index("Lodge 35") < texto.index("Lodge 119")  # da mais antiga para a mais recente
+    assert "continua a troca MAIS RECENTE" in texto
 
 
-def test_sem_lodge_em_lugar_nenhum_mantem_tudo():
-    historico = [_troca("Ideia de post"), _troca("Outra ideia")]
-    assert perfis._historico_relevante(historico, "e agora?") == historico
+def _gestor_falso(resposta_plano: str, descricoes: list):
+    def executar(agente, descricao, esperado, papel):
+        descricoes.append((agente, descricao))
+        if "JSON com o entendimento" in esperado:
+            return resposta_plano
+        return f"entrega de {agente}"
+    return executar
+
+
+def test_gestor_interpreta_antes_e_as_etapas_recebem_o_entendimento(tmp_path, monkeypatch):
+    import threading
+
+    from agents import projeto
+
+    monkeypatch.setattr(projeto, "PASTA_PROJETOS", tmp_path)
+    descricoes = []
+    plano = ('{"entendimento": "Continua o carrossel de 20/11 com os Lodges 02, 119 e 18 (troca mais recente).", '
+             '"duvida": "", "titulo": "Carrossel 20/11", "etapas": [{"agente": "copywriter", '
+             '"instrucao": "Textos dos 3 Lodges", "fase": 1}]}')
+    final = projeto.executar_projeto(1, "agora monte o carrossel", "CTX", _gestor_falso(plano, descricoes),
+                                     threading.Event())
+    assert "INTERPRETE" in descricoes[0][1].upper() or "interprete o pedido" in descricoes[0][1]
+    etapa = next(d for a, d in descricoes if a == "copywriter")
+    assert "ENTENDIMENTO DO GESTOR" in etapa and "Lodges 02, 119 e 18" in etapa
+    assert "Lodges 02, 119 e 18" in descricoes[-1][1]  # a consolidação confere contra o entendimento
+    assert final == "entrega de gestor"
+
+
+def test_gestor_pergunta_quando_nao_da_para_saber(tmp_path, monkeypatch):
+    import threading
+
+    from agents import projeto
+
+    monkeypatch.setattr(projeto, "PASTA_PROJETOS", tmp_path)
+    descricoes = []
+    plano = ('{"entendimento": "O pedido fala em essa casa, mas a conversa tem dois carrosséis.", '
+             '"duvida": "O carrossel é o dos 6 Lodges do feriado ou o do Lodge 35?", "titulo": "", "etapas": []}')
+    final = projeto.executar_projeto(2, "monte essa casa", "CTX", _gestor_falso(plano, descricoes), threading.Event())
+    assert final.endswith("PERGUNTA: O carrossel é o dos 6 Lodges do feriado ou o do Lodge 35?")
+    assert len(descricoes) == 1  # ninguém da equipe trabalhou num palpite
 
 
 def test_reacao_negativa():

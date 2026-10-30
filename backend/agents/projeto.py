@@ -151,6 +151,36 @@ def titulo_do_projeto(tarefa_id: int) -> str:
     return arquivo.read_text(encoding="utf-8").strip() if arquivo.exists() else ""
 
 
+# Interpretar a conversa antes de planejar (Thomas, 30/10/2026): "agora monte o carrossel... essa casa", logo depois
+# de pedir 6 Lodges, virou um carrossel do Lodge 35, tirado de uma troca antiga (#232). Em vez de regra fixa, o Gestor
+# escreve primeiro o ENTENDIMENTO (a que trabalho o pedido se refere e de qual troca isso vem); as etapas e a
+# consolidação recebem esse entendimento. Se não der para saber, ele pergunta (DÚVIDA) em vez de escolher.
+INTERPRETAR = (
+    "ANTES de dividir o trabalho, interprete o pedido à luz da conversa, como uma pessoa da equipe faria: a que "
+    "trabalho, peça, imóveis e dados ele se refere, e de qual troca da conversa isso vem. Pedido curto ou com "
+    "referência sem nome (\"agora monte\", \"essa casa\", \"o carrossel\") continua a troca MAIS RECENTE; não puxe "
+    "imóvel, data ou assunto de troca antiga que o usuário não retomou, nem de ficha que só aparece no contexto. "
+    "Escreva isso no campo \"entendimento\" (2 a 4 frases, com os imóveis e dados concretos). Se a conversa não deixa "
+    "claro a que o pedido se refere e um palpite errado estragaria a entrega, NÃO escolha: preencha \"duvida\" com "
+    "uma pergunta objetiva e deixe \"etapas\" vazio. ")
+
+
+def _campo(texto: str, nome: str) -> str:
+    """Campo de texto do JSON do plano (lido à parte: o JSON às vezes vem com sobras em volta)."""
+    achado = re.search(rf'"{nome}"\s*:\s*"((?:[^"\\]|\\.)*)"', texto)
+    if not achado:
+        return ""
+    try:
+        return json.loads(f'"{achado.group(1)}"').strip()
+    except ValueError:
+        return achado.group(1).strip()
+
+
+def _lido(pasta: Path, nome: str) -> str:
+    arquivo = pasta / nome
+    return arquivo.read_text(encoding="utf-8").strip() if arquivo.exists() else ""
+
+
 def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar, ficha: str = "") -> list[dict]:
     from estado import AGENTES_PRODUCAO
 
@@ -169,7 +199,7 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar, ficha: s
                 "pedido original). " if ficha else "")
         descricao = (
             f"{contexto}\n\nPedido do usuário: {pedido}\n\n{guia}"
-            f"{modo}Divida o trabalho em até {MAX_ETAPAS} etapas para a sua equipe: {equipe_txt}. "
+            f"{INTERPRETAR}{modo}Depois, divida o trabalho em até {MAX_ETAPAS} etapas para a sua equipe: {equipe_txt}. "
             "Prefira micro-tarefas: cada etapa é uma entrega focada de um único especialista "
             "(ex.: post de Lodge = Copywriter escreve o texto da arte e a legenda com os dados do Cérebro, "
             "Criador de Imagens escolhe as fotos reais do acervo, Designer define o layout e o editável; "
@@ -181,10 +211,19 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar, ficha: s
             "precisa do resultado de outra etapa vai para uma fase seguinte (ex.: Designer na fase 2). Cada etapa "
             "recebe só os resultados das fases anteriores. "
             "Dê também um título curto ao projeto (até 6 palavras, sem data, ex.: \"Post Réveillon Lodge 1\"). "
-            'Responda SOMENTE com um JSON: {"titulo": "<título>", "etapas": '
-            '[{"agente": "<id>", "instrucao": "<o que entregar>", "fase": <número>}]}.'
+            "As instruções das etapas seguem o entendimento (citem os imóveis e dados dele). "
+            'Responda SOMENTE com um JSON: {"entendimento": "<o que o usuário quer agora>", "duvida": "", '
+            '"titulo": "<título>", "etapas": [{"agente": "<id>", "instrucao": "<o que entregar>", "fase": <número>}]}.'
         )
-        plano, titulo = _extrair_plano(executar("gestor", descricao, "JSON com o título e as etapas.", "gestor"))
+        resposta = executar("gestor", descricao, "JSON com o entendimento, o título e as etapas.", "gestor")
+        if (entendimento := _campo(resposta, "entendimento")):
+            _gravar(pasta / "entendimento.txt", entendimento)
+        duvida = _campo(resposta, "duvida")
+        if duvida and duvida.lower().strip(" .") not in ("nenhuma", "nenhum", "não", "nao", "-", "n/a"):
+            _gravar(pasta / "duvida.txt", duvida)
+            _gravar(arquivo, "[]")
+            return []
+        plano, titulo = _extrair_plano(resposta)
         if ideacao:  # rede de segurança: nada de produção num pedido de ideias
             plano = [p for p in plano if p["agente"] not in AGENTES_PRODUCAO] or [
                 {"agente": "social_media", "instrucao": pedido, "fase": 1}]
@@ -192,7 +231,8 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar, ficha: s
             _gravar(pasta / "titulo.txt", titulo)
         _gravar(arquivo, json.dumps(plano, ensure_ascii=False, indent=2))
         linhas = [f"{n}. **{_nome(p['agente'])}** (fase {p['fase']}): {p['instrucao']}" for n, p in enumerate(plano, 1)]
-        _gravar(pasta / "plano.md", f"# Plano\n\nPedido: {pedido}\n\n" + "\n".join(linhas) + "\n")
+        _gravar(pasta / "plano.md", f"# Plano\n\nPedido: {pedido}\n\nEntendimento: {entendimento or '-'}\n\n"
+                + "\n".join(linhas) + "\n")
     return json.loads(arquivo.read_text(encoding="utf-8"))
 
 
@@ -238,10 +278,18 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
     (pasta / "etapas").mkdir(parents=True, exist_ok=True)
     ficha = _ficha(pasta, pedido, contexto, executar)
     plano = _plano(pasta, pedido, contexto, executar, ficha)
+    entendimento = _lido(pasta, "entendimento.txt")
+    if (duvida := _lido(pasta, "duvida.txt")):  # não deu para saber a que o pedido se refere: pergunta antes
+        final = pasta / "final.md"
+        if not final.exists():
+            _gravar(final, (f"{entendimento}\n\n" if entendimento else "") + f"PERGUNTA: {duvida}")
+        return final.read_text(encoding="utf-8")
     fase = lambda n, p: p.get("fase", n)  # plano antigo (sem fases): uma etapa por vez
     # Pedido longo: a etapa recebe a ficha (não o texto gigante) e termina com a âncora do objetivo.
     projeto_txt = (f"Projeto (ficha de requisitos de um pedido de {len(pedido)} caracteres; é a sua referência):\n"
                    f"{ficha}" if ficha else f"Projeto: {pedido}")
+    if entendimento:
+        projeto_txt += f"\n\nENTENDIMENTO DO GESTOR (o que o usuário quer agora, lido na conversa): {entendimento}"
 
     def rodar_etapa(n: int, passo: dict) -> None:
         if cancelar.is_set():
@@ -286,7 +334,8 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
             f"## {_nome(p['agente'])}\n{_arquivo_etapa(pasta, i, p['agente']).read_text(encoding='utf-8')[:TRECHO_FINAL]}"
             for i, p in enumerate(plano, 1)
         )
-        descricao = (f"{contexto}\n\nPedido do usuário: {pedido}\n\nEntregas da equipe:\n{entregas}\n\n"
+        lido = f"\n\nSeu entendimento do pedido (a entrega precisa bater com ele): {entendimento}" if entendimento else ""
+        descricao = (f"{contexto}\n\nPedido do usuário: {pedido}{lido}\n\nEntregas da equipe:\n{entregas}\n\n"
                      f"Revise e consolide tudo numa entrega final coerente para o usuário (até ~{PALAVRAS_FINAL} palavras). "
                      "Entregue só o que ele pediu. NÃO inclua bastidores: observações internas, conferência de "
                      "dados, especificações técnicas (medidas, zonas mortas, fontes, cores), quem fez o quê nem "
