@@ -348,7 +348,21 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
     ]))
 
 
-def comando_producao() -> list[str]:
+def pastas_de_fotos(empresa: str) -> tuple[list[Path], list[Path]]:
+    """(pastas que a peça pode ler, pastas de fotos das OUTRAS empresas). Revisão de 30/10/2026 (2.7): toda peça
+    recebia o acervo e as pastas das três empresas; a separação existia só no texto do prompt."""
+    vero, corp = list(catalogo_fotos_empresas.PASTAS_VERO), [catalogo_fotos_empresas.FOTOS_EVENTOS]
+    acervo = [comum.ACERVO]
+    if empresa == "casa_vero":
+        return vero, corp
+    if empresa == "cv_corporativo":  # o acervo dos Lodges só nos espaços "PODE (mesma casa)", como diz o índice
+        return corp + acervo, vero
+    if empresa == "casa_veraneio":  # Lodge que também é imóvel da Casa Vero: as pastas do Vero valem
+        return acervo + vero, corp
+    return [], acervo + vero + corp
+
+
+def comando_producao(empresa: str = "casa_veraneio") -> list[str]:
     # --restricted (comum.ISOLAMENTO) tira o Bash se --tools não o citar; arquivos só na pasta da peça + acervo.
     return [comum.claude_exe(), "-p", "--output-format", "json", "--permission-mode", "acceptEdits",
             "--max-turns", "120", "--tools", "Read,Write,Edit,Glob,Bash",  # 4 stories com editáveis passam de 40
@@ -356,10 +370,9 @@ def comando_producao() -> list[str]:
             # por ele, com os argumentos conferidos. Sem -I/-S/-E, que pulariam a caixa (revisão de 30/10/2026).
             "--allowedTools", "Read,Write,Edit,Glob,Bash(python:*)",
             "--disallowedTools", "Bash(python -I:*),Bash(python -S:*),Bash(python -E:*),WebFetch,WebSearch",
-            "--add-dir", str(comum.ACERVO), "--add-dir", str(comum.CEREBRO),
-            # fotos da Casa Vero e do Corporativo (somente leitura, como o acervo; índices em CÉREBRO)
-            *[a for pasta in [*catalogo_fotos_empresas.PASTAS_VERO, catalogo_fotos_empresas.FOTOS_EVENTOS]
-              for a in ("--add-dir", str(pasta))]]
+            "--add-dir", str(comum.CEREBRO),
+            # só as fotos da empresa da peça (somente leitura; índices em CÉREBRO)
+            *[a for pasta in pastas_de_fotos(empresa)[0] for a in ("--add-dir", str(pasta))]]
 
 
 # Conferência técnica depois do render (ideia do OpenMontage): medida e duração de cada arquivo final contra o
@@ -446,7 +459,8 @@ def produzir(producao: dict) -> None:
     versao = int(versao_arquivo.read_text()) + 1 if producao.get("base") and versao_arquivo.exists() else 1
     log(f"Produção #{producao['tarefa_id']} ({producao['agente']}) v{versao} -> {relativa}")
 
-    ambiente = {**comum.ambiente_seguro(), **comum.caixa_de_areia(rascunho)}
+    ambiente = {**comum.ambiente_seguro(),
+                **comum.caixa_de_areia(rascunho, pastas_de_fotos(producao.get("empresa") or "casa_veraneio")[1])}
     if (dir_ffmpeg := ffmpeg_dir()):
         ambiente["PATH"] = dir_ffmpeg + os.pathsep + ambiente.get("PATH", "")
     try:
@@ -455,7 +469,7 @@ def produzir(producao: dict) -> None:
         antes = entregaveis(rascunho)
         # O pedido vai pela entrada padrão (texto longo, com quebras de linha).
         try:
-            resumo = comum.rodar_claude(comando_producao(),
+            resumo = comum.rodar_claude(comando_producao(producao.get("empresa") or "casa_veraneio"),
                                         montar_prompt(producao, rascunho, anexos, versao, referencias),
                                         rascunho, TEMPO_LIMITE, ambiente,
                                         ao_progresso=lambda linhas: comum.chamar(

@@ -344,3 +344,11 @@ def test_tentativa_que_estourou_o_tempo_nao_grava_a_etapa(tmp_path, monkeypatch)
     with pytest.raises(projeto.Cancelado):
         projeto.executar_projeto(9, "pedido", "CTX", executar, cancelar)
     assert not list((tmp_path / "9" / "etapas").glob("*.md"))
+
+
+def test_peca_le_so_as_fotos_da_propria_empresa(trabalhador):
+    liberadas, bloqueadas = trabalhador.pastas_de_fotos("casa_vero")
+    assert trabalhador.catalogo_fotos_empresas.FOTOS_EVENTOS in bloqueadas
+    assert trabalhador.catalogo_fotos_empresas.FOTOS_EVENTOS not in liberadas
+    liberadas, bloqueadas = trabalhador.pastas_de_fotos("cv_corporativo")
+    assert all(p in bloqueadas for p in trabalhador.catalogo_fotos_empresas.PASTAS_VERO)

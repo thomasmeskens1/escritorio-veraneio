@@ -125,14 +125,15 @@ PROGRAMAS_DA_PRODUCAO = ("ffmpeg", "ffprobe", "chrome", "msedge", "python", "pyt
                          Path(sys.executable).stem.lower())
 
 
-def caixa_de_areia(pasta_da_peca: Path) -> dict:
+def caixa_de_areia(pasta_da_peca: Path, outras_bloqueadas: list[Path] = ()) -> dict:
     """Variáveis que prendem o python da produção (revisão de 30/10/2026, item 1.1): sem ler o repositório, a pasta dev
     e credenciais do usuário, gravando só na pasta da peça e no TEMP, sem rede externa e sem outros programas."""
     casa = Path.home()
     local, roaming = Path(os.environ.get("LOCALAPPDATA", casa)), Path(os.environ.get("APPDATA", casa))
     bloqueadas = [RAIZ.parent, casa / ".claude", casa / ".ssh", casa / ".aws", casa / ".config", casa / ".docker",
                   local / "Google" / "Chrome" / "User Data", local / "Microsoft" / "Edge" / "User Data",
-                  roaming / "Mozilla", roaming / "Microsoft" / "Credentials", local / "Microsoft" / "Credentials"]
+                  roaming / "Mozilla", roaming / "Microsoft" / "Credentials", local / "Microsoft" / "Credentials",
+                  *outras_bloqueadas]  # fotos das outras empresas
     return {
         "PYTHONPATH": str(CAIXA_DE_AREIA),
         "VERANEIO_AREIA_BLOQUEADAS": os.pathsep.join(map(str, bloqueadas)),
