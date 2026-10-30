@@ -164,3 +164,32 @@ def estatisticas(dias: int = 7) -> list[dict]:
     return [{"modelo": l["modelo"], "tentativas": l["tentativas"], "falhas": l["falhas"],
              "taxa_falha": round(l["falhas"] / l["tentativas"], 2),
              "tempo_medio_s": round(l["tempo_medio"], 1) if l["tempo_medio"] else None} for l in linhas]
+
+
+BACKUP_ATRASADO_H = 36
+
+
+def aviso_backup() -> str | None:
+    """Último "Backup ok" do backup diário do Windows (scripts/backup_dados.py) há mais de 36 h: aviso no painel da
+    Diretoria (revisão de 30/10/2026: dias sem backup só ficavam registrados no backup.log)."""
+    import config  # import tardio: config lê o ambiente
+
+    try:
+        linhas = config.ARQUIVO_LOG_BACKUP.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return "Nenhum backup diário registrado ainda (backup.log não encontrado)."
+    falhas = 0
+    for linha in reversed(linhas):
+        if "Backup FALHOU" in linha:
+            falhas += 1
+        if "Backup ok" in linha:
+            try:
+                ultimo = datetime.strptime(linha[1:20], "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                continue
+            horas = (datetime.now() - ultimo).total_seconds() / 3600  # o log usa a hora local do PC
+            if horas > BACKUP_ATRASADO_H:
+                return (f"Último backup diário bom foi há {horas / 24:.1f} dias ({ultimo:%d/%m %H:%M})"
+                        + (f"; {falhas} tentativa(s) falharam depois." if falhas else "."))
+            return None
+    return "Nenhum backup diário bom registrado no backup.log."

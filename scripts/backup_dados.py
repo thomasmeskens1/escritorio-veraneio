@@ -36,9 +36,16 @@ def fazer_backup() -> Path:
         fonte = DADOS / "escritorio.copia.db"
         if not fonte.exists():  # sistema antigo (banco ainda em dados/)
             fonte = DADOS / "escritorio.db"
-        origem, destino = sqlite3.connect(fonte), sqlite3.connect(copia_banco)
+        if not fonte.exists():  # antes, o sqlite criava um banco vazio aqui e o backup registrava "ok"
+            raise FileNotFoundError(f"Cópia do banco não encontrada em {DADOS}")
+        # Só leitura: o backup nunca altera nem cria a fonte.
+        origem, destino = sqlite3.connect(f"{fonte.as_uri()}?mode=ro", uri=True), sqlite3.connect(copia_banco)
         try:
             origem.backup(destino)
+            if destino.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                raise RuntimeError("cópia do banco estragada (integrity_check)")
+            if not destino.execute("SELECT COUNT(*) FROM tarefas").fetchone()[0]:
+                raise RuntimeError("cópia do banco sem nenhuma tarefa (banco recriado vazio?)")
         finally:  # `with` não fecha a conexão; no Windows o arquivo ficaria preso
             origem.close()
             destino.close()

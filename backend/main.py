@@ -66,7 +66,7 @@ EXIGEM_EMPRESA = {"marketing"}  # andares que trabalham para uma empresa (o Cér
 MAX_FALHAS_LOGIN = 5          # senhas erradas seguidas por usuário/IP antes do bloqueio
 MAX_FALHAS_IP = 20            # senhas erradas de um IP (qualquer usuário) antes do bloqueio
 BLOQUEIO_LOGIN_S = 15 * 60
-INTERVALO_COPIA_BANCO_S = 6 * 3600
+INTERVALO_COPIA_BANCO_S = 3600  # e ao desligar (revisão de 30/10/2026: até 6 h de perda)
 
 _falhas_login: dict[tuple[str, str], list[float]] = {}  # (usuário, IP) -> horários das falhas
 _falhas_ip: dict[str, list[float]] = {}                 # IP -> horários das falhas (usuários aleatórios)
@@ -92,10 +92,14 @@ async def ciclo_de_vida(_: FastAPI):
     agendamentos.parar()
     fila.cancel()
     copias.cancel()
+    try:  # cópia final ao desligar (restart do Docker, atualização, PC desligando)
+        await asyncio.to_thread(tarefas.copiar_para_backup)
+    except Exception:
+        log.exception("Não foi possível copiar o banco ao desligar.")
 
 
 async def copiar_banco_periodicamente() -> None:
-    """O banco vive num volume do Docker: a cada 6 h uma cópia consistente vai para dados/ (backup diário)."""
+    """O banco vive num volume do Docker: a cada 1 h uma cópia consistente vai para dados/ (backup diário)."""
     while True:
         try:
             await asyncio.to_thread(tarefas.copiar_para_backup)

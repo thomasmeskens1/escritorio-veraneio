@@ -1,11 +1,14 @@
 """Registro das tarefas (SQLite): dificuldade, tempo, modelo, custo e fila adiada."""
 
 import calendar
+import logging
 import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 
 import config
+
+log = logging.getLogger("veraneio.tarefas")
 
 _ESQUEMA = """
 CREATE TABLE IF NOT EXISTS tarefas (
@@ -125,6 +128,7 @@ def _db() -> sqlite3.Connection:
     if _conexao is None:
         config.ARQUIVO_BANCO.parent.mkdir(parents=True, exist_ok=True)
         _migrar_para_o_volume()
+        _restaurar_da_copia()
         _conexao = sqlite3.connect(config.ARQUIVO_BANCO, check_same_thread=False, factory=_ConexaoCompartilhada)
         _conexao.row_factory = sqlite3.Row
         if config.ARQUIVO_BANCO.parent != config.DADOS_DIR:  # WAL só é seguro fora da pasta compartilhada
@@ -158,16 +162,85 @@ def _migrar_para_o_volume() -> None:
     antigo.replace(antigo.with_suffix(".db.migrado"))
 
 
+class BancoAusente(RuntimeError):
+    """O banco do volume sumiu e as cópias existentes estão estragadas: subir vazio apagaria o histórico."""
+
+
+def _copias() -> list:
+    return [config.ARQUIVO_COPIA_BANCO, config.ARQUIVO_COPIA_BANCO.with_suffix(".db.anterior")]
+
+
+def _abrir_so_leitura(arquivo) -> sqlite3.Connection:
+    return sqlite3.connect(f"file:{arquivo}?mode=ro", uri=True)
+
+
+def _integro(arquivo) -> bool:
+    try:
+        conexao = _abrir_so_leitura(arquivo)
+        try:
+            return conexao.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        finally:
+            conexao.close()
+    except sqlite3.Error:
+        return False
+
+
+def _total_de_tarefas(conexao: sqlite3.Connection) -> int:
+    try:
+        return conexao.execute("SELECT COUNT(*) FROM tarefas").fetchone()[0]
+    except sqlite3.Error:
+        return 0
+
+
+def _restaurar_da_copia() -> None:
+    """Revisão de 30/10/2026 (item 1.5): um "Clean/Purge data" do Docker Desktop apaga o volume, e o sistema subia
+    com um banco vazio que, horas depois, ainda substituía a cópia boa. Agora o banco volta da cópia em dados/;
+    sem cópia nenhuma (primeira instalação) sobe vazio; com cópias, mas estragadas, recusa subir."""
+    if config.ARQUIVO_BANCO.parent == config.DADOS_DIR or config.ARQUIVO_BANCO.exists():
+        return
+    existentes = [c for c in _copias() if c.exists()]
+    for copia in existentes:
+        if not _integro(copia):
+            continue
+        origem, destino = _abrir_so_leitura(copia), sqlite3.connect(config.ARQUIVO_BANCO)
+        try:
+            origem.backup(destino)
+        finally:
+            origem.close()
+            destino.close()
+        log.warning("Banco do volume não encontrado: restaurado de %s.", copia.name)
+        return
+    if existentes:
+        raise BancoAusente("O banco do volume sumiu e as cópias em dados/ estão estragadas. Restaure um backup com "
+                           "scripts/restaurar_banco.py antes de subir o sistema.")
+
+
 def copiar_para_backup() -> None:
-    """Cópia consistente do banco em dados/ para o backup diário do Windows (que não enxerga o volume)."""
+    """Cópia consistente do banco em dados/ para o backup diário do Windows (que não enxerga o volume). Nunca troca
+    a cópia por uma com menos tarefas (banco recriado vazio) nem por uma estragada; a anterior fica como .anterior."""
     if config.ARQUIVO_BANCO.parent == config.DADOS_DIR:
         return
     temporario = config.ARQUIVO_COPIA_BANCO.with_suffix(".tmp")
     destino = sqlite3.connect(temporario)
     try:
         _db().backup(destino)
+        novas = _total_de_tarefas(destino)
     finally:
         destino.close()
+    if not _integro(temporario):
+        temporario.unlink(missing_ok=True)
+        raise RuntimeError("A cópia do banco saiu estragada (integrity_check); a cópia anterior foi mantida.")
+    if config.ARQUIVO_COPIA_BANCO.exists():
+        atual = _abrir_so_leitura(config.ARQUIVO_COPIA_BANCO)
+        try:
+            antigas = _total_de_tarefas(atual)
+        finally:
+            atual.close()
+        if novas < antigas:
+            temporario.unlink(missing_ok=True)
+            raise RuntimeError(f"O banco tem menos tarefas ({novas}) que a cópia ({antigas}); a cópia foi mantida. "
+                               "Confira se o volume do Docker foi apagado (scripts/restaurar_banco.py).")
+        config.ARQUIVO_COPIA_BANCO.replace(config.ARQUIVO_COPIA_BANCO.with_suffix(".db.anterior"))
     temporario.replace(config.ARQUIVO_COPIA_BANCO)
 
 

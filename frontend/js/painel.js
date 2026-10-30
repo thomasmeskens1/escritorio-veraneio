@@ -133,13 +133,22 @@ async function carregarTarefas() {
 // ---------- Renderização ----------
 function renderizarPainel({ resumo = {}, tarefas = [] }) {
   const blocos = [
-    criarResumo(resumo), criarCredito(resumo.anthropic), criarModelosFora(resumo.modelos_fora),
+    criarAvisos(resumo.avisos), criarResumo(resumo), criarCredito(resumo.anthropic), criarModelosFora(resumo.modelos_fora),
     criarSaudeModelos(resumo.modelos_7d), criarAprendizado(resumo.aprendizado), criarListaTarefas(tarefas),
   ];
   painelConteudo.replaceChildren(...blocos.filter(Boolean));
 }
 
 // Modelos fora da rota: pausa curta (cota, limite, lentidão) ou AFASTADOS por falha recorrente (7 dias).
+// Avisos de operação para a Diretoria (ex.: backup diário atrasado).
+function criarAvisos(avisos = []) {
+  if (!avisos.length) return null;
+  const caixa = novoEl('section', 'credito');
+  caixa.append(novoEl('h3', null, '⚠ Atenção'));
+  avisos.forEach((texto) => caixa.append(novoEl('p', 'credito-legenda modelo-afastado', texto)));
+  return caixa;
+}
+
 function criarModelosFora(modelos = []) {
   if (!modelos.length) return null;
   const caixa = novoEl('section', 'credito');
