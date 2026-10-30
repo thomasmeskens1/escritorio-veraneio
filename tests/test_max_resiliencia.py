@@ -200,3 +200,38 @@ def test_peca_parada_concluida_pelo_max_e_descartada_sem_travar_a_fila(monkeypat
     conclusao = producao.Conclusao(resumo="ok", pasta="MARKETING/x", arquivos=["a.png"], link="")
     resposta = asyncio.run(producao.concluir(tarefa_id, conclusao, ""))
     assert resposta == {"ok": True, "descartada": True}
+
+
+# --- Item 1.11: pergunta antiga não sequestra o próximo pedido -----------------------------------------------------
+
+def _espera(texto: str, resposta: str, pergunta: str, criada_em: str | None = None) -> int:
+    import espera
+
+    tarefa_id = tarefas.criar("ana-espera", "marketing", "gestor", texto, "media")
+    tarefas.atualizar(tarefa_id, status="concluida", resposta=resposta)
+    espera.guardar(tarefa_id, "ana-espera", "marketing", "gestor", pergunta)
+    if criada_em:
+        with espera._db() as db:
+            db.execute("UPDATE producao_em_espera SET criada_em = ? WHERE tarefa_id = ?", (criada_em, tarefa_id))
+    return tarefa_id
+
+
+def test_pergunta_vence_em_6_horas():
+    import espera
+
+    _espera("Post do Lodge 1", "Plano...", "Qual data?", "2026-10-01T10:00:00Z")
+    assert espera.no_chat("ana-espera", "marketing", "gestor") is None
+
+
+def test_pedido_novo_nao_vira_resposta_da_pergunta_antiga():
+    import espera
+
+    tarefa_id = _espera("Post do Lodge 1 no Réveillon", "Plano do Lodge 1", "Qual data você prefere?")
+    pendente = espera.no_chat("ana-espera", "marketing", "gestor")
+    assert pendente["tarefa_id"] == tarefa_id
+    assert espera.e_pedido_novo("Faça um post do Lodge 10", pendente)
+    assert espera.e_pedido_novo("E o Lodge 10, como fica?", pendente)  # imóvel que não era do trabalho
+    for resposta in ("dia 20/11", "Pode seguir", "Sim, o Lodge 1 mesmo", "o primeiro"):
+        assert not espera.e_pedido_novo(resposta, pendente), resposta
+    assert asyncio.run(orquestrador.retomar_producao(pendente, "Faça um post do Lodge 10")) is None
+    assert espera.no_chat("ana-espera", "marketing", "gestor") is not None  # a espera segue para a resposta

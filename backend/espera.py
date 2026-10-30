@@ -6,6 +6,7 @@ A próxima mensagem do usuário naquele chat é a resposta: ela entra no briefin
 """
 
 import re
+from datetime import timedelta
 
 import tarefas
 
@@ -19,6 +20,31 @@ CANCELAR = re.compile(r"^\s*(cancel\w*|n[aã]o\s+produz\w*|n[aã]o\s+precisa\w*|
 # Confirmação explícita (pedido que não falava em arquivo): só isto dispara a produção.
 PRODUZIR = re.compile(r"^\s*(sim\b|pode\s+(seguir|produzir)|produz\w*|quero\s+(a\s+)?pe[cç]a|pe[cç]a\s+final)",
                       re.IGNORECASE)
+
+# Revisão de 30/10/2026 (item 1.11): a espera não vencia e qualquer mensagem no chat, mesmo dias depois e mesmo
+# sendo um pedido novo ("Faça um post do Lodge 10"), virava resposta da pergunta antiga e disparava a produção velha.
+VALIDADE = timedelta(hours=6)
+PEDIDO_NOVO = re.compile(
+    r"^\s*(fa[cç]a|faz|crie|cria|monte|monta|escreva|escreve|gere|prepare|preciso\s+de|quero\s+(um|uma|outr)|"
+    r"me\s+(ajud|d[aáê])\w*|agora\s+(fa[cç]a|crie|monte|um|uma)|nov[oa]\s|outr[oa]\s|planejamento\s*:|"
+    r"pe[cç]a\s+final\s*:)", re.IGNORECASE)
+LODGE = re.compile(r"\b(?:lodge|vero)s?\s*#?0*(\d{1,4})\b", re.IGNORECASE)
+
+
+def e_pedido_novo(resposta: str, pendente) -> bool:
+    """A mensagem parece um pedido novo, e não a resposta da pergunta: começa como pedido ou cita um imóvel que o
+    trabalho em espera não tinha. "Sim", "pode produzir", "o primeiro" e "dia 20/11" continuam sendo respostas."""
+    if PRODUZIR.search(resposta) or CANCELAR.search(resposta):
+        return False
+    if PEDIDO_NOVO.search(resposta):
+        return True
+    citados = set(LODGE.findall(resposta))
+    if not citados:
+        return False
+    linha = tarefas.obter(pendente["tarefa_id"])
+    do_trabalho = set(LODGE.findall(f"{linha['texto']} {linha['resposta'] or ''} {pendente['pergunta']}")) if linha else set()
+    return not citados <= do_trabalho
+
 
 _ESQUEMA = """CREATE TABLE IF NOT EXISTS producao_em_espera (
     tarefa_id INTEGER PRIMARY KEY, usuario TEXT NOT NULL, andar TEXT NOT NULL, agente TEXT NOT NULL,
@@ -60,9 +86,10 @@ def guardar(tarefa_id: int, usuario: str, andar: str, agente: str, pergunta: str
 
 
 def no_chat(usuario: str, andar: str, agente: str):
-    """Produção esperando resposta neste chat (a mais recente), ou None."""
+    """Produção esperando resposta neste chat (a mais recente, das últimas 6 h), ou None."""
     return _db().execute("SELECT * FROM producao_em_espera WHERE usuario = ? AND andar = ? AND agente = ? "
-                         "ORDER BY tarefa_id DESC LIMIT 1", (usuario, andar, agente)).fetchone()
+                         "AND criada_em >= ? ORDER BY tarefa_id DESC LIMIT 1",
+                         (usuario, andar, agente, tarefas._agora(-VALIDADE))).fetchone()
 
 
 def remover(tarefa_id: int) -> None:

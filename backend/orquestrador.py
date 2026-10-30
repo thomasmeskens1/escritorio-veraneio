@@ -288,7 +288,10 @@ async def _esperar_resposta(linha, pergunta: str | None, confirmar_arquivo: bool
 
 async def retomar_producao(pendente, resposta: str) -> str | None:
     """Resposta do usuário a uma produção em espera: vira decisão final no briefing (ou cancela). None: não era
-    sobre a produção (pedido sem arquivo e resposta sem "produzir"); a mensagem segue como conversa normal."""
+    sobre a produção (pedido sem arquivo e resposta sem "produzir", ou um pedido novo); a mensagem segue como
+    conversa normal."""
+    if espera.e_pedido_novo(resposta, pendente):  # a espera continua para a próxima mensagem (vence em 6 h)
+        return None
     espera.remover(pendente["tarefa_id"])
     linha = tarefas.obter(pendente["tarefa_id"])
     if espera.CANCELAR.search(resposta):
