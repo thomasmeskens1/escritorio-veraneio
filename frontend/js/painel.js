@@ -156,7 +156,20 @@ function criarModelosFora(modelos = []) {
   modelos.forEach(({ modelo, motivo, volta_em: volta, afastado, falhas_24h: falhas }) => {
     const quando = new Date(volta).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     const linha = novoEl('p', `credito-legenda${afastado ? ' modelo-afastado' : ''}`,
-      `${afastado ? '⚠ ' : ''}${abreviarModelo(modelo)} · ${motivo} · ${falhas} falha(s) em 24 h · volta em ${quando}`);
+      `${afastado ? '⚠ ' : ''}${abreviarModelo(modelo)} · ${motivo} · ${falhas} falha(s) em 24 h · volta em ${quando} `);
+    if (sessao?.role === 'diretoria') {  // devolver à rota agora (revisão de 30/10/2026)
+      const devolver = novoEl('button', 'botao-secundario painel-detalhes', 'Devolver à rota');
+      devolver.type = 'button';
+      devolver.addEventListener('click', async () => {
+        devolver.disabled = true;
+        await fetch('/api/modelos/devolver', {
+          method: 'POST', headers: { Authorization: `Bearer ${sessao.token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ modelo }),
+        }).catch(() => {});
+        carregarPainel();
+      });
+      linha.append(devolver);
+    }
     caixa.append(linha);
   });
   return caixa;

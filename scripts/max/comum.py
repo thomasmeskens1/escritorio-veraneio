@@ -146,6 +146,20 @@ ARQUIVO_PROGRESSO = "progresso.txt"  # o Claude Code anota cada peça que começ
 INTERVALO_PROGRESSO = 10
 
 
+def encerrar_arvore(processo: subprocess.Popen) -> None:
+    """Encerra o Claude Code E os filhos (ffmpeg, Chrome, python): antes só o claude.exe morria e o ffmpeg seguia
+    gravando um MP4 que saía como pronto (revisão de 30/10/2026, 2.4)."""
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(processo.pid)], capture_output=True, creationflags=SEM_JANELA)
+    else:
+        processo.kill()
+    try:
+        processo.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        processo.kill()
+        processo.wait()
+
+
 def rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: dict | None = None,
                  ao_progresso=None) -> str:
     """Roda o Claude Code com o prompt pela entrada padrão; devolve o texto final ou levanta RuntimeError.
@@ -169,8 +183,7 @@ def rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: 
                 break
             except subprocess.TimeoutExpired:
                 if time.monotonic() - inicio > timeout:
-                    processo.kill()
-                    processo.wait()
+                    encerrar_arvore(processo)
                     raise subprocess.TimeoutExpired(comando, timeout)
             if ao_progresso and progresso.exists():
                 linhas = [l.strip() for l in progresso.read_text(encoding="utf-8", errors="replace").splitlines()

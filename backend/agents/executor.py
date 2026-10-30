@@ -165,16 +165,20 @@ class MaxOcupado(Exception):
 
 def _rodar_no_max(agente_id: str, descricao: str, esperado: str, limite_s: int, tarefa_id: int) -> str:
     """Tarefa de texto pelo plano Max (custo zero). Levanta MaxOcupado se ele não estiver livre agora."""
-    trabalho = max_texto.reservar()
-    if trabalho is None:
+    if not max_texto.online() or max_texto._ocupado():  # olhada rápida antes do trabalho de montar o pedido
         raise MaxOcupado
-    max_texto.registrar_trabalho(tarefa_id, trabalho)
+    # O pedido é montado ANTES da reserva (revisão de 30/10/2026, 2.1): um erro aqui deixava a reserva "ocupando" o
+    # Max por 10 min e os textos de todos iam para a API.
     etapa = re.search(r"Sua etapa \(\d+\): (.+)", descricao)  # projeto do Gestor: a pergunta é a etapa
     consulta = (etapa.group(1) if etapa else descricao)[:500]
     contexto_cerebro = cerebro.consultar(consulta, agente_id, tarefa_id) if agente_id != cerebro.ID else ""
     prompt = max_texto.montar_prompt(PERFIS[agente_id],
                                      diretrizes.para(agente_id, empresa=cerebro.empresa_da_tarefa(tarefa_id)),
                                      contexto_cerebro, descricao, esperado)
+    trabalho = max_texto.reservar()
+    if trabalho is None:
+        raise MaxOcupado
+    max_texto.registrar_trabalho(tarefa_id, trabalho)
     return max_texto.executar(trabalho, prompt, limite_s)
 
 
@@ -200,7 +204,11 @@ def _rodar_max_ou_api(agente_id: str, descricao: str, esperado: str, limite_s: i
         if (reserva := _modelo_reserva(agente_id)) or time.monotonic() >= fim:
             if not reserva:
                 raise TimeoutError("Nem o Max nem a API ficaram disponíveis a tempo.")
-            return _rodar(agente_id, descricao, esperado, reserva, limite_s, total, tarefa_id)
+            try:
+                return _rodar(agente_id, descricao, esperado, reserva, limite_s, total, tarefa_id)
+            except Exception as erro:  # a falha é do modelo reserva, não do Max (revisão de 30/10/2026, 2.10)
+                saude.registrar_falha(reserva, str(erro))
+                raise saude.FalhaDoModelo(f"{reserva} (reserva do Max): {erro}", ja_registrada=True) from erro
         time.sleep(5)
 
 

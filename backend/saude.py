@@ -43,7 +43,12 @@ NUNCA_AFASTAR = ("claude-code/",)  # o Max é nosso: falha dele pausa, mas não 
 class FalhaDoModelo(Exception):
     """O modelo respondeu mal ou o Max devolveu falha: a tarefa segue para o próximo modelo da rota. Sem esta
     marca, o erro nasce num arquivo do backend e o orquestrador o tomaria por "erro interno" (revisão de 30/10/2026:
-    Max sem cota ou plano sem JSON encerravam a tarefa em vez de tentar outro modelo)."""
+    Max sem cota ou plano sem JSON encerravam a tarefa em vez de tentar outro modelo). `ja_registrada`: a falha já foi
+    contada no modelo que de fato rodou (ex.: a API reserva numa etapa do Max)."""
+
+    def __init__(self, mensagem: str = "", ja_registrada: bool = False):
+        super().__init__(mensagem)
+        self.ja_registrada = ja_registrada
 
 
 _trava = threading.Lock()
@@ -92,6 +97,12 @@ def _classificar(erro: str) -> tuple[str, float, str]:
         return "credito", _proximo_mes_utc(), "crédito do mês esgotado"
     if "per-day" in texto or "per day" in texto:          # cota diária gratuita (OpenRouter)
         return "cota", _proxima_meia_noite_utc(), "cota diária esgotada"
+    # Revisão de 30/10/2026 (2.10): pedido grande demais não é falha do modelo; sobrecarga e resposta vazia são
+    # passageiras (antes contavam como erro recorrente e 3 em 24 h afastavam o modelo por 7 dias).
+    if "413" in texto or "too large" in texto or "request_too_large" in texto:
+        return "grande", agora, "pedido grande demais para este modelo"
+    if any(m in texto for m in ("503", "overloaded", "unavailable", "none or empty", "empty response")):
+        return "limite", agora + 5 * 60, "sobrecarregado ou resposta vazia"
     if "429" in texto or "rate" in texto:                 # limite por minuto ou provedor sobrecarregado
         return "limite", agora + 120, "limite temporário"
     if texto.startswith("excedeu"):                        # timeout: modelo lento agora, tenta outro por 15 min
@@ -126,6 +137,14 @@ def registrar_falha(modelo: str, erro: str) -> None:
         db.execute("INSERT OR REPLACE INTO saude_modelos (modelo, ate, motivo, tipo, afastamentos, em_teste_ate) "
                    "VALUES (?, ?, ?, ?, ?, ?)", (modelo, ate, motivo, tipo, afastamentos, em_teste_ate))
         _ate_cache()[modelo] = ate
+
+
+def devolver_a_rota(modelo: str) -> bool:
+    """Botão da Diretoria no painel: o modelo volta à rota agora (o histórico de falhas fica)."""
+    with _trava, _db() as db:
+        mudou = db.execute("UPDATE saude_modelos SET ate = 0 WHERE modelo = ?", (modelo,)).rowcount
+        _ate_cache()[modelo] = 0
+    return bool(mudou)
 
 
 def registrar_sucesso(modelo: str) -> None:

@@ -160,6 +160,17 @@ def _agrupar(linhas) -> dict[int, int]:
     return grupos
 
 
+@rotas.post("/modelos/devolver")
+def devolver_modelo(dados: dict, authorization: str = Header("")):
+    """Modelo fora da rota volta agora (botão da Diretoria no painel; revisão de 30/10/2026, 2.10)."""
+    if _usuario(authorization)["role"] != "diretoria":
+        raise HTTPException(status_code=403, detail="Apenas a diretoria pode devolver um modelo à rota.")
+    modelo = str(dados.get("modelo") or "")
+    if not saude.devolver_a_rota(modelo):
+        raise HTTPException(status_code=404, detail="Modelo não está fora da rota.")
+    return {"ok": True}
+
+
 @rotas.get("/registro")
 def registro(limite: int = 50, usuario_filtro: str = "", agente: str = "", authorization: str = Header("")):
     """Registro de atividade: uma linha por pedido, com a linha do tempo dos eventos. O master vê todos e filtra por

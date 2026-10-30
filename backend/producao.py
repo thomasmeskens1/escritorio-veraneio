@@ -424,14 +424,36 @@ async def proxima(sem_producao: bool = False, authorization: str = Header("")):
         "SELECT * FROM tarefas WHERE status = 'producao' ORDER BY id LIMIT 1").fetchone()
     if not linha:
         return {"producao": None, "trabalho": _reservar_trabalho(tuple(sorted(TIPOS_TRABALHO - {"anexo"})))}
+    # Tudo montado ANTES de mudar o estado (revisão de 30/10/2026, 2.5): um erro aqui devolvia a mesma peça a cada 30 s,
+    # duplicando eventos e status no Monday. Três erros seguidos: a peça falha com o motivo.
+    try:
+        producao = await _montar_producao(linha)
+    except Exception as erro:
+        log.exception("Produção %s: não foi possível montar o pedido.", linha["id"])
+        _falhas_ao_montar[linha["id"]] = _falhas_ao_montar.get(linha["id"], 0) + 1
+        if _falhas_ao_montar[linha["id"]] >= MAX_FALHAS_AO_MONTAR:
+            _falhas_ao_montar.pop(linha["id"], None)
+            tarefas.atualizar(linha["id"], status="produzindo")
+            await _finalizar(linha["id"], "falhou", f"A produção não pôde ser montada: {str(erro)[:200]}", "falhou",
+                             str(erro)[:300])
+        return {"producao": None, "trabalho": None}
+    _falhas_ao_montar.pop(linha["id"], None)
     tarefas.atualizar(linha["id"], status="produzindo")
     tarefas.registrar_evento(linha["id"], "tentativa", linha["agente"], MODELO_MAX, "Claude Code (Max) iniciou a produção")
     await atividade.ocupar(linha["agente"])
     monday.andamento(linha["id"], "produzindo")
+    return {"producao": producao, "trabalho": None}
+
+
+MAX_FALHAS_AO_MONTAR = 3
+_falhas_ao_montar: dict[int, int] = {}
+
+
+async def _montar_producao(linha) -> dict:
     info = _db().execute("SELECT * FROM producao_info WHERE tarefa_id = ?", (linha["id"],)).fetchone()
     base = info and info["base_tarefa_id"]
     pasta_base = base and _db().execute("SELECT pasta FROM producao_info WHERE tarefa_id = ?", (base,)).fetchone()
-    return {"producao": {
+    return {
         "tarefa_id": linha["id"], "agente": linha["agente"], "andar": linha["andar"],
         "pasta_andar": PASTAS_ANDAR.get(linha["andar"], linha["andar"].upper()),
         "titulo": info["titulo"] if info else titulo_curto(linha["texto"]),
@@ -447,7 +469,7 @@ async def proxima(sem_producao: bool = False, authorization: str = Header("")):
         "referencias": await asyncio.to_thread(monday.referencias_da_tarefa, linha["id"]),
         "fichas": await asyncio.to_thread(fichas.fichas_citadas, linha["texto"], linha["empresa"]),  # da empresa
         "empresa": linha["empresa"],  # o trabalhador escolhe manuais e acervo da empresa (nunca misturar)
-    }, "trabalho": None}
+    }
 
 
 def _anexos_da_producao(tarefa_id: int) -> list[str]:

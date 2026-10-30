@@ -388,6 +388,37 @@ def medida(arquivo: Path, ambiente: dict) -> tuple[int, int, float | None] | Non
     return None
 
 
+def esperar_arquivos_estaveis(rascunho: Path, limite_s: int = 60) -> None:
+    """Os finais pararam de mudar (tamanho e data iguais em duas leituras seguidas): nada é copiado pela metade."""
+    anterior, fim = None, time.monotonic() + limite_s
+    while time.monotonic() < fim:
+        final = rascunho / PASTA_FINAL
+        atual = {a: (a.stat().st_size, a.stat().st_mtime) for a in final.rglob("*") if a.is_file()} if final.is_dir() else {}
+        if atual == anterior:
+            return
+        anterior = atual
+        time.sleep(3)
+
+
+def arquivo_integro(arquivo: Path, ambiente: dict) -> bool:
+    """Imagem que abre e vídeo com duração (ffprobe); PDF, DOCX e PPTX não vazios."""
+    sufixo = arquivo.suffix.lower()
+    if sufixo in {".png", ".jpg", ".jpeg", ".mp4", ".mov"}:
+        m = medida(arquivo, ambiente)
+        return bool(m) and (sufixo not in {".mp4", ".mov"} or bool(m[2]))
+    return arquivo.stat().st_size > 0
+
+
+def sem_sobrescrever(destino: Path, versao: int) -> Path:
+    """Nome livre na pasta do Drive: se já existe um arquivo com esse nome, o novo ganha _v<versão> (ou _2, _3...)."""
+    if not destino.exists():
+        return destino
+    candidato, n = destino.with_name(f"{destino.stem}_v{versao}{destino.suffix}"), 2
+    while candidato.exists():
+        candidato, n = destino.with_name(f"{destino.stem}_{n}{destino.suffix}"), n + 1
+    return candidato
+
+
 def conferir_entrega(pasta: Path, nomes: list[str], pedido: str, ambiente: dict) -> str:
     """Linha para o resumo: medidas conferidas e o que saiu do formato pedido (ou do conjunto aceito)."""
     formato = re.search(r"FORMATO DA PEÇA[^\n]*", pedido)
@@ -439,16 +470,24 @@ def produzir(producao: dict) -> None:
                 raise
             resumo = (f"O Claude Code parou antes de concluir ({parada}). Entreguei as {len(prontos)} arte(s) já "
                       "prontas; se faltar algo (ex.: editável ou legenda), peça um ajuste nesta peça.")
-        # Só os finais novos ou alterados vão para o Drive (sem pasta de trabalho na entrega).
+        # Só os finais novos ou alterados vão para o Drive (sem pasta de trabalho na entrega), já estáveis e íntegros.
+        esperar_arquivos_estaveis(rascunho)
         novos = sorted(nome for nome, mtime in entregaveis(rascunho).items() if antes.get(nome) != mtime)
+        if (estragados := [n for n in novos if not arquivo_integro(rascunho / PASTA_FINAL / n, ambiente)]):
+            novos = [n for n in novos if n not in estragados]
+            resumo = f"{resumo}\n\n⚠ Ficaram de fora por estarem incompletos ou corrompidos: {', '.join(estragados)}."
         if not any(Path(n).suffix.lower() in EXTENSOES_ARTE for n in novos):
             raise RuntimeError("Nenhum arquivo PNG/MP4/PDF foi gerado.")
+        copiados = []
         for nome in novos:
-            (entrega / nome).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(rascunho / PASTA_FINAL / nome, entrega / nome)
+            destino = sem_sobrescrever(entrega / nome, versao)  # 2.6: nunca troca uma arte que já está no Drive
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(rascunho / PASTA_FINAL / nome, destino)
+            copiados.append(destino.relative_to(entrega).as_posix())
+        novos = copiados
         versao_arquivo.write_text(str(versao))
         arquivos = [n for n in novos if "/" not in n or n.lower().endswith(".pptx")]  # sem listar cada cena
-        if (conferencia := conferir_entrega(rascunho / PASTA_FINAL, novos, producao["texto"], ambiente)):
+        if (conferencia := conferir_entrega(entrega, novos, producao["texto"], ambiente)):  # os nomes já da entrega
             resumo = f"{resumo}\n\n{conferencia}"
             log(f"   {conferencia}")
         if producao.get("monday"):  # antes de concluir: o item já recebe os criativos quando vira "Revisão"

@@ -235,3 +235,73 @@ def test_pedido_novo_nao_vira_resposta_da_pergunta_antiga():
         assert not espera.e_pedido_novo(resposta, pendente), resposta
     assert asyncio.run(orquestrador.retomar_producao(pendente, "Faça um post do Lodge 10")) is None
     assert espera.no_chat("ana-espera", "marketing", "gestor") is not None  # a espera segue para a resposta
+
+
+# --- Seção 2: Max e produção (2.1, 2.4, 2.5, 2.6, 2.10) --------------------------------------------------------------
+
+def test_sobrecarga_e_resposta_vazia_nao_afastam_e_413_nao_pausa():
+    assert saude._classificar("Invalid response from LLM call - None or empty.")[0] == "limite"
+    assert saude._classificar("Error code: 503 - overloaded")[0] == "limite"
+    tipo, ate, _ = saude._classificar("Error code: 413 - Request too large for model")
+    assert tipo == "grande" and ate <= __import__("time").time() + 1
+
+
+def test_devolver_modelo_a_rota():
+    saude.registrar_falha("openrouter/teste:free", "404 not found")
+    assert not saude.disponivel("openrouter/teste:free")
+    assert saude.devolver_a_rota("openrouter/teste:free")
+    assert saude.disponivel("openrouter/teste:free")
+
+
+def test_erro_ao_montar_a_peca_nao_muda_o_estado_e_falha_na_terceira(monkeypatch):
+    import atividade
+    import monday
+
+    async def nada(*_a):
+        return None
+
+    async def quebra(_linha):
+        raise RuntimeError("Monday fora do ar")
+
+    monkeypatch.setattr(producao, "_exigir_operador", lambda _a: None)
+    monkeypatch.setattr(producao, "_retomar_orfaos", lambda: [])
+    monkeypatch.setattr(producao, "_montar_producao", quebra)
+    monkeypatch.setattr(atividade, "ocupar", nada)
+    monkeypatch.setattr(atividade, "liberar", nada)
+    monkeypatch.setattr(monday, "andamento", lambda *_a, **_k: None)
+    import orquestrador as orq
+
+    async def entregar(*_a):
+        return None
+
+    monkeypatch.setattr(orq, "_entregar", entregar)
+    monkeypatch.setattr(orq, "entregar_na_origem", entregar)
+    with tarefas._db() as db:  # só esta peça na fila
+        db.execute("UPDATE tarefas SET status = 'falhou' WHERE status = 'producao'")
+    tarefa_id = _producao("producao")
+    for _ in range(2):
+        assert asyncio.run(producao.proxima(authorization=""))["producao"] is None
+        assert tarefas.obter(tarefa_id)["status"] == "producao"  # nada mudou: sem eventos duplicados
+    asyncio.run(producao.proxima(authorization=""))
+    assert tarefas.obter(tarefa_id)["status"] == "falhou"
+
+
+@pytest.fixture
+def trabalhador(monkeypatch):
+    if not Path("/repo/scripts/max/trabalhador_max.py").exists():
+        pytest.skip("scripts/max não montado em /repo/scripts/max")
+    sys.path.insert(0, "/repo/scripts/max")
+    try:
+        import trabalhador_max
+    except Exception as erro:  # dependências do PC (ex.: catálogo do Drive) podem faltar no contêiner
+        pytest.skip(f"trabalhador indisponível no contêiner: {erro}")
+    return trabalhador_max
+
+
+def test_entrega_nunca_sobrescreve_arte_no_drive(trabalhador, tmp_path):
+    original = tmp_path / "arte.png"
+    original.write_bytes(b"original")
+    assert trabalhador.sem_sobrescrever(original, 2).name == "arte_v2.png"
+    (tmp_path / "arte_v2.png").write_bytes(b"x")
+    assert trabalhador.sem_sobrescrever(original, 2).name == "arte_2.png"
+    assert trabalhador.sem_sobrescrever(tmp_path / "nova.png", 1).name == "nova.png"

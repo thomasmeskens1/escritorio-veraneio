@@ -151,7 +151,8 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
             log.exception("Tarefa %s: erro interno antes/fora do modelo.", tarefa["id"])
             tarefas.registrar_evento(tarefa["id"], "falha_modelo", agente.id, etapa.modelo, f"erro interno: {erro}")
             raise ErroInterno(erro) from e
-        saude.registrar_falha(etapa.modelo, erro)  # sai da rota por um tempo; falha recorrente afasta por 7 dias
+        if not getattr(e, "ja_registrada", False):  # sai da rota por um tempo; falha recorrente afasta por 7 dias
+            saude.registrar_falha(etapa.modelo, erro)
     finally:
         tarefas.registrar_tentativa(tarefa["id"], time.monotonic() - inicio)
     tarefas.registrar_evento(tarefa["id"], "falha_modelo", agente.id, etapa.modelo, erro)
