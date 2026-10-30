@@ -16,6 +16,7 @@ import logging
 import os
 import re
 import secrets
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
@@ -392,11 +393,29 @@ def _em_segundo_plano(corrotina) -> None:
     tarefa.add_done_callback(_em_andamento.discard)
 
 
+# Revisão de 30/10/2026 (2.19): uma falha passageira da API na hora da entrega deixava o item "Em produção" sem a
+# entrega, e um novo clique gerava produção duplicada. Erros de rede, 429 e 5xx são tentados de novo.
+ESPERAS_NOVA_TENTATIVA_S = (5, 30, 120)
+
+
+def _passageiro(erro: Exception) -> bool:
+    if isinstance(erro, urllib.error.HTTPError):
+        return erro.code == 429 or erro.code >= 500
+    return isinstance(erro, (urllib.error.URLError, TimeoutError, ConnectionError, OSError))
+
+
 async def _seguro(funcao, *args) -> None:
-    try:
-        await asyncio.to_thread(funcao, *args)
-    except Exception as erro:  # o Monday fora do ar nunca derruba a tarefa
-        log.warning("Monday: %s falhou (%s)", getattr(funcao, "__name__", funcao), erro)
+    for tentativa, espera in enumerate((*ESPERAS_NOVA_TENTATIVA_S, None)):
+        try:
+            await asyncio.to_thread(funcao, *args)
+            return
+        except Exception as erro:  # o Monday fora do ar nunca derruba a tarefa
+            if espera is None or not _passageiro(erro):
+                log.warning("Monday: %s falhou (%s)", getattr(funcao, "__name__", funcao), erro)
+                return
+            log.info("Monday: %s falhou (%s); nova tentativa em %d s.", getattr(funcao, "__name__", funcao), erro,
+                     espera)
+            await asyncio.sleep(espera)
 
 
 def andamento(tarefa_id: int, evento: str, texto: str = "", producao_a_seguir: bool = False) -> None:

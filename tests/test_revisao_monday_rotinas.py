@@ -91,3 +91,28 @@ def test_fila_do_monday_sobrevive_ao_reinicio(monkeypatch):
     asyncio.run(subida())
     assert chamados == [777]
     assert not monday._db().execute("SELECT 1 FROM monday_fila WHERE item_id = 777").fetchone()  # tratado: saiu
+
+
+def test_atualizacao_do_monday_tenta_de_novo_so_em_falha_passageira(monkeypatch):
+    import urllib.error
+
+    import monday
+
+    monkeypatch.setattr(monday, "ESPERAS_NOVA_TENTATIVA_S", (0, 0, 0))
+    chamadas = []
+
+    def instavel(item_id):
+        chamadas.append(item_id)
+        if len(chamadas) < 3:
+            raise urllib.error.URLError("rede caiu")
+
+    asyncio.run(monday._seguro(instavel, 1))
+    assert len(chamadas) == 3  # duas falhas de rede e o sucesso
+    chamadas.clear()
+
+    def recusa(item_id):
+        chamadas.append(item_id)
+        raise RuntimeError("Monday: [coluna inválida]")
+
+    asyncio.run(monday._seguro(recusa, 1))
+    assert len(chamadas) == 1  # erro de validação não adianta repetir
