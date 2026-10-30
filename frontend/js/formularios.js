@@ -93,7 +93,22 @@ let popupFormulario = null;
 function fecharFormularioPopup() {
   popupFormulario?.remove();
   popupFormulario = null;
+  const proximo = popupsNaFila.shift();
+  if (proximo) setTimeout(proximo, 0);
 }
+
+// Revisão de 30/10/2026 (2.27): um pop-up que abre sozinho (formulário de agente, pergunta de insatisfação) esperava
+// nada e apagava o que a pessoa estava digitando em outro. Agora ele espera na fila até o atual fechar.
+const popupsNaFila = [];
+
+function abrirQuandoLivre(abrir) {
+  if (popupFormulario?.dataset.preenchido) popupsNaFila.push(abrir);
+  else abrir();
+}
+
+document.addEventListener('input', (e) => {
+  if (popupFormulario?.contains(e.target)) popupFormulario.dataset.preenchido = '1';
+});
 
 // `aoFechar`: o usuário fechou sem enviar (X, Esc ou clique fora). Nos formulários dos agentes isso PARA a
 // solicitação (Thomas, 29/10/2026), e o pop-up avisa antes.
@@ -118,8 +133,16 @@ function abrirFormularioPopup(definicao, aoEnviar, subtitulo = '', aoFechar = nu
   const corpo = novoEl('div', 'formulario-corpo');
   if (aoFechar) corpo.append(novoEl('p', 'form-aviso-fechar', 'Fechar este formulário sem enviar encerra a solicitação.'));
   corpo.append(criarFormulario({ ...definicao, titulo: '' }, (respostas, texto) => {
+    const enviado = (aoEnviar || enviarRespostasDoFormulario)(respostas, texto.replace(/^Respostas:/, `Respostas — ${definicao.titulo || 'Formulário'}:`));
+    if (enviado === false) {  // chat bloqueado (sem conexão ou carregando): o pop-up fica, com o que foi preenchido
+      corpo.querySelectorAll('input, select, textarea, button').forEach((el) => { el.disabled = false; });
+      let aviso = corpo.querySelector('.form-aviso-envio');
+      if (!aviso) corpo.append(aviso = novoEl('p', 'form-aviso-fechar form-aviso-envio'));
+      aviso.textContent = 'Não deu para enviar agora (conexão caiu ou o chat ainda está carregando). Suas respostas '
+        + 'continuam aqui: tente de novo em alguns segundos.';
+      return;
+    }
     fecharFormularioPopup();
-    (aoEnviar || enviarRespostasDoFormulario)(respostas, texto.replace(/^Respostas:/, `Respostas — ${definicao.titulo || 'Formulário'}:`));
   }));
   janela.append(barra, corpo);
   fundo.append(janela);
@@ -131,7 +154,8 @@ function abrirFormularioPopup(definicao, aoEnviar, subtitulo = '', aoFechar = nu
 }
 
 function enviarRespostasDoFormulario(_respostas, texto) {
-  if (modalInput.disabled) return;
+  if (modalInput.disabled || modalEnviar.disabled) return false;
   modalInput.value = texto;
   document.getElementById('modal-form').requestSubmit();
+  return true;
 }

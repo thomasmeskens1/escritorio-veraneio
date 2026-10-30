@@ -118,6 +118,9 @@ function encerrarSessao(aviso = '') {
   desconectar();
   fecharChat();
   fecharPainel();
+  fecharUsuarios();         // revisão de 30/10/2026 (2.23): nada do usuário anterior fica na tela
+  fecharFormularioPopup();
+  encerrarOnboarding();
   limparRegistro();
   limparCaixa();
   limparInsatisfacoes();

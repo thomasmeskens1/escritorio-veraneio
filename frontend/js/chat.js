@@ -86,11 +86,13 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
 // A resposta leva a tarefa do formulário: o servidor continua aquela tarefa (e a empresa dela).
 function abrirFormularioDaMensagem(pedido, tarefaId) {
   const nome = chatAberto ? dadosAgente(chatAberto.andar, chatAberto.agente).nome : '';
-  abrirFormularioPopup(pedido, tarefaId ? (respostas, textoRespostas) => {
+  abrirQuandoLivre(() => abrirFormularioPopup(pedido, tarefaId ? (respostas, textoRespostas) => {
     respondendoTarefa = tarefaId;
-    enviarRespostasDoFormulario(respostas, textoRespostas);
+    const enviado = enviarRespostasDoFormulario(respostas, textoRespostas);
+    if (!enviado) respondendoTarefa = null;
+    return enviado;
   } : undefined, nome ? `${nome} precisa destas respostas para seguir` : '',
-  tarefaId ? () => pararSolicitacao(`/api/tarefas/${tarefaId}/parar`) : null); // fechar sem responder = parar
+  tarefaId ? () => pararSolicitacao(`/api/tarefas/${tarefaId}/parar`) : null)); // fechar sem responder = parar
 }
 
 // "Parar" (botão do chat ou formulário fechado): o servidor para a tarefa ou encerra o formulário (parar.py) e
@@ -216,6 +218,10 @@ function rolarParaFim() {
 
 // Mesma tarefa + mesmo tipo + mesmo texto = mesma mensagem (ao vivo x histórico salvo).
 const assinaturaMensagem = (m) => (m.tarefa_id != null ? `${m.tipo}|${m.tarefa_id}|${m.texto}` : null);
+
+// Ao juntar com o histórico salvo, a mensagem do usuário (sem número de tarefa) também se reconhece pelo texto:
+// antes ela aparecia duplicada a cada reconexão (revisão de 30/10/2026, 2.26).
+const assinaturaNaMescla = (m) => assinaturaMensagem(m) || (m.tipo === 'voce' ? `voce|${m.texto}` : null);
 
 // Registra a assinatura; false se a mensagem já foi exibida.
 function marcarVista(k, mensagem) {
@@ -362,8 +368,8 @@ async function carregarHistorico(andar, agente) {
     historicoCarregado.add(k);
     // Mensagem ao vivo que também está no histórico fica na posição cronológica dele.
     const salvas = (dados.mensagens || []).map((m) => converterDoServidor(andar, agente, m));
-    const noHistorico = new Set(salvas.map(assinaturaMensagem).filter(Boolean));
-    const aoVivo = (historicos[k] || []).filter((m) => !noHistorico.has(assinaturaMensagem(m)));
+    const noHistorico = new Set(salvas.map(assinaturaNaMescla).filter(Boolean));
+    const aoVivo = (historicos[k] || []).filter((m) => !noHistorico.has(assinaturaNaMescla(m)));
     salvas.forEach((m) => marcarVista(k, m));
     historicos[k] = [...salvas, ...aoVivo];
     if (dados.pendentes?.length && dadosAgente(andar, agente).status === 'trabalhando') pendentes.add(k);
@@ -563,6 +569,8 @@ async function enviarTarefa(evento) {
     return;
   }
   if (!garantirEmpresa(andar, agente, texto)) return; // sem empresa: a citada no pedido ou o formulário (js/empresa.js)
+  // Lida antes do upload (revisão de 30/10/2026, 2.22): trocar de chat durante o envio dos anexos não muda a empresa.
+  const empresa = empresaDaConversa(andar, agente);
 
   let anexos = [];
   if (escolhidos.length) {
@@ -584,7 +592,7 @@ async function enviarTarefa(evento) {
   }
 
   const mensagem = { tipo: 'mensagem', andar, agente, texto };
-  if (empresaDaConversa(andar, agente)) mensagem.empresa = empresaDaConversa(andar, agente);
+  if (empresa) mensagem.empresa = empresa;
   if (anexos.length) mensagem.anexos = anexos.map((a) => a.id);
   if (respondendoTarefa && texto.startsWith('Respostas')) mensagem.responde_a = respondendoTarefa;
   respondendoTarefa = null;

@@ -124,7 +124,7 @@ function perguntarInsatisfacao(tarefaId, origem = 'voto', mensagem = '') {
 // Mensagem enviada no chat: se for uma reação negativa à última resposta do agente, pergunta o porquê.
 function verificarReacaoNegativa(texto, tarefaId) {
   if (!tarefaId || texto.startsWith('Respostas') || !REACAO_NEGATIVA.test(texto)) return;
-  setTimeout(() => perguntarInsatisfacao(tarefaId, 'mensagem', texto), 400);
+  setTimeout(() => abrirQuandoLivre(() => perguntarInsatisfacao(tarefaId, 'mensagem', texto)), 400);
 }
 
 function criarAvaliacao(tarefaId, valorInicial = 0) {
