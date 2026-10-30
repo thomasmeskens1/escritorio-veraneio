@@ -67,12 +67,17 @@ CREATE TABLE IF NOT EXISTS monday_tarefas (
 );
 CREATE INDEX IF NOT EXISTS idx_monday_item ON monday_tarefas(item_id);
 CREATE TABLE IF NOT EXISTS monday_eventos (gatilho TEXT PRIMARY KEY, em TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS monday_fila (item_id INTEGER PRIMARY KEY, usuario INTEGER, em TEXT NOT NULL);
 """
 _MIGRACOES = ("ALTER TABLE monday_tarefas ADD COLUMN usuario_monday INTEGER",   # quem clicou (notificações)
               "ALTER TABLE monday_tarefas ADD COLUMN origem TEXT DEFAULT 'botao'")  # botao | chat
 _esquema_criado = False
 _em_andamento: set[asyncio.Task] = set()
 _enviando: set[int] = set()  # itens entre o clique e a criação da tarefa (clique duplo = um projeto só)
+# Revisão de 30/10/2026 (2.18): a espera pelo Gestor vivia só na memória (um reinício deixava o item "Na fila" para
+# sempre) e dois itens podiam criar tarefas do Gestor ao mesmo tempo. Agora a fila fica no banco e a vez do Gestor
+# é uma trava: um item por vez, na ordem do clique.
+_vez_do_gestor = asyncio.Lock()
 _autorizados: set[int] | None = None
 
 
@@ -484,10 +489,23 @@ async def _enviar_ao_gestor(item_id: int, usuario: int | None = None) -> None:
     if item_id in _enviando:  # clique duplo: o primeiro já está cuidando deste item
         return
     _enviando.add(item_id)
+    with _db() as db:
+        db.execute("INSERT OR REPLACE INTO monday_fila (item_id, usuario, em) VALUES (?, ?, ?)",
+                   (item_id, usuario, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")))
     try:
         await _enviar_ao_gestor_unico(item_id, usuario)
     finally:
         _enviando.discard(item_id)
+        with _db() as db:  # criou a tarefa ou recusou: sai da fila (reinício no meio: fica para retomar_fila)
+            db.execute("DELETE FROM monday_fila WHERE item_id = ?", (item_id,))
+
+
+def retomar_fila() -> int:
+    """Na subida: itens que esperavam o Gestor quando o servidor caiu voltam a esperar."""
+    pendentes = _db().execute("SELECT item_id, usuario FROM monday_fila ORDER BY em").fetchall()
+    for linha in pendentes:
+        _em_segundo_plano(_enviar_ao_gestor(linha["item_id"], linha["usuario"]))
+    return len(pendentes)
 
 
 async def _enviar_ao_gestor_unico(item_id: int, usuario: int | None) -> None:
@@ -522,19 +540,20 @@ async def _enviar_ao_gestor_unico(item_id: int, usuario: int | None) -> None:
     gestor = buscar_agente("marketing", "gestor")
     if not gestor:
         return
-    if gestor.status == Status.trabalhando:  # espera o Gestor terminar o que está fazendo
+    if gestor.status == Status.trabalhando or _vez_do_gestor.locked():
         await _seguro(mudar_status, item_id, NA_FILA)
-        for _ in range(ESPERA_MAXIMA_S // ESPERA_GESTOR_S):
-            await asyncio.sleep(ESPERA_GESTOR_S)
+    async with _vez_do_gestor:  # um item por vez: a checagem do Gestor e a criação da tarefa juntas
+        for _ in range(ESPERA_MAXIMA_S // ESPERA_GESTOR_S):  # espera o Gestor terminar o que está fazendo
             if gestor.status != Status.trabalhando:
                 break
-    await _seguro(mudar_status, item_id, EM_PRODUCAO)
-    pedido = (f"Produza a peça do item abaixo, do planejamento de Social Media no Monday.\n\n{briefing(item)}\n\n"
-              f"Na entrega final, inclua a legenda pronta (se a peça tiver legenda) entre as linhas "
-              f"{MARCA_LEGENDA[0]} e {MARCA_LEGENDA[1]}.")
-    await orquestrador.nova_tarefa(config.DONO_MAX, "marketing", gestor, pedido,
-                                   ao_criar=lambda tarefa_id: vincular(tarefa_id, item_id, usuario),
-                                   empresa=empresas.da_conta_monday(marca) or empresas.PADRAO)  # Conta = empresa
+            await asyncio.sleep(ESPERA_GESTOR_S)
+        await _seguro(mudar_status, item_id, EM_PRODUCAO)
+        pedido = (f"Produza a peça do item abaixo, do planejamento de Social Media no Monday.\n\n{briefing(item)}\n\n"
+                  f"Na entrega final, inclua a legenda pronta (se a peça tiver legenda) entre as linhas "
+                  f"{MARCA_LEGENDA[0]} e {MARCA_LEGENDA[1]}.")
+        await orquestrador.nova_tarefa(config.DONO_MAX, "marketing", gestor, pedido,
+                                       ao_criar=lambda tarefa_id: vincular(tarefa_id, item_id, usuario),
+                                       empresa=empresas.da_conta_monday(marca) or empresas.PADRAO)  # Conta = empresa
 
 
 @rotas.post("/criativos/{tarefa_id}")

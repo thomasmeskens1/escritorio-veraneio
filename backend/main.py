@@ -89,6 +89,8 @@ async def ciclo_de_vida(_: FastAPI):
             log.warning("Diretrizes de %s sem %s: confira o mapa SECOES.", agente_id, situacao["faltando"])
     fila = asyncio.create_task(orquestrador.processar_fila())
     agendamentos.iniciar()  # rotinas agendadas (recarrega as ativas do banco)
+    if (retomados := monday.retomar_fila()):  # itens do Monday que esperavam o Gestor quando o servidor caiu
+        log.warning("Monday: %d item(ns) voltaram a esperar o Gestor.", retomados)
     copias = asyncio.create_task(copiar_banco_periodicamente())
     yield
     agendamentos.parar()

@@ -70,3 +70,24 @@ def test_reenvio_de_mensagem_ja_recebida_e_ignorado():
     assert not main._ja_recebida("ana", "envio-1")
     assert main._ja_recebida("ana", "envio-1")  # mesmo envio de novo: só confirma
     assert not main._ja_recebida("bia", "envio-1")  # outro usuário, outro envio
+
+
+def test_fila_do_monday_sobrevive_ao_reinicio(monkeypatch):
+    import monday
+
+    chamados = []
+
+    async def unico(item_id, usuario):
+        chamados.append(item_id)
+
+    monkeypatch.setattr(monday, "_enviar_ao_gestor_unico", unico)
+    with monday._db() as db:
+        db.execute("INSERT OR REPLACE INTO monday_fila (item_id, usuario, em) VALUES (777, 5, '2026-10-30T10:00:00Z')")
+
+    async def subida():
+        assert monday.retomar_fila() == 1
+        await asyncio.sleep(0.05)
+
+    asyncio.run(subida())
+    assert chamados == [777]
+    assert not monday._db().execute("SELECT 1 FROM monday_fila WHERE item_id = 777").fetchone()  # tratado: saiu
