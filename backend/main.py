@@ -278,6 +278,20 @@ async def ensinar_cerebro(ws: WebSocket, usuario: dict, andar: str, agente, text
     await orquestrador.entregar(tarefas.obter(tarefa_id))
 
 
+ENVIOS_LEMBRADOS_S = 30 * 60
+_envios_recebidos: dict[tuple[str, str], float] = {}
+
+
+def _ja_recebida(login: str, id_envio: str) -> bool:
+    agora = time.monotonic()
+    for chave in [c for c, t in _envios_recebidos.items() if agora - t > ENVIOS_LEMBRADOS_S]:
+        del _envios_recebidos[chave]
+    if (login, id_envio) in _envios_recebidos:
+        return True
+    _envios_recebidos[(login, id_envio)] = agora
+    return False
+
+
 async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     async def erro(texto: str, **extra) -> None:
         await gerenciador.enviar(ws, {"tipo": "erro", "texto": texto, **extra})
@@ -295,6 +309,14 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         return
     if not isinstance(msg, dict) or msg.get("tipo") != "mensagem":
         return await erro("Tipo de mensagem desconhecido.")
+    # Confirmação de recebimento (revisão de 30/10/2026, 2.25): numa conexão "muda" do túnel a mensagem sumia e o
+    # agente "nunca respondia". O navegador espera este "recebido"; sem ele, oferece "Reenviar". Reenvio de uma
+    # mensagem que já tinha chegado (só a confirmação se perdeu) é confirmado de novo e ignorado.
+    if (id_envio := str(msg.get("id_envio") or "")[:64]):
+        repetida = _ja_recebida(usuario["sub"], id_envio)
+        await gerenciador.enviar(ws, {"tipo": "recebido", "id_envio": id_envio})
+        if repetida:
+            return
     gerenciador.registrar_presenca(ws, True)  # enviar um pedido é interação
 
     andar, agente_id = str(msg.get("andar", "")), str(msg.get("agente", ""))

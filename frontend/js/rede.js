@@ -50,6 +50,9 @@ function tratarMensagem(msg) {
   switch (msg.tipo) {
     case 'pong':
       break;
+    case 'recebido': // o servidor recebeu a mensagem do chat (js/chat.js)
+      confirmarEnvio(msg.id_envio);
+      break;
     case 'estado':
       aplicarEstado(msg.andares);
       atualizarContadores(msg.andares);

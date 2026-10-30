@@ -53,9 +53,10 @@ function textoNatural(texto) {
 }
 
 function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, formulario, link, relatorio,
-  formulario_encerrado: encerrado, avaliacao }) {
+  formulario_encerrado: encerrado, avaliacao, id_envio }) {
   const div = document.createElement('div');
   div.className = `msg msg-${tipo}`;
+  if (id_envio) div.dataset.envio = id_envio;
   const nome = document.createElement('span');
   nome.className = 'msg-autor';
   nome.textContent = autor;
@@ -591,7 +592,7 @@ async function enviarTarefa(evento) {
     anexos.forEach((a, i) => { if (escolhidos[i]?.url) urlsAnexo[a.id] = Promise.resolve(escolhidos[i].url); });
   }
 
-  const mensagem = { tipo: 'mensagem', andar, agente, texto };
+  const mensagem = { tipo: 'mensagem', andar, agente, texto, id_envio: novoIdEnvio() };
   if (empresa) mensagem.empresa = empresa;
   if (anexos.length) mensagem.anexos = anexos.map((a) => a.id);
   if (respondendoTarefa && texto.startsWith('Respostas')) mensagem.responde_a = respondendoTarefa;
@@ -600,6 +601,7 @@ async function enviarTarefa(evento) {
     avisarAnexo('Sem conexão com o servidor. Tente de novo.');
     return;
   }
+  aguardarConfirmacao(mensagem);
 
   selecionados[k] = [];
   rascunhos[k] = '';
@@ -612,8 +614,58 @@ async function enviarTarefa(evento) {
   pendentes.add(k);
   const ultimaResposta = [...(historicos[k] || [])].reverse().find((m) => m.tipo === 'agente' && m.tarefa_id);
   verificarReacaoNegativa(texto, ultimaResposta?.tarefa_id); // "não era isso": pergunta o porquê (js/avaliacao.js)
-  adicionarMensagem(andar, agente, { autor: 'Você', texto, tipo: 'voce', anexos });
+  adicionarMensagem(andar, agente, { autor: 'Você', texto, tipo: 'voce', anexos, id_envio: mensagem.id_envio });
   atualizarChat();
+}
+
+// Confirmação de recebimento (revisão de 30/10/2026, 2.25): sem o "recebido" do servidor em 10 s, a mensagem fica
+// marcada como não enviada, com "Reenviar" (o servidor ignora a repetição se a primeira tinha chegado).
+const ESPERA_CONFIRMACAO = 10000;
+const envios = new Map(); // id_envio -> { dados, timer }
+
+function novoIdEnvio() {
+  return window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+const elementosDoEnvio = (id) => modalHistorico.querySelectorAll(`.msg[data-envio="${CSS.escape(id)}"]`);
+
+function aguardarConfirmacao(dados) {
+  clearTimeout(envios.get(dados.id_envio)?.timer);
+  envios.set(dados.id_envio, { dados, timer: setTimeout(() => marcarNaoEnviada(dados.id_envio), ESPERA_CONFIRMACAO) });
+}
+
+function confirmarEnvio(id) {
+  const envio = envios.get(id);
+  if (!envio) return;
+  clearTimeout(envio.timer);
+  envios.delete(id);
+  elementosDoEnvio(id).forEach((el) => {
+    el.classList.remove('msg-nao-enviada');
+    el.querySelector('.msg-reenviar')?.remove();
+  });
+}
+
+function marcarNaoEnviada(id) {
+  const envio = envios.get(id);
+  if (!envio) return;
+  const { andar, agente } = envio.dados;
+  pendentes.delete(chave(andar, agente));
+  atualizarChat();
+  elementosDoEnvio(id).forEach((el) => {
+    el.classList.add('msg-nao-enviada');
+    if (el.querySelector('.msg-reenviar')) return;
+    const reenviar = novoEl('button', 'botao-secundario msg-reenviar', 'Não chegou ao servidor. Reenviar');
+    reenviar.type = 'button';
+    reenviar.addEventListener('click', () => {
+      if (!enviar(envio.dados)) return;
+      reenviar.remove();
+      el.classList.remove('msg-nao-enviada');
+      pendentes.add(chave(andar, agente));
+      atualizarChat();
+      aguardarConfirmacao(envio.dados);
+    });
+    el.append(reenviar);
+  });
 }
 
 // Limpeza só da tela (o servidor guardou a partir de onde mostrar; a memória dos agentes não muda).

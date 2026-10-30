@@ -62,3 +62,11 @@ def test_senha_trocada_ou_sair_derruba_o_token_antigo(monkeypatch):
     assert auth.validar_token(novo)
     auth.encerrar_sessoes("ana@x.com")  # "Sair"
     assert auth.validar_token(novo) is None
+
+
+def test_reenvio_de_mensagem_ja_recebida_e_ignorado():
+    import main
+
+    assert not main._ja_recebida("ana", "envio-1")
+    assert main._ja_recebida("ana", "envio-1")  # mesmo envio de novo: só confirma
+    assert not main._ja_recebida("bia", "envio-1")  # outro usuário, outro envio

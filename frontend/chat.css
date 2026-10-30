@@ -1054,3 +1054,15 @@
   max-height: 60vh;
   overflow-y: auto;
 }
+
+/* Mensagem sem confirmação do servidor (js/chat.js, revisão de 30/10/2026) */
+.msg-nao-enviada {
+  opacity: 0.65;
+  outline: 1px dashed #e07a5f;
+}
+
+.msg-reenviar {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.75rem;
+}
