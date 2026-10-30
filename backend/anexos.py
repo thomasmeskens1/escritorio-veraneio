@@ -12,7 +12,7 @@ import io
 import logging
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, File, Header, HTTPException, UploadFile
@@ -28,6 +28,10 @@ log = logging.getLogger("veraneio.anexos")
 BACKEND_DIR = config.DADOS_DIR.parent  # backend/ (caminhos gravados são relativos a ela)
 PASTA = BACKEND_DIR / "dados" / "anexos"
 TAMANHO_MAX = 15 * 1024 * 1024
+# Revisão de 30/10/2026: upload sem cota e sem limpeza. Até 300 MB por usuário por dia; arquivos com mais de 180 dias
+# saem do disco (a descrição fica no banco).
+COTA_DIARIA = 300 * 1024 * 1024
+DIAS_GUARDADOS = 180
 MAX_POR_MENSAGEM = 4
 TEMPO_MAX_DONO = 180          # segundos esperando o Claude Code do PC do dono
 LADO_MAX_API = 1568           # imagens maiores são reduzidas antes de ir para a API
@@ -112,6 +116,18 @@ def _absoluto(caminho: str) -> Path:
 
 # --- Rotas -------------------------------------------------------------------------------
 
+def limpar_antigos() -> int:
+    """Apaga do disco os anexos com mais de DIAS_GUARDADOS dias (a linha e a descrição ficam). Na subida."""
+    limite = (datetime.now(timezone.utc) - timedelta(days=DIAS_GUARDADOS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    apagados = 0
+    for linha in _db().execute("SELECT caminho FROM anexos WHERE criado_em < ?", (limite,)).fetchall():
+        arquivo = _absoluto(linha["caminho"])
+        if arquivo.is_file():
+            arquivo.unlink()
+            apagados += 1
+    return apagados
+
+
 @rotas.post("")
 async def enviar_anexos(arquivos: list[UploadFile] = File(...), authorization: str = Header("")):
     """Valida tudo antes de gravar: ou entram todos, ou nenhum."""
@@ -134,6 +150,12 @@ async def enviar_anexos(arquivos: list[UploadFile] = File(...), authorization: s
         if not mime or extensao not in TIPOS[mime]:
             raise HTTPException(status_code=415, detail=f"{nome}: envie apenas imagens PNG, JPG, WEBP ou PDF.")
         validados.append((nome, mime, conteudo))
+    desde = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    usado = _db().execute("SELECT COALESCE(SUM(tamanho), 0) FROM anexos WHERE usuario = ? AND criado_em >= ?",
+                          (usuario["sub"], desde)).fetchone()[0]
+    if usado + sum(len(c) for _, _, c in validados) > COTA_DIARIA:
+        raise HTTPException(status_code=413, detail="Limite de anexos de hoje atingido (300 MB). Tente amanhã ou "
+                                                    "mande os arquivos pelo Drive.")
 
     PASTA.mkdir(parents=True, exist_ok=True)
     criados = []

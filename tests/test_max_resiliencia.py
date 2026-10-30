@@ -372,3 +372,11 @@ def test_conclusao_repetida_da_peca_nao_trava_o_trabalhador(monkeypatch):
     conclusao = producao.Conclusao(resumo="ok", pasta="MARKETING/x", arquivos=["a.png"], link="")
     asyncio.run(producao.concluir(tarefa_id, conclusao, ""))
     assert asyncio.run(producao.concluir(tarefa_id, conclusao, "")) == {"ok": True, "descartada": True}
+
+
+def test_conferencia_tecnica_confere_quantidade_e_duracao(trabalhador, monkeypatch, tmp_path):
+    medidas = {"p1.png": (1080, 1440, None), "p2.png": (1080, 1440, None), "reel.mp4": (1080, 1920, 50.0)}
+    monkeypatch.setattr(trabalhador, "medida", lambda arquivo, _amb: medidas.get(arquivo.name))
+    pedido = "FORMATO DA PEÇA (obrigatório): CARROSSEL 4 páginas 1080×1440 e REELS de 15 a 30 s"
+    linha = trabalhador.conferir_entrega(tmp_path, ["p1.png", "p2.png", "reel.mp4"], pedido, {})
+    assert "pedidas 4" in linha and "entregues 3" in linha and "reel.mp4 com 50.0 s" in linha

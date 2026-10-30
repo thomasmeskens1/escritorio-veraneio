@@ -137,3 +137,26 @@ def test_busca_de_item_ambigua_nao_escolhe_o_primeiro(monkeypatch):
     monkeypatch.setattr(monday, "_com_descricao", lambda item: item)
     assert monday.buscar_item("Lodge 10") is None  # dois parecidos: o agente pergunta qual
     assert monday.buscar_item("POST | Lodge 10 Carnaval")["name"] == "POST | Lodge 10 Carnaval"
+
+
+def test_anexos_tem_cota_diaria_e_os_antigos_saem_do_disco(tmp_path, monkeypatch):
+    import io
+
+    import pytest
+    from fastapi import HTTPException, UploadFile
+
+    import anexos
+
+    monkeypatch.setattr(anexos, "_usuario", lambda _a: {"sub": "ana-cota"})
+    monkeypatch.setattr(anexos, "COTA_DIARIA", 100)
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 200
+    with pytest.raises(HTTPException) as erro:
+        asyncio.run(anexos.enviar_anexos([UploadFile(io.BytesIO(png), filename="a.png")], ""))
+    assert erro.value.status_code == 413
+    antigo = tmp_path / "velho.png"
+    antigo.write_bytes(b"x")
+    monkeypatch.setattr(anexos, "_absoluto", lambda caminho: antigo)
+    with anexos._db() as db:
+        db.execute("INSERT INTO anexos (id, usuario, nome_original, mime, tamanho, caminho, status, criado_em) VALUES "
+                   "('velho1', 'ana', 'v.png', 'image/png', 1, 'dados/anexos/velho1.png', 'pronto', '2025-01-01T00:00:00Z')")
+    assert anexos.limpar_antigos() >= 1 and not antigo.exists()

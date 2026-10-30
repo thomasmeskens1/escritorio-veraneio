@@ -95,6 +95,8 @@ async def ciclo_de_vida(_: FastAPI):
     config.ARQUIVO_MANUTENCAO.unlink(missing_ok=True)  # subiu: a manutenção acabou
     tarefas.iniciar()
     producao.iniciar()
+    if (apagados := anexos.limpar_antigos()):
+        log.info("Anexos: %d arquivo(s) antigos apagados do disco.", apagados)
     agentes_dinamicos.carregar()  # agentes criados pelo Construtor voltam ao prédio
     aprendizado.carregar()
     reranker.carregar()  # rede neural do Cérebro (ativa só se superou a ordem atual)

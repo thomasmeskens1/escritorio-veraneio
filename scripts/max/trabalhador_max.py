@@ -379,6 +379,8 @@ def comando_producao(empresa: str = "casa_veraneio") -> list[str]:
 # formato pedido. Não bloqueia a entrega; o resultado vai no resumo, com ⚠ quando algo sai do formato.
 MEDIDAS_ACEITAS = {(1080, 1440), (1080, 1920), (1080, 1080), (1080, 1350)}
 MEDIDA_PEDIDA = re.compile(r"(\d{3,4})\s*[x×]\s*(\d{3,4})")
+QUANTIDADE_PEDIDA = re.compile(r"\b(\d{1,2})\s+(p[áa]ginas|slides|telas|stories|artes|imagens)\b", re.IGNORECASE)
+DURACAO_PEDIDA = re.compile(r"\b(\d{1,3})\s*(?:a|-|até)?\s*(\d{1,3})?\s*(?:s\b|seg)", re.IGNORECASE)
 
 
 def medida(arquivo: Path, ambiente: dict) -> tuple[int, int, float | None] | None:
@@ -446,8 +448,23 @@ def conferir_entrega(pasta: Path, nomes: list[str], pedido: str, ambiente: dict)
             fora.append(f"{nome} ({m[0]}×{m[1]})")
     if not conferidos:
         return ""
+    # Revisão de 30/10/2026: antes só a medida era conferida; quantidade e duração pedidas passavam batido.
+    avisos = []
     if fora:
-        return f"⚠ Conferência técnica: {len(fora)} arquivo(s) fora do formato pedido: {', '.join(fora[:5])}."
+        avisos.append(f"{len(fora)} arquivo(s) fora do formato pedido: {', '.join(fora[:5])}")
+    texto_formato = formato.group(0) if formato else ""
+    if (quantidade := QUANTIDADE_PEDIDA.search(texto_formato)):
+        artes = [n for n in nomes if "/" not in n and Path(n).suffix.lower() in EXTENSOES_ARTE]
+        if len(artes) != int(quantidade.group(1)):
+            avisos.append(f"pedidas {quantidade.group(1)} {quantidade.group(2)}, entregues {len(artes)} arquivo(s)")
+    if (duracao := DURACAO_PEDIDA.search(texto_formato)):
+        minimo, maximo = int(duracao.group(1)), int(duracao.group(2) or duracao.group(1))
+        for nome in nomes:
+            if Path(nome).suffix.lower() in {".mp4", ".mov"} and (m := medida(pasta / nome, ambiente)) and m[2]:
+                if not minimo - 1 <= m[2] <= maximo + 1:
+                    avisos.append(f"{nome} com {m[2]} s (pedido: {minimo}{f' a {maximo}' if maximo != minimo else ''} s)")
+    if avisos:
+        return "⚠ Conferência técnica: " + "; ".join(avisos) + "."
     return f"Conferência técnica: {conferidos} arquivo(s) no formato certo."
 
 
@@ -588,6 +605,23 @@ PAUSA_COTA_MIN, PAUSA_COTA_MAX = 5 * 60, 30 * 60
 AVISO_DRIVE_S = 5 * 60
 
 
+def conferir_claude_code() -> None:
+    """Versão do Claude Code e as opções que a produção usa (revisão de 30/10/2026: uma atualização da CLI que mude
+    as opções derrubaria a fila em cadeia sem um sinal claro). Só registra no log; não impede a subida."""
+    try:
+        versao = subprocess.run([comum.claude_exe(), "--version"], capture_output=True, text=True, timeout=60,
+                                creationflags=comum.SEM_JANELA).stdout.strip()
+        ajuda = subprocess.run([comum.claude_exe(), "--help"], capture_output=True, text=True, timeout=60,
+                               creationflags=comum.SEM_JANELA).stdout
+    except Exception as erro:
+        log(f"AVISO: não consegui rodar o Claude Code ({erro}). Confira a instalação.")
+        return
+    faltando = [o for o in ("--allowedTools", "--disallowedTools", "--add-dir", "--permission-mode", "--output-format",
+                            "--max-turns") if o not in ajuda]
+    log(f"Claude Code {versao or '(versão desconhecida)'}"
+        + (f" — AVISO: a ajuda não cita {', '.join(faltando)}; a produção pode falhar." if faltando else ""))
+
+
 def faltando_no_drive() -> list[str]:
     """O que a produção precisa do Drive e não está acessível agora ([] = pronto)."""
     exigidos = {"Drive do escritório": DRIVE, "acervo dos Lodges": comum.ACERVO, "marcas": PASTA_MARCAS,
@@ -601,6 +635,7 @@ def main() -> None:
         log("Já existe um Trabalhador Max rodando neste PC; esta cópia foi encerrada.")
         return
     log(f"Trabalhador Max ativo. Fila: {comum.BACKEND} | Drive: {DRIVE} | log: {comum.ARQUIVO_LOG}")
+    conferir_claude_code()
     preparado = False
     proximo_catalogo = 0.0
     pausa_ate, pausa_s = 0.0, PAUSA_COTA_MIN
