@@ -163,13 +163,21 @@ def substituir_ref(fonte_tipo: str, fonte_ref: str, titulo: str, conteudo: str, 
     """Mesmo fonte_ref: os trechos novos substituem os anteriores daquele ref. Devolve o nº de trechos."""
     novos = dividir(titulo, conteudo)
     with _trava:
-        antigos = db().execute("SELECT id, titulo, conteudo FROM conhecimento WHERE fonte_tipo = ? AND fonte_ref = ? "
-                               "AND ativo = 1 ORDER BY id", (fonte_tipo, fonte_ref)).fetchall()
+        antigos = db().execute("SELECT id, titulo, conteudo, embedding, modelo_embedding FROM conhecimento "
+                               "WHERE fonte_tipo = ? AND fonte_ref = ? AND ativo = 1 ORDER BY id",
+                               (fonte_tipo, fonte_ref)).fetchall()
     if [(l["titulo"], l["conteudo"]) for l in antigos] == [(t[:200], c) for t, c in novos]:
         return len(antigos)  # nada mudou
     ids = [_inserir(fonte_tipo, fonte_ref, t, c, empresa) for t, c in novos]
+    # Trecho igual ao anterior herda o vetor (revisão de 30/10/2026, 2.33: a recoleta recalculava todos os vetores do
+    # documento por uma linha mudada); só os trechos novos vão ao Ollama.
+    vetores = {(l["titulo"], l["conteudo"]): (l["embedding"], l["modelo_embedding"]) for l in antigos if l["embedding"]}
+    herdados = [(*vetores[(t[:200], c)], i) for i, (t, c) in zip(ids, novos) if (t[:200], c) in vetores]
+    if herdados:
+        with _trava, db() as conexao:
+            conexao.executemany("UPDATE conhecimento SET embedding = ?, modelo_embedding = ? WHERE id = ?", herdados)
     _desativar([l["id"] for l in antigos], ids[0] if ids else None)
-    gerar_embeddings(ids)
+    gerar_embeddings([i for i in ids if i not in {h[2] for h in herdados}])
     return len(ids)
 
 
@@ -499,11 +507,12 @@ def consolidar() -> dict:
         decaidos = conexao.execute(
             "UPDATE conhecimento SET pontuacao = pontuacao * 0.9 WHERE fonte_tipo = 'tarefa' AND ativo = 1 "
             "AND pontuacao != 0 AND criado_em < ?", (agora(-timedelta(days=30)),)).rowcount
-        # Versões antigas (inativas há 30+ dias) guardam o texto como histórico, mas não o vetor: era mais da
-        # metade do banco. Se um trecho for reativado, o vetor é recalculado (pendentes() pega ativo sem vetor).
+        # Versões antigas (inativas há 3+ dias) guardam o texto como histórico, mas não o vetor: era mais da metade
+        # do banco (30/10/2026: 49 MB de 85 MB com o prazo de 30 dias). Se um trecho for reativado, o vetor é
+        # recalculado (pendentes() pega ativo sem vetor).
         liberados = conexao.execute(
             "UPDATE conhecimento SET embedding = NULL WHERE ativo = 0 AND embedding IS NOT NULL "
-            "AND atualizado_em < ?", (agora(-timedelta(days=30)),)).rowcount
+            "AND atualizado_em < ?", (agora(-timedelta(days=3)),)).rowcount
     if liberados >= 100:
         with _trava:
             db().execute("VACUUM")  # devolve o espaço ao disco (fora de transação)

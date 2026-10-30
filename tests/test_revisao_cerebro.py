@@ -107,3 +107,19 @@ def test_relatorio_libera_so_os_proprios_scripts_e_expira(tmp_path, monkeypatch)
     with pytest.raises(HTTPException):
         relatorios.abrir(nome)
     assert not (tmp_path / nome).exists()
+
+
+def test_recoleta_reaproveita_o_vetor_do_trecho_que_nao_mudou(monkeypatch):
+    gerados = []
+    monkeypatch.setattr(base, "gerar_embeddings", lambda ids: gerados.extend(ids) or 0)
+    monkeypatch.setattr(base, "dividir", lambda titulo, conteudo: [(f"{titulo} › {n}", parte)
+                                                                     for n, parte in enumerate(conteudo.split("|"))])
+    base.substituir_ref("site", "teste/doc", "Doc", "parte A|parte B", "casa_veraneio")
+    with base.db() as conexao:
+        conexao.execute("UPDATE conhecimento SET embedding = X'0102', modelo_embedding = 'm' WHERE fonte_ref = 'teste/doc'")
+    gerados.clear()
+    base.substituir_ref("site", "teste/doc", "Doc", "parte A|parte B mudou", "casa_veraneio")
+    ativos = base.db().execute("SELECT id, conteudo, embedding FROM conhecimento WHERE fonte_ref = 'teste/doc' "
+                               "AND ativo = 1 ORDER BY id").fetchall()
+    assert ativos[0]["embedding"] == b"\x01\x02"  # "parte A" não mudou: herdou o vetor
+    assert gerados == [ativos[1]["id"]]          # só o trecho mudado vai ao Ollama
