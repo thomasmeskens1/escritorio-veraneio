@@ -101,12 +101,12 @@ def executar(trabalho_id: int, prompt: str, limite_s: int = LIMITE_S) -> str:
             raise saude.FalhaDoModelo("Trabalho do Max não encontrado.")
         if linha["status"] == "concluido":
             return linha["resultado"] or ""
-        if linha["status"] == "falhou":
+        if linha["status"] in ("falhou", "cancelado"):
             raise saude.FalhaDoModelo(f"Claude Code (Max): {linha['resultado'] or 'falhou'}")
         time.sleep(2)
-    with _db() as db:  # ainda na fila: cancela para o trabalhador não rodar à toa
-        db.execute("UPDATE trabalhos_max SET status = 'falhou', resultado = 'tempo esgotado' "
-                   "WHERE id = ? AND status = 'pendente'", (trabalho_id,))
+    import producao  # import tardio: produção depende do orquestrador
+
+    producao.cancelar_trabalho(trabalho_id, "tempo esgotado")  # na fila ou rodando: o trabalhador para
     raise TimeoutError("O Claude Code (Max) não respondeu a tempo.")
 
 

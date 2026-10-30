@@ -57,7 +57,7 @@ def _gravar(arquivo: Path, texto: str) -> None:
     """Gravação atômica; se outra tentativa já gravou, mantém a primeira."""
     if arquivo.exists():
         return
-    temporario = arquivo.with_suffix(".tmp")
+    temporario = arquivo.with_suffix(f".{threading.get_ident()}.tmp")  # duas tentativas não dividem o temporário
     temporario.write_text(texto, encoding="utf-8")
     temporario.replace(arquivo)
 
@@ -344,8 +344,10 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
         detalhe = f"Etapa {n}: {passo['instrucao'][:160]}"
         avisar("etapa_iniciada", passo["agente"], detalhe)
         try:
-            _gravar(_arquivo_etapa(pasta, n, passo["agente"]),
-                    executar(passo["agente"], descricao, "Entrega completa desta etapa.", "equipe"))
+            entrega = executar(passo["agente"], descricao, "Entrega completa desta etapa.", "equipe")
+            if cancelar.is_set():  # esta tentativa estourou o tempo: o próximo modelo refaz (revisão de 30/10, 2.8)
+                raise Cancelado
+            _gravar(_arquivo_etapa(pasta, n, passo["agente"]), entrega)
         finally:
             avisar("etapa_encerrada", passo["agente"], detalhe)
         avisar("etapa_salva", passo["agente"], detalhe)
@@ -382,6 +384,8 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
                           "entrega. Depois do texto final, acrescente o bloco <<CHECAGEM>> com uma linha por "
                           "requisito (\"R1: ok\" ou \"R1: faltou - motivo\") e feche com <<FIM>>.")
         texto = executar("gestor", descricao, "Entrega final consolidada e revisada.", "gestor")
+        if cancelar.is_set():
+            raise Cancelado
         if ficha:
             texto = _aplicar_checagem(pasta, texto)
         _gravar(final, texto)

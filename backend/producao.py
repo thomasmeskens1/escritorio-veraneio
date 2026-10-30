@@ -125,9 +125,10 @@ def iniciar() -> None:
     # continua produzindo (antes, o painel mostrava "na fila" uma peça em produção). Se o trabalhador caiu de
     # verdade, a sobra é recuperada quando ele pede o próximo item (_retomar_orfaos).
     with _db() as db:
-        # Texto pelo Max: quem esperava a resposta não existe mais após o reinício.
-        db.execute("UPDATE trabalhos_max SET status = 'falhou', resultado = 'reinício do servidor' "
-                   "WHERE tipo = 'texto' AND status IN ('reservado', 'pendente', 'executando')")
+        # Texto, pesquisa e anexo pelo Max: quem esperava a resposta não existe mais após o reinício (antes as
+        # pesquisas continuavam e gastavam até 40 min de Max para ninguém; revisão de 30/10/2026, 2.2).
+        db.execute("UPDATE trabalhos_max SET status = 'cancelado', resultado = 'reinício do servidor' "
+                   "WHERE tipo IN ('texto', 'prospeccao', 'anexo') AND status IN ('reservado', 'pendente', 'executando')")
 
 
 _VERBOS_INICIAIS = re.compile(
@@ -336,7 +337,7 @@ async def aguardar_trabalho(trabalho_id: int, timeout: float) -> dict:
         trabalho = obter_trabalho(trabalho_id) or {"id": trabalho_id, "status": "falhou",
                                                    "resultado": "Trabalho não encontrado."}
         restante = limite - time.monotonic()
-        if trabalho["status"] in ("concluido", "falhou") or restante <= 0:
+        if trabalho["status"] in ("concluido", "falhou", "cancelado") or restante <= 0:
             return trabalho
         await asyncio.sleep(min(1.0, max(0.05, restante)))
 
@@ -352,8 +353,17 @@ def _reservar_trabalho(tipos: tuple[str, ...]) -> dict | None:
     return {"id": linha["id"], "tipo": linha["tipo"], "payload": json.loads(linha["payload"])}
 
 
-def _finalizar_trabalho(trabalho_id: int, status: str, resultado: str) -> dict:
+def cancelar_trabalho(trabalho_id: int, motivo: str) -> None:
+    """Ninguém espera mais o resultado (tempo esgotado): sai da fila e, se já estiver rodando, o trabalhador encerra."""
+    with _db() as db:
+        db.execute("UPDATE trabalhos_max SET status = 'cancelado', resultado = ? WHERE id = ? "
+                   "AND status IN ('reservado', 'pendente', 'executando')", (motivo, trabalho_id))
+
+
+def _finalizar_trabalho(trabalho_id: int, status: str, resultado: str) -> dict | None:
     trabalho = obter_trabalho(trabalho_id)
+    if trabalho and trabalho["status"] == "cancelado":  # terminou depois de cancelado: aceito e descartado
+        return None
     if not trabalho or trabalho["status"] != "executando":
         raise HTTPException(status_code=404, detail="Trabalho não encontrado")
     with _db() as db:
@@ -376,10 +386,18 @@ async def concluir_trabalho(trabalho_id: int, dados: Resultado, authorization: s
     _exigir_operador(authorization)
     dados.resultado = segredos.limpar(dados.resultado)  # o que o Max devolve nunca leva chave/token adiante
     trabalho = _finalizar_trabalho(trabalho_id, "concluido", dados.resultado)
-    if trabalho["tipo"] == "anexo" and trabalho["payload"].get("anexo_id"):
+    if trabalho and trabalho["tipo"] == "anexo" and trabalho["payload"].get("anexo_id"):
         import anexos  # import tardio: anexos depende deste módulo
         anexos.salvar_descricao(trabalho["payload"]["anexo_id"], dados.resultado)
     return {"ok": True}
+
+
+@rotas.get("/trabalhos/{trabalho_id}/status")
+async def status_do_trabalho(trabalho_id: int, authorization: str = Header("")):
+    """O trabalhador confere durante a execução se o trabalho foi cancelado (aí encerra o Claude Code)."""
+    _exigir_operador(authorization)
+    trabalho = obter_trabalho(trabalho_id)
+    return {"status": trabalho["status"] if trabalho else "cancelado"}
 
 
 @rotas.post("/trabalhos/{trabalho_id}/falhar")

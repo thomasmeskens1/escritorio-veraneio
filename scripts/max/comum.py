@@ -142,6 +142,13 @@ def caixa_de_areia(pasta_da_peca: Path) -> dict:
     }
 
 
+class Cancelado(RuntimeError):
+    """O backend cancelou o trabalho (ninguém espera mais o resultado): o Claude Code foi encerrado."""
+
+
+INTERVALO_CANCELAMENTO = 30
+
+
 ARQUIVO_PROGRESSO = "progresso.txt"  # o Claude Code anota cada peça que começa ("1/4 | Criando Story 1")
 INTERVALO_PROGRESSO = 10
 
@@ -161,7 +168,7 @@ def encerrar_arvore(processo: subprocess.Popen) -> None:
 
 
 def rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: dict | None = None,
-                 ao_progresso=None) -> str:
+                 ao_progresso=None, cancelado=None) -> str:
     """Roda o Claude Code com o prompt pela entrada padrão; devolve o texto final ou levanta RuntimeError.
     Sempre isolado (ISOLAMENTO) e com o ambiente sem segredos. `ao_progresso(linhas)`: chamado quando o
     progresso.txt da pasta muda (a cada INTERVALO_PROGRESSO s)."""
@@ -170,6 +177,7 @@ def rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: 
     progresso.unlink(missing_ok=True)
     visto: list[str] = []
     inicio = time.monotonic()
+    proxima_conferencia = inicio + INTERVALO_CANCELAMENTO
     with tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as saida_padrao, \
             tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as saida_erro:
         processo = subprocess.Popen(comando, stdin=subprocess.PIPE, stdout=saida_padrao, stderr=saida_erro, cwd=cwd,
@@ -185,6 +193,11 @@ def rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: 
                 if time.monotonic() - inicio > timeout:
                     encerrar_arvore(processo)
                     raise subprocess.TimeoutExpired(comando, timeout)
+                if cancelado and time.monotonic() >= proxima_conferencia:
+                    proxima_conferencia = time.monotonic() + INTERVALO_CANCELAMENTO
+                    if cancelado():
+                        encerrar_arvore(processo)
+                        raise Cancelado("cancelado pelo escritório (ninguém espera mais o resultado)")
             if ao_progresso and progresso.exists():
                 linhas = [l.strip() for l in progresso.read_text(encoding="utf-8", errors="replace").splitlines()
                           if l.strip()][-30:]

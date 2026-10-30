@@ -305,3 +305,42 @@ def test_entrega_nunca_sobrescreve_arte_no_drive(trabalhador, tmp_path):
     (tmp_path / "arte_v2.png").write_bytes(b"x")
     assert trabalhador.sem_sobrescrever(original, 2).name == "arte_2.png"
     assert trabalhador.sem_sobrescrever(tmp_path / "nova.png", 1).name == "nova.png"
+
+
+# --- 2.2 e 2.8: trabalho que ninguém espera é cancelado; tentativa que estourou não grava ----------------------------
+
+def _trabalho(tipo: str, status: str) -> int:
+    with producao._db() as db:
+        return db.execute("INSERT INTO trabalhos_max (tipo, payload, status, criado_em) VALUES (?, '{}', ?, ?)",
+                          (tipo, status, tarefas._agora())).lastrowid
+
+
+def test_reinicio_cancela_pesquisa_e_conclusao_tardia_e_aceita(monkeypatch):
+    monkeypatch.setattr(producao, "_exigir_operador", lambda _a: None)
+    pesquisa = _trabalho("prospeccao", "executando")
+    producao.iniciar()
+    assert producao.obter_trabalho(pesquisa)["status"] == "cancelado"
+    assert asyncio.run(producao.status_do_trabalho(pesquisa, ""))["status"] == "cancelado"
+    asyncio.run(producao.concluir_trabalho(pesquisa, producao.Resultado(resultado="tarde demais"), ""))  # sem 404
+    assert producao.obter_trabalho(pesquisa)["status"] == "cancelado"
+
+
+def test_tentativa_que_estourou_o_tempo_nao_grava_a_etapa(tmp_path, monkeypatch):
+    import threading
+
+    from agents import projeto
+
+    monkeypatch.setattr(projeto, "PASTA_PROJETOS", tmp_path)
+    cancelar = threading.Event()
+    plano = ('{"entendimento": "E", "duvida": "", "titulo": "T", "etapas": '
+             '[{"agente": "copywriter", "instrucao": "Textos", "fase": 1}]}')
+
+    def executar(agente, descricao, esperado, papel):
+        if "JSON com o entendimento" in esperado:
+            return plano
+        cancelar.set()  # o tempo estourou enquanto o modelo escrevia
+        return "texto atrasado"
+
+    with pytest.raises(projeto.Cancelado):
+        projeto.executar_projeto(9, "pedido", "CTX", executar, cancelar)
+    assert not list((tmp_path / "9" / "etapas").glob("*.md"))

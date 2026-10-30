@@ -229,9 +229,10 @@ def pedir_ao_max(prompt: str, limite_s: int = LIMITE_S) -> str:
                                        (trabalho_id,)).fetchone()
         if linha["status"] == "concluido":
             return linha["resultado"] or ""
-        if linha["status"] == "falhou":
+        if linha["status"] in ("falhou", "cancelado"):
             raise RuntimeError(linha["resultado"] or "A pesquisa no Claude Code (Max) falhou.")
         time.sleep(5)
+    producao.cancelar_trabalho(trabalho_id, "tempo esgotado")  # não roda depois para ninguém (revisão de 30/10, 2.2)
     raise TimeoutError("A pesquisa no Claude Code (Max) não terminou a tempo.")
 
 

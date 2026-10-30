@@ -36,7 +36,7 @@ def montar_anexo(payload: dict) -> tuple[list[str], str, Path]:
 
 def executar_anexo(payload: dict) -> str:
     comando, prompt, pasta = montar_anexo(payload)
-    descricao = comum.rodar_claude(comando, prompt, pasta, TEMPO_ANEXO).strip()
+    descricao = comum.rodar_claude(comando, prompt, pasta, TEMPO_ANEXO, cancelado=_cancelado).strip()
     if not descricao:
         raise RuntimeError("O Claude Code não devolveu descrição.")
     return descricao
@@ -60,7 +60,8 @@ def executar_texto(payload: dict) -> str:
     PASTA_TEXTO.mkdir(parents=True, exist_ok=True)
     # Só escreve a resposta: nenhuma ferramenta (lista de permissão vazia, não lista de bloqueio) e nenhum MCP.
     comando = [comum.claude_exe(), "-p", "--output-format", "json", "--max-turns", "3", "--tools", ""]
-    texto = comum.rodar_claude(comando, payload["prompt"], PASTA_TEXTO, min(int(payload.get("limite_s", 900)), 900))
+    texto = comum.rodar_claude(comando, payload["prompt"], PASTA_TEXTO, min(int(payload.get("limite_s", 900)), 900),
+                               cancelado=_cancelado)
     if not texto.strip():
         raise RuntimeError("O Claude Code não devolveu texto.")
     return texto.strip()
@@ -78,7 +79,8 @@ def executar_prospeccao(payload: dict) -> str:
     PASTA_PROSPECCAO.mkdir(parents=True, exist_ok=True)
     comando = [comum.claude_exe(), "-p", "--output-format", "json", "--max-turns", "80",
                "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch"]
-    texto = comum.rodar_claude(comando, payload["prompt"], PASTA_PROSPECCAO, min(int(payload.get("limite_s", 2400)), 2400))
+    texto = comum.rodar_claude(comando, payload["prompt"], PASTA_PROSPECCAO, min(int(payload.get("limite_s", 2400)), 2400),
+                               cancelado=_cancelado)
     if not texto.strip():
         raise RuntimeError("O Claude Code não devolveu a pesquisa.")
     return texto.strip()
@@ -88,8 +90,21 @@ EXECUTORES = {"anexo": executar_anexo, "site": executar_site, "texto": executar_
               "prospeccao": executar_prospeccao}
 
 
+_em_execucao: int | None = None  # trabalho rodando agora (um por vez)
+
+
+def _cancelado() -> bool:
+    """O backend cancelou o trabalho em execução? (tempo esgotado ou reinício: ninguém espera mais o resultado)"""
+    try:
+        return comum.chamar("GET", f"/api/producao/trabalhos/{_em_execucao}/status").get("status") == "cancelado"
+    except Exception:
+        return False  # sem resposta do backend: segue (o tempo limite continua valendo)
+
+
 def executar(trabalho: dict) -> None:
     """Roda o trabalho e informa o backend (concluir/falhar). Só repassa comum.MaxSemCota (o trabalhador pausa)."""
+    global _em_execucao
+    _em_execucao = trabalho["id"]
     log(f"Trabalho #{trabalho['id']} ({trabalho['tipo']})")
     try:
         executor = EXECUTORES.get(trabalho["tipo"])
