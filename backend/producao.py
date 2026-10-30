@@ -119,8 +119,15 @@ def _exigir_operador_ou_dono(authorization: str) -> None:
         raise HTTPException(status_code=401, detail="Apenas o operador ou o dono do plano Max")
 
 
+RETENCAO_PAYLOAD_DIAS = 14  # revisão de 30/10/2026: prompts de até 80 KB ficavam para sempre no banco
+
+
 def iniciar() -> None:
     token_operador()
+    limite = (datetime.now(timezone.utc) - timedelta(days=RETENCAO_PAYLOAD_DIAS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with _db() as db:  # trabalhos antigos e terminados: o pedido some, o registro (tipo, status, datas) fica
+        db.execute("UPDATE trabalhos_max SET payload = '{}' WHERE criado_em < ? AND payload != '{}' "
+                   "AND status IN ('concluido', 'falhou', 'cancelado')", (limite,))
     # O que está "produzindo" NÃO volta para a fila no reinício do servidor: o trabalhador roda fora dele e
     # continua produzindo (antes, o painel mostrava "na fila" uma peça em produção). Se o trabalhador caiu de
     # verdade, a sobra é recuperada quando ele pede o próximo item (_retomar_orfaos).
@@ -502,6 +509,8 @@ class Descartada(Exception):
 async def _finalizar(tarefa_id: int, status: str, resposta: str, evento: str, detalhe: str) -> None:
     linha = tarefas.obter(tarefa_id)
     if linha and tarefas.parada(tarefa_id):  # antes: 404, e o trabalhador insistia por ~10 min com a fila parada
+        raise Descartada
+    if linha and linha["status"] == status:  # repetição (a resposta da 1ª chamada se perdeu): já registrado
         raise Descartada
     if not linha or linha["status"] not in ("produzindo", "producao"):
         raise HTTPException(status_code=404, detail="Produção não encontrada")

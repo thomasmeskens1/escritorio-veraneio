@@ -271,7 +271,11 @@ def aprender_tarefa(tarefa_id: int) -> int | None:
 def indexar_oficiais() -> int:
     """Indexa os .md de backend/dados/conhecimento/ como "oficial" (só os que mudaram). Devolve o nº de trechos."""
     total, refs = 0, set()
-    for arquivo in sorted(PASTA_CONHECIMENTO.glob("*.md")):
+    arquivos = sorted(PASTA_CONHECIMENTO.glob("*.md"))
+    if not arquivos:  # pasta ausente ou vazia (Drive fora, pasta renomeada): não desativa todos os manuais
+        log.warning("Cérebro: nenhum manual em %s; os oficiais ativos foram mantidos.", PASTA_CONHECIMENTO)
+        return 0
+    for arquivo in arquivos:
         refs.add(arquivo.name)
         titulo = arquivo.stem.replace("_", " ").capitalize()
         total += base.substituir_ref("oficial", arquivo.name, titulo, arquivo.read_text(encoding="utf-8"),

@@ -352,3 +352,23 @@ def test_peca_le_so_as_fotos_da_propria_empresa(trabalhador):
     assert trabalhador.catalogo_fotos_empresas.FOTOS_EVENTOS not in liberadas
     liberadas, bloqueadas = trabalhador.pastas_de_fotos("cv_corporativo")
     assert all(p in bloqueadas for p in trabalhador.catalogo_fotos_empresas.PASTAS_VERO)
+
+
+def test_conclusao_repetida_da_peca_nao_trava_o_trabalhador(monkeypatch):
+    import atividade
+    import monday
+
+    async def nada(*_a):
+        return None
+
+    monkeypatch.setattr(producao, "_exigir_operador", lambda _a: None)
+    monkeypatch.setattr(atividade, "liberar", nada)
+    monkeypatch.setattr(monday, "andamento", lambda *_a, **_k: None)
+    import orquestrador as orq
+
+    monkeypatch.setattr(orq, "_entregar", nada)
+    monkeypatch.setattr(orq, "entregar_na_origem", nada)
+    tarefa_id = _producao("produzindo")
+    conclusao = producao.Conclusao(resumo="ok", pasta="MARKETING/x", arquivos=["a.png"], link="")
+    asyncio.run(producao.concluir(tarefa_id, conclusao, ""))
+    assert asyncio.run(producao.concluir(tarefa_id, conclusao, "")) == {"ok": True, "descartada": True}

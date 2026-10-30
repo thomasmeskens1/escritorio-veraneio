@@ -28,7 +28,7 @@ BANCO = Path(os.getenv("SOCIAL_ANALYTICS_DADOS", Path(os.environ.get("LOCALAPPDA
 CONTA_INSTAGRAM = {"casaveraneio": "casa_veraneio", "casaveraneiocorp": "cv_corporativo", "casaveroimoveis": "casa_vero"}
 CONTAS_ANUNCIO = {"act_1868351480015873": "casa_veraneio", "act_1227886486162881": "cv_corporativo"}
 NOME_EMPRESA = {"casa_veraneio": "Casa Veraneio", "cv_corporativo": "Casa Veraneio Corporativo", "casa_vero": "Casa Vero Imóveis"}
-CORP = re.compile(r"corp|corporativ|eventos corporativos", re.I)
+CORP = re.compile(r"\bcorp\b|corporativ|eventos corporativos", re.I)  # "Corpus Christi" não é Corporativo
 # E-mail: a regra do painel (coleta/brevo.py) olha só o nome da campanha; o assunto também denuncia o Corporativo.
 EMAIL_CORP = re.compile(r"\bcorp\b|corporativ|\boff-?site\b|\bempresa\b|confraterniza|\bseu time\b|\beventos?\b|"
                         r"escrit[óo]rio", re.I)

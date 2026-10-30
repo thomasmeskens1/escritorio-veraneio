@@ -121,7 +121,7 @@ function novoUsuario() {
       { nome: 'login', rotulo: 'E-mail (login)', tipo: 'texto', obrigatorio: true },
       { nome: 'nome', rotulo: 'Nome exibido', tipo: 'texto', obrigatorio: true },
       { nome: 'role', rotulo: 'Perfil', tipo: 'opcoes', obrigatorio: true, opcoes: ['Funcionário', 'Diretoria'] },
-      { nome: 'senha', rotulo: 'Senha inicial (mínimo 8 caracteres)', tipo: 'texto', obrigatorio: true },
+      { nome: 'senha', rotulo: 'Senha inicial (mínimo 8 caracteres)', tipo: 'senha', obrigatorio: true },
     ],
   }, async (r) => {
     try {
@@ -240,8 +240,8 @@ function abrirUsuario(u) {
   const senha = document.createElement('input');
   senha.className = 'form-entrada';
   senha.id = 'usuario-senha';
-  senha.type = 'text';
-  senha.autocomplete = 'off';
+  senha.type = 'password'; // revisão de 30/10/2026: a senha não fica exposta na tela
+  senha.autocomplete = 'new-password';
   const rotuloSenha = novoEl('label', 'form-rotulo', 'Nova senha (mínimo 8 caracteres)');
   rotuloSenha.htmlFor = senha.id;
   const salvarSenha = novoEl('button', 'botao-primario', 'Salvar senha');

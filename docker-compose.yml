@@ -12,6 +12,7 @@ services:
       FRONTEND_DIR: /frontend
       ARQUIVO_BANCO: /var/lib/escritorio/escritorio.db # banco no volume (rápido); o resto de dados/ segue no PC
       CREWAI_TELEMETRY_OPT_OUT: "true"
+      TZ: America/Sao_Paulo # datas "de hoje" certas entre 21h e 0h (revisão de 30/10/2026)
       PAINEL_DIR: /painel
       SOCIAL_ANALYTICS_DADOS: /painel
       SISTEMA_DIR: /sistema

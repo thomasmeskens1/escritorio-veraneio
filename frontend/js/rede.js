@@ -2,6 +2,9 @@
 
 const CODIGO_TOKEN_INVALIDO = 4401;
 const ATRASO_RECONEXAO = 2000;
+const ATRASO_MAXIMO = 30000; // revisão de 30/10/2026: espera crescente (2, 4, 8... até 30 s) com o servidor fora
+let tentativasReconexao = 0;
+const proximoAtraso = () => Math.min(ATRASO_MAXIMO, ATRASO_RECONEXAO * 2 ** tentativasReconexao++);
 // Vigia (Thomas, 30/10/2026): pelo túnel da Cloudflare a conexão pode ficar "aberta mas muda" (nada chega). Só é
 // AO VIVO depois que o servidor responde; sem resposta em PRAZO_RESPOSTA, reconecta sozinha ("RECONECTANDO").
 const PRAZO_RESPOSTA = 10000;
@@ -38,7 +41,7 @@ function vigiar(ws) {
     liberarPendentes();
     atualizarConexao();
     try { ws.close(4000, 'sem resposta'); } catch { /* já fechada */ }
-    if (sessao) timerReconexao = setTimeout(conectar, ATRASO_RECONEXAO);
+    if (sessao) timerReconexao = setTimeout(conectar, proximoAtraso());
   }, PRAZO_RESPOSTA);
 }
 
@@ -103,6 +106,7 @@ function conectar() {
     clearTimeout(timerVigia);
     if (!confirmado) {
       confirmado = true;
+      tentativasReconexao = 0; // o servidor respondeu: a próxima queda volta a esperar 2 s
       atualizarConexao();
     }
     try {
@@ -122,7 +126,7 @@ function conectar() {
     if (e.code === CODIGO_TOKEN_INVALIDO) {
       encerrarSessao('Sessão expirada. Entre novamente.');
     } else if (sessao) {
-      timerReconexao = setTimeout(conectar, ATRASO_RECONEXAO);
+      timerReconexao = setTimeout(conectar, proximoAtraso());
     }
   });
 }

@@ -50,7 +50,7 @@ function campoDoFormulario(campo, indice) {
   } else {
     entrada = document.createElement('input');
     entrada.className = 'form-entrada';
-    entrada.type = { data: 'date', numero: 'number', hora: 'time' }[campo.tipo] || 'text';
+    entrada.type = { data: 'date', numero: 'number', hora: 'time', senha: 'password' }[campo.tipo] || 'text';
   }
   entrada.id = id;
   const grupo = novoEl('div', 'form-campo');

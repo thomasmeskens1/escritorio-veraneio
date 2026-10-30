@@ -81,3 +81,10 @@ def test_consolidacao_tem_tolerancia_e_confere_na_subida():
     consolidacao_semanal.agendar(agendador)
     semanal = agendador.get_job("consolidacao_semanal")
     assert semanal.misfire_grace_time == 24 * 3600
+
+
+def test_pasta_de_manuais_vazia_nao_desativa_os_oficiais(tmp_path, monkeypatch):
+    trecho = base._inserir("oficial", "00_manual_teste.md", "Manual", "Regra de ouro do teste", "casa_veraneio")
+    monkeypatch.setattr(cerebro, "PASTA_CONHECIMENTO", tmp_path)  # pasta vazia (Drive fora, renomeada)
+    assert cerebro.indexar_oficiais() == 0
+    assert base.db().execute("SELECT ativo FROM conhecimento WHERE id = ?", (trecho,)).fetchone()[0] == 1

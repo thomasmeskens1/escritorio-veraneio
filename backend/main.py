@@ -65,7 +65,9 @@ EMPRESA_DO_AGENTE = {"prospectador": "cv_corporativo", "estrategista": empresas.
 VISAO_DO_GRUPO = {"analista_metricas"}  # podem trabalhar com as três empresas juntas (opção "Todas" do seletor)
 EXIGEM_EMPRESA = {"marketing"}  # andares que trabalham para uma empresa (o Cérebro também, ver tratar_mensagem)
 MAX_FALHAS_LOGIN = 5          # senhas erradas seguidas por usuário/IP antes do bloqueio
-MAX_FALHAS_IP = 20            # senhas erradas de um IP (qualquer usuário) antes do bloqueio
+# Revisão de 30/10/2026: com 20, a equipe inteira atrás do mesmo roteador ficava bloqueada por um erro de digitação
+# repetido; o limite por usuário/IP (5) continua segurando quem tenta senhas.
+MAX_FALHAS_IP = 60            # senhas erradas de um IP (qualquer usuário) antes do bloqueio
 BLOQUEIO_LOGIN_S = 15 * 60
 CONFERIR_TOKEN_S = 60
 INTERVALO_COPIA_BANCO_S = 3600  # e ao desligar (revisão de 30/10/2026: até 6 h de perda)
