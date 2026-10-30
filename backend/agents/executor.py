@@ -195,6 +195,35 @@ def _rodar_max_ou_api(agente_id: str, descricao: str, esperado: str, limite_s: i
         time.sleep(5)
 
 
+ETAPA_DO_PROJETO = re.compile(r"Sua etapa \(\d+\): (.+?)(?:\n\n|$)", re.S)
+_pre_consultas: dict[tuple, tuple[float, str]] = {}
+
+
+def _com_cerebro_pre_consultado(agente_id: str, descricao: str, tarefa_id: int) -> str:
+    """Ideia do Code Mode (Cloudflare), avaliada em 30/10/2026: em vez de o modelo ir e voltar várias vezes à
+    ferramenta (o Gestor chegava a 24 consultas por projeto, 7,8 em média; cada uma é uma rodada inteira do modelo),
+    a busca principal é feita uma vez, antes, de forma determinística, e já vai no pedido. A ferramenta continua
+    disponível para um fato específico que falte. Mesmas regras da ferramenta: empresa, financeiro e preços."""
+    if not tarefa_id or "CONHECIMENTO DO CÉREBRO JÁ CONSULTADO" in descricao:
+        return descricao
+    etapa = ETAPA_DO_PROJETO.search(descricao)
+    linha = tarefas.obter(tarefa_id)
+    pergunta = (etapa.group(1) if etapa else (linha["texto"] if linha else descricao))[:600]
+    chave = (tarefa_id, agente_id, pergunta)
+    with _trava_total:  # outra tentativa (outro modelo, corrida) reaproveita a mesma busca por 10 min
+        guardado = _pre_consultas.get(chave)
+    if guardado and time.monotonic() - guardado[0] < 600:
+        conhecimento = guardado[1]
+    else:
+        conhecimento = cerebro.consultar(pergunta, agente_id, tarefa_id)
+        with _trava_total:
+            if len(_pre_consultas) > 200:
+                _pre_consultas.clear()
+            _pre_consultas[chave] = (time.monotonic(), conhecimento)
+    return (f"{descricao}\n\nCONHECIMENTO DO CÉREBRO JÁ CONSULTADO para este pedido (use direto; chame a "
+            f"ferramenta consultar_cerebro só se faltar um fato específico que não esteja aqui):\n{conhecimento}")
+
+
 def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s: int, total: Resultado,
           tarefa_id: int) -> str:
     """Roda um agente (Crew de uma tarefa) e acumula tokens e custo no `total`."""
@@ -202,6 +231,8 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
         return _rodar_no_max(agente_id, descricao, esperado, limite_s, tarefa_id)
     # Todos os agentes de IA consultam o Cérebro (ele mesmo recebe os trechos já na descrição).
     ferramentas = [] if agente_id == cerebro.ID else [ConsultarCerebro(agente=agente_id, tarefa_id=tarefa_id)]
+    if agente_id != cerebro.ID:
+        descricao = _com_cerebro_pre_consultado(agente_id, descricao, tarefa_id)
     if agente_id == "construtor":
         ferramentas.append(CriarAgente(tarefa_id=tarefa_id))
     # Monday (Social Media) e Brevo (E-mail Marketing) para TODOS os usuários, sempre com as credenciais universais

@@ -880,3 +880,100 @@
   flex-direction: column;
   gap: 8px;
 }
+
+/* Caixa de entrada (js/caixa.js) */
+.janela-caixa {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.caixa-abas {
+  display: flex;
+  gap: 4px;
+  padding: 8px 14px 0;
+  border-bottom: 1px solid #343a40;
+}
+
+.caixa-aba {
+  padding: 6px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #adb5bd;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.caixa-aba.ativa {
+  border-bottom-color: #f4a261;
+  color: #f8f9fa;
+}
+
+.caixa-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.caixa-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #343a40;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.caixa-item:hover,
+.caixa-item:focus-visible {
+  border-color: #f4a261;
+  outline: none;
+}
+
+.caixa-item.falhou {
+  border-color: rgba(250, 82, 82, 0.45);
+}
+
+.caixa-item-topo {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+
+.caixa-item-topo time {
+  color: #868e96;
+  font-size: 0.72rem;
+}
+
+.caixa-motivo {
+  font-size: 0.75rem;
+  color: #ffa8a8;
+}
+
+.caixa-resumo {
+  font-size: 0.78rem;
+  color: #adb5bd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.caixa-todos {
+  align-self: flex-end;
+  margin-bottom: 8px;
+}
+
+.caixa-corpo {
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+  overflow-y: auto;
+}

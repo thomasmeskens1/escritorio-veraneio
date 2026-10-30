@@ -106,6 +106,7 @@ function iniciarSessao(nova) {
   iniciarEscritorio();
   atualizarPendencias(); // "!" nos agentes com formulário ou produção esperando
   verificarAvisoCerebro(); // ratinho do Cérebro se houver correções ou elogios para aprovar (Diretoria)
+  iniciarCaixa(); // caixa de entrada: para aprovar e concluídos (js/caixa.js)
   conectar();
 }
 
@@ -117,6 +118,7 @@ function encerrarSessao(aviso = '') {
   fecharChat();
   fecharPainel();
   limparRegistro();
+  limparCaixa();
   limparEquipe();
   limparModelos();
   limparChat();

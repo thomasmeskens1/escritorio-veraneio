@@ -57,12 +57,15 @@ function tratarMensagem(msg) {
       break;
     case 'resposta_agente':
       receberResposta(msg);
+      caixaMudou(); // caixa de entrada (js/caixa.js)
       break;
     case 'tarefa_adiada':
       receberAdiada(msg);
+      caixaMudou();
       break;
     case 'aviso':
       receberAviso(msg);
+      caixaMudou(); // pode ser uma decisão de produção esperando você
       break;
     case 'correcao_nova': // ratinho do Cérebro (js/aviso_cerebro.js)
       mostrarAvisoCerebro(msg.total, msg.ultima);

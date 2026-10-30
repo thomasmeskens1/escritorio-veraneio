@@ -312,6 +312,7 @@ function abrirChat(andar, agente) {
   carregarPerfil(andar, agente);
   acompanharAndamento(andar, agente);
   avisarChatAberto(); // os outros veem "Em uso: <você>" neste agente
+  caixaChatAberto(andar, agente); // concluídos deste chat saem da caixa de entrada
   atualizarChat();
   if (!modalInput.disabled) modalInput.focus();
 }

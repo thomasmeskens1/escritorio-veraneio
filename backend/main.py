@@ -19,6 +19,7 @@ import agentes_dinamicos
 import aprendizado
 import atividade
 import avaliacoes
+import caixa
 import config
 import correcoes
 import empresas
@@ -152,6 +153,7 @@ app.include_router(parar.rotas)
 app.include_router(avaliacoes.rotas)
 app.include_router(consolidacao_semanal.rotas)
 app.include_router(triagem.rotas)
+app.include_router(caixa.rotas)
 
 
 class Credenciais(BaseModel):

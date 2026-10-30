@@ -90,6 +90,29 @@ def _formatar(trechos: list[dict], limite: int) -> str:
     return "\n\n".join(blocos)[:limite]
 
 
+PRIMEIRA_FRASE = re.compile(r"^(.{20,180}?[.!?])(\s|$)", re.S)
+K_CAMADAS, COMPLETOS = 9, 3
+
+
+def _formatar_em_camadas(trechos: list[dict], limite: int, completos: int = COMPLETOS) -> str:
+    """Resumos em camadas (ideia do OpenViking, 30/10/2026): os `completos` mais relevantes vão com o conteúdo
+    (camada detalhada) e os demais só com título e primeira frase (camada resumo). No mesmo espaço de antes (5
+    trechos cortados), o agente enxerga 9 fontes e pede o detalhe de uma do mapa pelo título, se precisar."""
+    if len(trechos) <= completos:
+        return _formatar(trechos, limite)
+    resumo = ("\n\nMapa de outras fontes relacionadas (só título e primeira frase; para o conteúdo completo, "
+              "consulte o Cérebro pelo título):")
+    orcamento = max(600, int(limite * 0.4))
+    for n, t in enumerate(trechos[completos:], completos + 1):
+        texto = " ".join(t["conteudo"].split())
+        frase = (achou.group(1) if (achou := PRIMEIRA_FRASE.match(texto)) else texto[:140].rstrip() + "…")
+        linha = f"\n[{n}] {t['titulo']} — {ROTULOS_FONTE.get(t['fonte_tipo'], t['fonte_tipo'])}, {t['data']}: {frase}"
+        if len(resumo) + len(linha) > orcamento:
+            break  # só linhas inteiras
+        resumo += linha
+    return _formatar(trechos[:completos], limite - len(resumo)) + resumo
+
+
 def empresa_da_tarefa(tarefa_id: int) -> str:
     """Empresa do trabalho (a busca no Cérebro nunca mistura empresas); sem tarefa: dado antigo, Casa Veraneio."""
     linha = tarefas.obter(tarefa_id) if tarefa_id else None
@@ -110,7 +133,8 @@ def consultar(pergunta: str, agente: str, tarefa_id: int = 0) -> str:
     try:
         if tarefa_id:
             atividade.evento_em_thread(tarefa_id, "consulta_cerebro", agente, detalhe=pergunta)
-        trechos = base.buscar(pergunta, empresa=empresa_da_tarefa(tarefa_id), financeiro=_ve_financeiro(tarefa_id))
+        trechos = base.buscar(pergunta, k=K_CAMADAS, empresa=empresa_da_tarefa(tarefa_id),
+                              financeiro=_ve_financeiro(tarefa_id))
         base.registrar_consulta(tarefa_id, agente, pergunta, [t["id"] for t in trechos], [t["sinais"] for t in trechos])
     except Exception:
         log.exception("Cérebro: falha na consulta.")
@@ -123,7 +147,7 @@ def consultar(pergunta: str, agente: str, tarefa_id: int = 0) -> str:
                 "na base da Casa Veraneio ou pergunte ao usuário.")
     linha = tarefas.obter(tarefa_id) if tarefa_id else None
     return ("Conhecimento do Cérebro (cite a fonte ao usar; prefira o mais recente se houver conflito):\n\n"
-            + empresas.sem_precos(_formatar(trechos, MAX_CARACTERES_FERRAMENTA), empresa_da_tarefa(tarefa_id),
+            + empresas.sem_precos(_formatar_em_camadas(trechos, MAX_CARACTERES_FERRAMENTA), empresa_da_tarefa(tarefa_id),
                                   linha["texto"] if linha else ""))
 
 

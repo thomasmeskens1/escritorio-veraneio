@@ -343,3 +343,28 @@
 .conexao.reconectando::before {
   animation: ao-vivo 0.8s ease-in-out infinite;
 }
+
+/* Caixa de entrada (js/caixa.js) */
+.topo-caixa {
+  position: relative;
+}
+
+.caixa-contador {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: #495057;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.caixa-contador.urgente {
+  background: #fa5252;
+}
