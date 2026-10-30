@@ -60,6 +60,8 @@ def avaliar(linha, usuario: str, valor: int, comentario: str = "") -> int:
                        "em = excluded.em", (linha["id"], usuario, valor, comentario or None, tarefas._agora()))
         else:
             db.execute("DELETE FROM avaliacoes WHERE tarefa_id = ?", (linha["id"],))
+    if (valor == -1) != (anterior == -1):  # resposta ruim não fica como conhecimento (revisão de 30/10, 2.15)
+        base.ativar_trecho_da_tarefa(linha["id"], valor != -1)
     ids = _trechos_usados(linha["id"])
     if ids and valor != anterior:
         base.ajustar_pontuacao(ids, _passo(valor) - _passo(anterior))

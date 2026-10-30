@@ -32,7 +32,9 @@ PESO_COSSENO, PESO_BM25 = 0.65, 0.35
 FINANCEIRO_REF = re.compile(r"^analytics/[^/]+/(crm|google-ads|meta-ads)\b|:financeiro$")
 LAMBDA_MMR = 0.7
 PONTUACAO_LIMITE = 2.0
-PASSO_SUCESSO, PASSO_FALHA = 0.10, 0.15
+PASSO_SUCESSO, PASSO_FALHA = 0.10, 0.15  # 👍/👎 do usuário (avaliacoes.py) e falha da tarefa
+# Tarefa concluída sem avaliação (revisão de 30/10/2026, 2.15): antes valia +0,10, e duas conclusões anulavam um 👎.
+PASSO_CONCLUSAO = 0.02
 FATOR_PONTUACAO = 0.15     # multiplicador = 1 + 0.15 * pontuação  (0.7 a 1.3)
 # Documentos com identidade própria (cada página do site, cada lodge da planilha/acervo, cada documento
 # oficial): só o substituir_ref troca a versão. Lodges seguem o mesmo modelo de texto e não podem se
@@ -421,6 +423,16 @@ def ajustar_pontuacao(ids: list[int], passo: float) -> None:
                             [(-PONTUACAO_LIMITE, PONTUACAO_LIMITE, passo, i) for i in ids])
 
 
+def ativar_trecho_da_tarefa(tarefa_id: int, ativo: bool) -> int:
+    """👎 numa resposta: o trecho que ela virou sai das buscas (e volta se o voto for retirado ou trocado)."""
+    with _trava, db() as conexao:
+        mudou = conexao.execute("UPDATE conhecimento SET ativo = ? WHERE fonte_tipo = 'tarefa' AND fonte_ref IN (?, ?)",
+                                (int(ativo), f"tarefa:{tarefa_id}", f"tarefa:{tarefa_id}:financeiro")).rowcount
+    if mudou:
+        _mudou()
+    return mudou
+
+
 def registrar_resultado(tarefa_id: int, sucesso: bool) -> int:
     """Ajusta a pontuação dos trechos usados na tarefa (+ sucesso, − falha). Devolve quantos trechos mudaram."""
     with _trava:
@@ -429,7 +441,7 @@ def registrar_resultado(tarefa_id: int, sucesso: bool) -> int:
         if not linhas:
             return 0
         usados = {i for l in linhas for i in json.loads(l["ids_conhecimento"] or "[]")}
-        passo = PASSO_SUCESSO if sucesso else -PASSO_FALHA
+        passo = PASSO_CONCLUSAO if sucesso else -PASSO_FALHA
         with db() as conexao:
             conexao.executemany("UPDATE conhecimento SET pontuacao = MAX(?, MIN(?, pontuacao + ?)) WHERE id = ?",
                                 [(-PONTUACAO_LIMITE, PONTUACAO_LIMITE, passo, i) for i in usados])

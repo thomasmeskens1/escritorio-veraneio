@@ -143,8 +143,15 @@ def agendar(agendador) -> None:
     """Segunda-feira, 07:00 (São Paulo), no agendador das rotinas (agendamentos.iniciar)."""
     from apscheduler.triggers.cron import CronTrigger
 
+    from apscheduler.triggers.date import DateTrigger
+
+    # Revisão de 30/10/2026 (2.20): a tolerância era de 1 s; com o PC ou o Docker fora às 07:00, a semana se perdia.
     agendador.add_job(rodar_agendada, CronTrigger(day_of_week="mon", hour=7, minute=0, timezone=agendador.timezone),
-                      id="consolidacao_semanal", replace_existing=True)
+                      id="consolidacao_semanal", replace_existing=True, misfire_grace_time=24 * 3600, coalesce=True)
+    agora = datetime.now(agendador.timezone)
+    if not (agora.weekday() == 0 and agora.hour < 7):  # já passou das 07:00 de segunda: confere a semana na subida
+        agendador.add_job(rodar_agendada, DateTrigger(agora + timedelta(minutes=5)), id="consolidacao_atrasada",
+                          replace_existing=True)
 
 
 @rotas.post("/consolidar")

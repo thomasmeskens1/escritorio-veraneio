@@ -145,7 +145,31 @@ def _ve_financeiro(tarefa_id: int) -> bool:
     from auth import ve_financeiro
 
     linha = tarefas.obter(tarefa_id) if tarefa_id else None
-    return bool(linha) and ve_financeiro(linha["usuario"])
+    return bool(linha) and ve_financeiro(linha["usuario"]) and not _do_monday(tarefa_id)
+
+
+def _do_monday(tarefa_id: int) -> bool:
+    """Tarefa criada pelo botão Enviar do Monday: fica em nome do Thomas, mas quem escreveu o item foi a equipe e a
+    entrega vira comentário visível no quadro. Sem dados financeiros e sem peso de dono (revisão de 30/10/2026, 2.12)."""
+    import monday  # import tardio: o Monday importa o orquestrador
+
+    try:
+        return monday.item_da_tarefa(tarefa_id) is not None
+    except Exception:
+        return False
+
+
+# Revisão de 30/10/2026 (2.13): contato de lead e cliente nunca vira conhecimento.
+EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+TELEFONE = re.compile(r"(?:\+?55\s?)?\(?\d{2}\)?\s?9?\d{4}[-\s.]?\d{4}\b")
+DOCUMENTO = re.compile(r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b|\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b")  # CPF, CNPJ
+SEM_APRENDIZADO = {"prospectador"}  # trabalham com leads e contatos: as respostas não viram conhecimento
+
+
+def sem_contatos(texto: str) -> str:
+    texto = EMAIL.sub("[e-mail]", texto or "")
+    texto = DOCUMENTO.sub("[documento]", texto)
+    return TELEFONE.sub("[telefone]", texto)
 
 
 def consultar(pergunta: str, agente: str, tarefa_id: int = 0) -> str:
@@ -213,9 +237,9 @@ def aprender_tarefa(tarefa_id: int) -> int | None:
         # poderia plantar um "fato"; por isso ela entra com o autor e peso menor que a do Thomas, e o ensinado, o
         # oficial e o site sempre valem mais.
         if (not linha or linha["status"] != "concluida" or not linha["resposta"]
-                or linha["agente"] == ID or linha["agente"] in AGENTES_PRODUCAO):
+                or linha["agente"] == ID or linha["agente"] in AGENTES_PRODUCAO or linha["agente"] in SEM_APRENDIZADO):
             return None
-        do_dono = linha["usuario"] == config.DONO_MAX
+        do_dono = linha["usuario"] == config.DONO_MAX and not _do_monday(tarefa_id)
         andar = andar_do_agente(linha["agente"])
         agente = buscar_agente(andar, linha["agente"]) if andar else None
         nome = agente.nome if agente else linha["agente"]
@@ -223,6 +247,7 @@ def aprender_tarefa(tarefa_id: int) -> int | None:
         autor = "" if do_dono else f" (de {linha['usuario'].split('@')[0]}, não confirmado pela diretoria)"
         conteudo = (f"Pedido{autor}: {linha['texto'].strip()[:300]}\n\nResposta de {nome}: "
                     f"{resposta[:800]}{'…' if len(resposta) > 800 else ''}")
+        conteudo = sem_contatos(conteudo)
         # Resposta de quem vê o financeiro, com valores em reais, nos agentes que leem vendas/receita/investimento:
         # o trecho fica marcado e só volta nas buscas da Diretoria (base.FINANCEIRO_REF).
         from auth import ve_financeiro
@@ -231,7 +256,7 @@ def aprender_tarefa(tarefa_id: int) -> int | None:
             linha["agente"] in AGENTES_FINANCEIROS or bool(TERMOS_FINANCEIROS.search(resposta))
             or _consultou_financeiro(tarefa_id))
         referencia = f"tarefa:{tarefa_id}{':financeiro' if financeira else ''}"
-        trecho_id = base._inserir("tarefa", referencia, f"{nome}: {linha['texto'].strip()[:70]}", conteudo,
+        trecho_id = base._inserir("tarefa", referencia, f"{nome}: {sem_contatos(linha['texto'].strip())[:70]}", conteudo,
                                   linha["empresa"] or empresas.PADRAO,
                                   peso=None if do_dono else base.PESOS_FONTE["tarefa"] * PESO_OUTROS_USUARIOS)
         _acordar.set()

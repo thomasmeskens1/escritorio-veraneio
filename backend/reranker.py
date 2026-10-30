@@ -23,6 +23,9 @@ log = logging.getLogger(__name__)
 
 MINIMO_EXEMPLOS = 300
 MINIMO_POR_CLASSE = 30
+# Revisão de 30/10/2026 (2.16): 300 linhas podiam vir de 2 ou 3 tarefas, e a validação misturava linhas da mesma
+# tarefa entre treino e teste. Agora há um mínimo de tarefas e cada tarefa fica inteira de um lado só.
+MINIMO_TAREFAS = 40
 GANHO_MINIMO = 0.02  # a rede precisa superar a ordem atual por pelo menos 2 pontos de AUC
 FONTES = ("ensinado", "oficial", "site", "drive", "dados", "rede", "tarefa")
 PASTA = config.DADOS_DIR / "aprendizado"
@@ -57,18 +60,22 @@ def _rotulos() -> dict[int, int]:
     return rotulos
 
 
-def exemplos() -> tuple[np.ndarray, np.ndarray]:
+def exemplos(com_grupos: bool = False):
+    """(X, y) ou, com `com_grupos`, (X, y, tarefa de cada linha)."""
+    vazio = (np.zeros((0, len(vetor({})))), np.zeros(0)) + ((np.zeros(0),) if com_grupos else ())
     rotulos = _rotulos()
     if not rotulos:
-        return np.zeros((0, len(vetor({})))), np.zeros(0)
+        return vazio
     try:
         linhas = tarefas._db().execute("SELECT tarefa_id, sinais FROM consulta_sinais").fetchall()
     except Exception:
         linhas = []
-    pares = [(vetor(json.loads(l["sinais"])), rotulos[l["tarefa_id"]]) for l in linhas if l["tarefa_id"] in rotulos]
-    if not pares:
-        return np.zeros((0, len(vetor({})))), np.zeros(0)
-    return np.array([p[0] for p in pares], dtype=np.float32), np.array([p[1] for p in pares])
+    trios = [(vetor(json.loads(l["sinais"])), rotulos[l["tarefa_id"]], l["tarefa_id"])
+             for l in linhas if l["tarefa_id"] in rotulos]
+    if not trios:
+        return vazio
+    X, y = np.array([t[0] for t in trios], dtype=np.float32), np.array([t[1] for t in trios])
+    return (X, y, np.array([t[2] for t in trios])) if com_grupos else (X, y)
 
 
 def status() -> dict:
@@ -83,22 +90,23 @@ def status() -> dict:
 def treinar() -> dict:
     """Treina se houver exemplos suficientes; ativa só se superar a ordem atual. Devolve o status."""
     global _modelo, _meta
-    from sklearn.model_selection import StratifiedKFold, cross_val_predict
+    from sklearn.model_selection import GroupKFold, cross_val_predict
     from sklearn.metrics import roc_auc_score
     from sklearn.neural_network import MLPClassifier
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
 
-    X, y = exemplos()
+    X, y, grupos = exemplos(com_grupos=True)
     positivos, negativos = int(y.sum()), int(len(y) - y.sum())
-    if len(y) < MINIMO_EXEMPLOS or min(positivos, negativos) < MINIMO_POR_CLASSE:
-        return {**status(), "observacao": (f"Ainda aprendendo: {len(y)} de {MINIMO_EXEMPLOS} exemplos rotulados "
-                                           f"({positivos} úteis, {negativos} que atrapalharam). Cada 👍/👎, elogio "
-                                           "ou correção aumenta essa base.")}
+    n_tarefas = len(set(grupos.tolist()))
+    if (len(y) < MINIMO_EXEMPLOS or min(positivos, negativos) < MINIMO_POR_CLASSE
+            or n_tarefas < MINIMO_TAREFAS):
+        return {**status(), "observacao": (f"Ainda aprendendo: {len(y)} de {MINIMO_EXEMPLOS} exemplos rotulados, de "
+                                           f"{n_tarefas} de {MINIMO_TAREFAS} tarefas ({positivos} úteis, {negativos} "
+                                           "que atrapalharam). Cada 👍/👎, elogio ou correção aumenta essa base.")}
     rede = make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(16, 8), max_iter=2000, random_state=42))
-    divisoes = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     try:
-        previsto = cross_val_predict(rede, X, y, cv=divisoes, method="predict_proba")[:, 1]
+        previsto = cross_val_predict(rede, X, y, groups=grupos, cv=GroupKFold(n_splits=5), method="predict_proba")[:, 1]
         auc = float(roc_auc_score(y, previsto))
         auc_atual = float(roc_auc_score(y, -X[:, 5]))  # a ordem atual: quem vem primeiro é tido como mais útil
         rede.fit(X, y)

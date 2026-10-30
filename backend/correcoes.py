@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
+import config
 import tarefas
 from auth import carregar_usuarios, validar_token
 from estado import andar_do_agente, buscar_agente
@@ -220,7 +221,10 @@ async def aprovar(observacao_id: int, decisao: Decisao, authorization: str = Hea
         db.execute("INSERT INTO regras_aprendidas (agente, regra, criada_em, observacao_id, empresa) "
                    "VALUES (?, ?, ?, ?, ?)", (agente, regra, tarefas._agora(), observacao_id, empresa))
     alvo = "todos os agentes" if agente == "*" else _nome(agente)
-    await cerebro.ensinar(usuario["sub"], f"Aprenda: Regra aprovada pelo Thomas para {alvo}: {regra}", empresa)
+    # Pelo login do dono do Cérebro: a Diretoria aprova, mas só a conta do Thomas grava no Cérebro (antes, com João ou
+    # Lucca aprovando, a regra ficava ativa sem entrar no Cérebro e a tela recebia erro 500; revisão de 30/10, 2.14).
+    quem = usuario.get("nome") or usuario["sub"]
+    await cerebro.ensinar(config.DONO_MAX, f"Aprenda: Regra aprovada por {quem} para {alvo}: {regra}", empresa)
     return {"ok": True}
 
 
