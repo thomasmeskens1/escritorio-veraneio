@@ -76,6 +76,7 @@ _falhas_ip: dict[str, list[float]] = {}                 # IP -> horários das fa
 
 @asynccontextmanager
 async def ciclo_de_vida(_: FastAPI):
+    config.ARQUIVO_MANUTENCAO.unlink(missing_ok=True)  # subiu: a manutenção acabou
     tarefas.iniciar()
     producao.iniciar()
     agentes_dinamicos.carregar()  # agentes criados pelo Construtor voltam ao prédio
@@ -332,6 +333,9 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
                                              "todos": comando == "todos"})
     anexos_ids = [str(i) for i in msg.get("anexos") or [] if isinstance(i, str)][:4]
     alvo = {"andar": andar, "agente": agente_id}
+    if config.ARQUIVO_MANUTENCAO.exists():  # reinício a caminho: nada começa pela metade
+        return await erro("O escritório vai reiniciar em instantes para uma atualização. Seu pedido não foi aceito: "
+                          "envie de novo em 2 ou 3 minutos.", **alvo)
 
     if not acesso.pode_ver_andar(usuario, andar):
         return await erro("Acesso negado.", **alvo)

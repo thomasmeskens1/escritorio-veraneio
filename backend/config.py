@@ -99,7 +99,10 @@ ARQUIVO_BANCO = Path(os.getenv("ARQUIVO_BANCO", DADOS_DIR / "escritorio.db"))
 # Cópia consistente do banco em dados/ (a cada 1 h e ao desligar) para o backup diário do Windows, que não enxerga o
 # volume. Se o volume se perder, o banco é restaurado dela na subida (tarefas._restaurar_da_copia).
 ARQUIVO_COPIA_BANCO = Path(os.getenv("ARQUIVO_COPIA_BANCO", DADOS_DIR / "escritorio.copia.db"))
-ARQUIVO_LOG_BACKUP = DADOS_DIR / "backup.log"  # escrito pelo backup diário do Windows (scripts/backup_dados.py)
+ARQUIVO_LOG_BACKUP = DADOS_DIR / "backup.log"
+# Modo manutenção (revisão de 30/10/2026, 2.11): com este arquivo, tarefas novas são recusadas com aviso e as atuais
+# terminam; scripts/reiniciar_api.py cria o arquivo, espera e reinicia. A subida do servidor apaga o arquivo.
+ARQUIVO_MANUTENCAO = DADOS_DIR / "manutencao"  # escrito pelo backup diário do Windows (scripts/backup_dados.py)
 # Documentos oficiais e diretrizes dos agentes (fora do git: o repositório é público).
 PASTA_CONHECIMENTO = Path(__file__).resolve().parent / "dados" / "conhecimento"
 FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", Path(__file__).resolve().parent.parent / "frontend"))
