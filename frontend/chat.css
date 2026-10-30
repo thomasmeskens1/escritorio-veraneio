@@ -810,26 +810,103 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
-.msg-voto-comentario {
-  display: flex;
-  flex: 1 1 100%;
+/* Pop-up de insatisfação (js/avaliacao.js) e registro do master (js/insatisfacoes.js) */
+.janela-insatisfacao {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.insatisfacao-opcoes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 6px;
-  margin-top: 4px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
 }
 
-.msg-voto-comentario[hidden] {
-  display: none;
+.insatisfacao-opcao {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
 }
 
-.msg-voto-comentario input {
-  flex: 1;
-  min-width: 0;
-  padding: 4px 8px;
+.insatisfacao-opcao:has(input:checked) {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.insatisfacao-texto {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
+  border-radius: 8px;
   background: rgba(0, 0, 0, 0.2);
   color: inherit;
-  font-size: 0.75rem;
+  font: inherit;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+
+.insatisfacao-acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.janela-insatisfacoes {
+  width: min(820px, calc(100vw - 32px));
+}
+
+.insatisfacoes-lista {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.insatisfacao-item {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 3px solid #e07a5f;
+  border-radius: 8px;
+}
+
+.insatisfacao-item.analisada {
+  border-left-color: rgba(255, 255, 255, 0.25);
+  opacity: 0.8;
+}
+
+.insatisfacao-topo {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 0.8rem;
+}
+
+.insatisfacao-motivo {
+  margin: 6px 0;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
+
+.insatisfacao-item details {
+  margin-top: 6px;
+  font-size: 0.8rem;
+}
+
+.insatisfacao-item details p {
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
 }
 
 /* Triagem (js/triagem.js): porta de entrada única */

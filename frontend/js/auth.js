@@ -107,6 +107,7 @@ function iniciarSessao(nova) {
   atualizarPendencias(); // "!" nos agentes com formulário ou produção esperando
   verificarAvisoCerebro(); // ratinho do Cérebro se houver correções ou elogios para aprovar (Diretoria)
   iniciarCaixa(); // caixa de entrada: para aprovar e concluídos (js/caixa.js)
+  iniciarInsatisfacoes(); // registro de insatisfações: só o master (js/insatisfacoes.js)
   conectar();
 }
 
@@ -119,6 +120,7 @@ function encerrarSessao(aviso = '') {
   fecharPainel();
   limparRegistro();
   limparCaixa();
+  limparInsatisfacoes();
   limparEquipe();
   limparModelos();
   limparChat();

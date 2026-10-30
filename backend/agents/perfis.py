@@ -332,7 +332,14 @@ def _historico_relevante(historico: list, pedido: str) -> list:
     Teste real: "ideia de post para o Lodge 20" virou "Lodge 20 em Jundiaí" por causa da conversa do Lodge 1."""
     citados = _lodges(pedido)
     if not citados:
-        return list(historico)
+        # Pedido sem Lodge ("agora monte o carrossel"): continua a troca mais recente que citou Lodges.
+        # Teste real (30/10/2026, Francielle): os 6 Lodges do #231 viraram um carrossel só do Lodge 35, que vinha
+        # de um pedido antigo (#113) que ainda estava no histórico.
+        recentes = next((l for h in reversed(historico) if (l := _lodges(f"{h['texto']} {h['resposta'] or ''}"))),
+                        set())
+        if not recentes:
+            return list(historico)
+        citados = recentes
     return [h for h in historico
             if not (outros := _lodges(f"{h['texto']} {h['resposta'] or ''}")) or outros & citados]
 

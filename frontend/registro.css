@@ -134,12 +134,12 @@
   color: #495057;
 }
 
-.registro-item.aberto .seta {
+.registro-item.aberto > .registro-linha .seta {
   transform: translateY(2px) rotate(-135deg);
 }
 
 /* Aberto: o resumo aparece inteiro na própria linha */
-.registro-item.aberto .reg-resumo {
+.registro-item.aberto > .registro-linha .reg-resumo {
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -301,12 +301,12 @@
     margin-left: 6px;
   }
 
-  .registro-item.aberto .reg-resumo {
+  .registro-item.aberto > .registro-linha .reg-resumo {
     display: block;
   }
 
   .registro-linha > .reg-modelo.reg-vazio,
-  .registro-item.aberto .registro-linha > .reg-modelo {
+  .registro-item.aberto > .registro-linha > .reg-modelo {
     display: none;
   }
 }
@@ -376,5 +376,26 @@
   margin-right: 8px;
   padding: 4px 10px;
   font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+/* Grupo (conversa ou projeto com vários pedidos): uma linha só; abrir mostra cada pedido */
+.registro-subitens {
+  margin: 0;
+  padding: 0 10px 10px 18px;
+}
+
+.registro-subitens[hidden] {
+  display: none;
+}
+
+.reg-grupo-n {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #2b3035;
+  color: #dee2e6;
+  font-size: 0.72rem;
   white-space: nowrap;
 }

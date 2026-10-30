@@ -602,6 +602,8 @@ async function enviarTarefa(evento) {
   }
   renderizarSelecao();
   pendentes.add(k);
+  const ultimaResposta = [...(historicos[k] || [])].reverse().find((m) => m.tipo === 'agente' && m.tarefa_id);
+  verificarReacaoNegativa(texto, ultimaResposta?.tarefa_id); // "não era isso": pergunta o porquê (js/avaliacao.js)
   adicionarMensagem(andar, agente, { autor: 'Você', texto, tipo: 'voce', anexos });
   atualizarChat();
 }

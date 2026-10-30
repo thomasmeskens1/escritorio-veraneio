@@ -1,6 +1,8 @@
 """Rotas de leitura da interface: painel do Despachante, detalhes dos agentes, registro e aprendizado."""
 
 import asyncio
+import re
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Header, HTTPException
 
@@ -127,6 +129,36 @@ async def treinar_agora(authorization: str = Header("")):
             "mensagem": f"Treinado com {meta['amostras']} tarefas: modelo {estado}.", "relatorio": relatorio}
 
 
+PROJETO_DE_ORIGEM = re.compile(r"^Produza a peça final do projeto #(\d+)")
+CONVERSA_SEGUIDA = timedelta(hours=2)  # mensagens ao mesmo agente com até 2 h de intervalo são uma conversa
+
+
+def _instante(iso: str | None) -> datetime | None:
+    try:
+        return datetime.strptime(iso or "", "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return None
+
+
+def _agrupar(linhas) -> dict[int, int]:
+    """Pedido -> grupo (id do primeiro pedido da conversa), para o Registro não repetir o mesmo trabalho em várias
+    linhas (Thomas, 30/10/2026). A produção da peça entra no projeto de origem ("Produza a peça final do projeto
+    #232"); mensagens seguidas ao mesmo agente, sem pausa longa, são a mesma conversa (#230 → #231 → #232)."""
+    grupos, ultima = {}, {}
+    for linha in sorted(linhas, key=lambda l: l["id"]):
+        if (origem := PROJETO_DE_ORIGEM.match(linha["texto"] or "")):
+            grupos[linha["id"]] = grupos.get(int(origem.group(1)), int(origem.group(1)))
+            continue
+        chave = (linha["usuario"], linha["andar"], linha["agente"])
+        inicio = _instante(linha["criada_em"])
+        anterior = ultima.get(chave)
+        fim_anterior = anterior and (_instante(anterior["concluida_em"]) or _instante(anterior["criada_em"]))
+        seguida = inicio and fim_anterior and inicio - fim_anterior <= CONVERSA_SEGUIDA
+        grupos[linha["id"]] = grupos[anterior["id"]] if seguida else linha["id"]
+        ultima[chave] = linha
+    return grupos
+
+
 @rotas.get("/registro")
 def registro(limite: int = 50, usuario_filtro: str = "", agente: str = "", authorization: str = Header("")):
     """Registro de atividade: uma linha por pedido, com a linha do tempo dos eventos. O master vê todos e filtra por
@@ -149,12 +181,14 @@ def registro(limite: int = 50, usuario_filtro: str = "", agente: str = "", autho
         from auth import carregar_usuarios
         nomes = {login: dados["nome"] for login, dados in carregar_usuarios().items()}
 
+    grupos = _agrupar(linhas)
     itens = []
     for linha in linhas:
         eventos_tarefa = eventos.get(linha["id"], [])
         acionados = list(dict.fromkeys([linha["agente"], *(e["agente"] for e in eventos_tarefa if e["agente"])]))
         itens.append({
-            "tarefa_id": linha["id"], "em": linha["criada_em"], "usuario": linha["usuario"],
+            "tarefa_id": linha["id"], "grupo": grupos.get(linha["id"], linha["id"]), "em": linha["criada_em"],
+            "usuario": linha["usuario"],
             "usuario_nome": nomes.get(linha["usuario"], usuario.get("nome") if linha["usuario"] == usuario["sub"] else linha["usuario"]),
             "agentes": [{"id": a, "nome": _nome_do_agente(a)} for a in acionados],
             "resumo": linha["texto"][:160], "modelo": linha["modelo"], "status": linha["status"],

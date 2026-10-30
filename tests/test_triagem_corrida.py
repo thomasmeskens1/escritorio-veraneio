@@ -18,7 +18,10 @@ tarefas.iniciar()
 USUARIO = {"sub": config.DONO_MAX, "master": True}
 
 
-def test_triagem_indica_o_especialista_e_o_gestor_nas_pecas():
+def test_triagem_indica_o_especialista_e_o_gestor_nas_pecas(monkeypatch):
+    # Só as regras: o classificador aprenderia com as tarefas que os outros testes deixam no banco temporário.
+    monkeypatch.setattr(triagem, "_modelo", None)
+    monkeypatch.setattr(triagem, "_treinar_se_preciso", lambda: None)
     casos = {"Escreve uma legenda para o Lodge 28": "copywriter",
              "Faça um post para o Lodge 12 em Juquehy": "gestor",
              "Quero uma matriz SWOT da Casa Vero": "estrategista",

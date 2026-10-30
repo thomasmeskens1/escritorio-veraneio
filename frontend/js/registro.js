@@ -32,6 +32,7 @@ let timerRegistro = null;
 let carregandoRegistro = false;
 let assinaturaRegistro = '';
 const registrosExpandidos = new Set(); // tarefa_id abertos (sobrevivem às atualizações)
+const gruposExpandidos = new Set(); // grupos (conversas) abertos
 
 // ---------- Formatação ----------
 function dataValida(iso) {
@@ -92,6 +93,7 @@ function limparRegistro() {
   registroAtualizado.textContent = '';
   assinaturaRegistro = '';
   registrosExpandidos.clear();
+  gruposExpandidos.clear();
   [filtroUsuario, filtroAgente].forEach((s) => { s.length = 1; s.value = ''; }); // só "Todos"
   Object.keys(conversasCarregadas).forEach((k) => delete conversasCarregadas[k]);
   conversasPedidas.clear();
@@ -172,8 +174,66 @@ function renderizarRegistro(itens) {
   cabecalho.setAttribute('aria-hidden', 'true');
   ['Quando', 'Usuário', 'Agentes', 'Tarefa', 'Modelo', ''].forEach((t) => cabecalho.append(novoEl('span', null, t)));
   const lista = novoEl('ul', 'registro-lista');
-  itens.forEach((item) => lista.append(criarItemRegistro(item)));
+  agruparRegistro(itens).forEach((grupo) => lista.append(grupo.length > 1 ? criarGrupoRegistro(grupo) : criarItemRegistro(grupo[0])));
   registroConteudo.replaceChildren(cabecalho, lista);
+}
+
+// Aglomerado (Thomas, 30/10/2026): pedidos do mesmo trabalho (conversa seguida com o agente e a produção da peça)
+// viram UMA linha; abrir mostra cada pedido. O servidor decide o grupo (api_painel._agrupar).
+function agruparRegistro(itens) {
+  const grupos = new Map();
+  itens.forEach((item) => {
+    const chaveGrupo = String(item.grupo ?? item.tarefa_id);
+    if (!grupos.has(chaveGrupo)) grupos.set(chaveGrupo, []);
+    grupos.get(chaveGrupo).push(item); // itens vêm do mais novo para o mais antigo
+  });
+  return [...grupos.values()];
+}
+
+const PRIORIDADE_STATUS = ['executando', 'producao', 'produzindo', 'adiada', 'falhou', 'concluida'];
+
+function statusDoGrupo(grupo) {
+  return PRIORIDADE_STATUS.find((s) => grupo.some((i) => i.status === s)) || grupo[0].status;
+}
+
+function criarGrupoRegistro(grupo) {
+  const id = `g${grupo[grupo.length - 1].tarefa_id}`;
+  const aberto = gruposExpandidos.has(id);
+  const recente = grupo[0];
+  const primeiro = grupo[grupo.length - 1];
+  const li = novoEl('li', `registro-item registro-grupo registro-${statusDoGrupo(grupo)}`);
+  const linha = novoEl('button', 'registro-linha');
+  linha.type = 'button';
+  linha.setAttribute('aria-expanded', String(aberto));
+
+  const agentes = novoEl('span', 'reg-agentes');
+  const vistos = new Map();
+  grupo.forEach((i) => (i.agentes || []).forEach((a) => vistos.set(a.id, a.nome || a.id)));
+  vistos.forEach((nome) => agentes.append(novoEl('span', 'chip-agente', nome)));
+
+  const quando = criarHora(recente.em);
+  quando.classList.add('reg-hora');
+  const usuario = novoEl('span', 'reg-usuario', recente.usuario_nome || recente.usuario || '—');
+  const resumo = novoEl('span', 'reg-resumo');
+  resumo.append(novoEl('span', 'reg-grupo-n', `${grupo.length} pedidos`), document.createTextNode(` ${primeiro.resumo || '(sem resumo)'}`));
+  const modelo = novoEl('span', 'reg-modelo', abreviarModelo(recente.modelo) || '—');
+  if (recente.modelo) modelo.title = recente.modelo;
+  linha.append(quando, usuario, agentes, resumo, modelo, novoEl('span', 'seta'));
+
+  const filhos = novoEl('ul', 'registro-lista registro-subitens');
+  [...grupo].reverse().forEach((item) => filhos.append(criarItemRegistro(item))); // em ordem: do começo ao fim
+  filhos.hidden = !aberto;
+  li.classList.toggle('aberto', aberto);
+  linha.addEventListener('click', () => {
+    const abrir = filhos.hidden;
+    filhos.hidden = !abrir;
+    li.classList.toggle('aberto', abrir);
+    linha.setAttribute('aria-expanded', String(abrir));
+    if (abrir) gruposExpandidos.add(id);
+    else gruposExpandidos.delete(id);
+  });
+  li.append(linha, filhos);
+  return li;
 }
 
 function criarItemRegistro(item) {
