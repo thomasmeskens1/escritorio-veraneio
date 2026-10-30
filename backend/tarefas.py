@@ -2,6 +2,7 @@
 
 import calendar
 import sqlite3
+import threading
 from datetime import datetime, timedelta, timezone
 
 import config
@@ -68,6 +69,53 @@ INTERVALO_REAGENDAMENTO = timedelta(minutes=30)
 _conexao: sqlite3.Connection | None = None
 
 
+class _ConexaoCompartilhada(sqlite3.Connection):
+    """A conexão é uma só para o loop e as threads dos agentes. Sem trava, duas threads abriam transação ao mesmo
+    tempo ("cannot start a transaction within a transaction") e o rollback de uma desfazia o INSERT da outra
+    (Francielle, 30/10/2026: tarefas 133 e 134). Agora cada comando e cada bloco `with db:` é atômico: enquanto uma
+    thread está num bloco, as outras esperam o commit/rollback dela. Comando de escrita fora de bloco grava na hora
+    (antes ficava pendurado na transação de quem fizesse o próximo commit ou rollback)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._trava = threading.RLock()
+        self._local = threading.local()  # profundidade de blocos `with` desta thread
+
+    def __enter__(self):
+        self._trava.acquire()
+        self._local.blocos = getattr(self._local, "blocos", 0) + 1
+        try:
+            return super().__enter__()
+        except BaseException:
+            self._local.blocos -= 1
+            self._trava.release()
+            raise
+
+    def __exit__(self, *erro):
+        try:
+            return super().__exit__(*erro)
+        finally:
+            self._local.blocos -= 1
+            self._trava.release()
+
+    def _avulso(self, metodo, *args, **kwargs):
+        with self._trava:
+            cursor = metodo(*args, **kwargs)
+            if not getattr(self._local, "blocos", 0) and self.in_transaction:
+                self.commit()
+            return cursor
+
+    def execute(self, *args, **kwargs):
+        return self._avulso(super().execute, *args, **kwargs)
+
+    def executemany(self, *args, **kwargs):
+        return self._avulso(super().executemany, *args, **kwargs)
+
+    def executescript(self, *args, **kwargs):
+        with self._trava:
+            return super().executescript(*args, **kwargs)
+
+
 def _agora(depois: timedelta = timedelta()) -> str:
     return (datetime.now(timezone.utc) + depois).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -77,7 +125,7 @@ def _db() -> sqlite3.Connection:
     if _conexao is None:
         config.ARQUIVO_BANCO.parent.mkdir(parents=True, exist_ok=True)
         _migrar_para_o_volume()
-        _conexao = sqlite3.connect(config.ARQUIVO_BANCO, check_same_thread=False)
+        _conexao = sqlite3.connect(config.ARQUIVO_BANCO, check_same_thread=False, factory=_ConexaoCompartilhada)
         _conexao.row_factory = sqlite3.Row
         if config.ARQUIVO_BANCO.parent != config.DADOS_DIR:  # WAL só é seguro fora da pasta compartilhada
             _conexao.execute("PRAGMA journal_mode=WAL")

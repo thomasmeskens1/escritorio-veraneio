@@ -1,25 +1,22 @@
-"""👍/👎, rede neural do Cérebro e consolidação semanal (Thomas, 29/10/2026), num banco temporário.
+"""👍/👎, rede neural do Cérebro e consolidação semanal (Thomas, 29/10/2026), num banco temporário (conftest).
 
   docker compose run --rm --no-deps -T -v "$(pwd -W)/tests:/testes:ro" -w /app -e PYTHONPATH=/app api \
       python -m pytest -p no:cacheprovider /testes/test_aprendizado_neural.py
 """
 
 import json
-import os
 import random
 import tempfile
 from pathlib import Path
 
-_PASTA = Path(tempfile.mkdtemp())
-(_PASTA / "teste.db").touch()  # já existe: o banco antigo de dados/ nunca é migrado para cá
-os.environ["ARQUIVO_BANCO"] = str(_PASTA / "teste.db")
+import avaliacoes  # banco temporário: tests/conftest.py
+import cerebro_base as base
+import consolidacao_semanal
+import correcoes
+import reranker
+import tarefas
 
-import avaliacoes  # noqa: E402
-import cerebro_base as base  # noqa: E402
-import consolidacao_semanal  # noqa: E402
-import correcoes  # noqa: E402
-import reranker  # noqa: E402
-import tarefas  # noqa: E402
+_PASTA = Path(tempfile.mkdtemp())
 
 reranker.PASTA = _PASTA / "aprendizado"
 reranker.ARQUIVO_MODELO = reranker.PASTA / "reranker.joblib"

@@ -10,7 +10,7 @@ continuam na API: o Claude Code do PC não tem essas ferramentas.
 import json
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import config
 from agents.perfis import ESTILO_CHAT
@@ -43,8 +43,11 @@ def _db():
 
 def _ocupado() -> bool:
     db = _db()
-    trabalhos = db.execute("SELECT 1 FROM trabalhos_max WHERE status IN ('reservado', 'pendente', 'executando') "
-                           "LIMIT 1").fetchone()
+    # Reserva vira pedido em segundos; parada há mais de 10 min é sobra de uma etapa que falhou no meio e não pode
+    # bloquear o Max até o próximo reinício (30/10/2026: trabalho 33, da tarefa 133).
+    recente = (datetime.now(timezone.utc) - timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    trabalhos = db.execute("SELECT 1 FROM trabalhos_max WHERE status IN ('pendente', 'executando') "
+                           "OR (status = 'reservado' AND criado_em >= ?) LIMIT 1", (recente,)).fetchone()
     producoes = db.execute("SELECT 1 FROM tarefas WHERE status IN ('producao', 'produzindo') LIMIT 1").fetchone()
     return bool(trabalhos or producoes)
 

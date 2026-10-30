@@ -17,11 +17,14 @@ function atualizarContadores(andares) {
 }
 
 // Pílula "AO VIVO" (WebSocket aberto) / "FECHADO".
-function atualizarPilula(online) {
+// 'online' | 'reconectando' (sessão ativa, conexão caindo ou sem resposta: js/rede.js tenta de novo) | 'fechado'.
+function atualizarPilula(estado) {
   const pilula = document.getElementById('conexao');
-  pilula.classList.toggle('online', online);
-  pilula.textContent = online ? 'AO VIVO' : 'FECHADO';
-  pilula.title = online ? 'Servidor conectado' : 'Servidor desconectado';
+  pilula.classList.toggle('online', estado === 'online');
+  pilula.classList.toggle('reconectando', estado === 'reconectando');
+  pilula.textContent = { online: 'AO VIVO', reconectando: 'RECONECTANDO' }[estado] || 'FECHADO';
+  pilula.title = { online: 'Servidor conectado', reconectando: 'Sem resposta do servidor; reconectando sozinho' }[estado]
+    || 'Servidor desconectado';
 }
 
 function atualizarRelogio() {

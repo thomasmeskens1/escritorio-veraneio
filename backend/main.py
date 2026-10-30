@@ -243,6 +243,8 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         msg = json.loads(bruto)
     except ValueError:
         return await erro("JSON inválido.")
+    if isinstance(msg, dict) and msg.get("tipo") == "ping":  # o navegador confere se a conexão ainda entrega (js/rede.js)
+        return await gerenciador.enviar(ws, {"tipo": "pong"})
     if isinstance(msg, dict) and msg.get("tipo") == "presenca":  # status ativo/ausente e chat aberto
         chat = msg.get("chat")
         if gerenciador.registrar_presenca(ws, bool(msg.get("interagiu")), str(chat) if chat is not None else None):

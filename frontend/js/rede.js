@@ -2,9 +2,15 @@
 
 const CODIGO_TOKEN_INVALIDO = 4401;
 const ATRASO_RECONEXAO = 2000;
+// Vigia (Thomas, 30/10/2026): pelo túnel da Cloudflare a conexão pode ficar "aberta mas muda" (nada chega). Só é
+// AO VIVO depois que o servidor responde; sem resposta em PRAZO_RESPOSTA, reconecta sozinha ("RECONECTANDO").
+const PRAZO_RESPOSTA = 10000;
+const INTERVALO_PING = 30000;
 
 let socket = null;
 let timerReconexao = null;
+let confirmado = false; // o servidor já respondeu nesta conexão
+let timerVigia = null;
 
 function conectado() {
   return socket?.readyState === WebSocket.OPEN;
@@ -17,12 +23,33 @@ function enviar(dados) {
 }
 
 function atualizarConexao() {
-  atualizarPilula(conectado());
+  atualizarPilula(conectado() && confirmado ? 'online' : (sessao ? 'reconectando' : 'fechado'));
   atualizarChat();
 }
 
+// Espera alguma mensagem do servidor; se não vier no prazo, derruba a conexão muda e abre outra.
+function vigiar(ws) {
+  clearTimeout(timerVigia);
+  timerVigia = setTimeout(() => {
+    if (socket !== ws) return;
+    console.warn('Conexão sem resposta do servidor; reconectando.');
+    socket = null;
+    confirmado = false;
+    liberarPendentes();
+    atualizarConexao();
+    try { ws.close(4000, 'sem resposta'); } catch { /* já fechada */ }
+    if (sessao) timerReconexao = setTimeout(conectar, ATRASO_RECONEXAO);
+  }, PRAZO_RESPOSTA);
+}
+
+setInterval(() => {
+  if (conectado() && confirmado && enviar({ tipo: 'ping' })) vigiar(socket);
+}, INTERVALO_PING);
+
 function tratarMensagem(msg) {
   switch (msg.tipo) {
+    case 'pong':
+      break;
     case 'estado':
       aplicarEstado(msg.andares);
       atualizarContadores(msg.andares);
@@ -54,6 +81,9 @@ function conectar() {
   const protocolo = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(`${protocolo}://${location.host}/ws`);
   socket = ws;
+  confirmado = false;
+  vigiar(ws); // abertura + primeira resposta (o estado do escritório) dentro do prazo
+  atualizarConexao();
 
   ws.addEventListener('open', () => {
     ws.send(JSON.stringify({ tipo: 'auth', token: sessao.token }));
@@ -63,6 +93,12 @@ function conectar() {
   });
 
   ws.addEventListener('message', (e) => {
+    if (socket !== ws) return; // conexão já trocada pela vigia
+    clearTimeout(timerVigia);
+    if (!confirmado) {
+      confirmado = true;
+      atualizarConexao();
+    }
     try {
       tratarMensagem(JSON.parse(e.data));
     } catch (erro) {
@@ -71,8 +107,10 @@ function conectar() {
   });
 
   ws.addEventListener('close', (e) => {
-    if (socket !== ws) return; // fechamento feito por desconectar()
+    if (socket !== ws) return; // fechamento feito por desconectar() ou pela vigia
     socket = null;
+    confirmado = false;
+    clearTimeout(timerVigia);
     liberarPendentes();
     atualizarConexao();
     if (e.code === CODIGO_TOKEN_INVALIDO) {
@@ -85,8 +123,10 @@ function conectar() {
 
 function desconectar() {
   clearTimeout(timerReconexao);
+  clearTimeout(timerVigia);
   const ws = socket;
   socket = null;
+  confirmado = false;
   if (ws) ws.close(1000);
   atualizarConexao();
 }
