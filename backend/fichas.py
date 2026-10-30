@@ -34,8 +34,18 @@ CABECALHO = ("FICHAS OFICIAIS DOS IMÓVEIS CITADOS, DESTA EMPRESA (dados do site
 
 def _trechos(ref: str, empresa: str = "casa_veraneio") -> list:
     with base._trava:
-        return base.db().execute("SELECT titulo, conteudo FROM conhecimento WHERE ativo = 1 AND fonte_ref = ? "
-                                 "AND empresa = ? ORDER BY id", (ref, empresa)).fetchall()
+        return base.db().execute("SELECT titulo, conteudo, atualizado_em FROM conhecimento WHERE ativo = 1 "
+                                 "AND fonte_ref = ? AND empresa = ? ORDER BY id", (ref, empresa)).fetchall()
+
+
+def _coletado(trechos) -> str:
+    """" (dados de 28/10/2026)": a data da coleta vai na ficha, para o agente saber quão recente é o preço
+    (revisão de 30/10/2026: as fichas não diziam de quando eram)."""
+    datas = [t["atualizado_em"] for t in trechos if t["atualizado_em"]]
+    if not datas:
+        return ""
+    data = max(datas)[:10]
+    return f" (dados de {data[8:10]}/{data[5:7]}/{data[:4]})"
 
 
 def _da_empresa(numero: str, empresa: str, limite: int = TAMANHO_FICHA) -> str | None:
@@ -48,7 +58,7 @@ def _do_documento(ref: str, empresa: str, limite: int = TAMANHO_FICHA) -> str | 
     trechos = _trechos(ref, empresa)
     if not trechos:
         return None
-    titulo = trechos[0]["titulo"].split(" › ")[0]
+    titulo = trechos[0]["titulo"].split(" › ")[0] + _coletado(trechos)
     corpo = "\n".join(t["conteudo"] for t in trechos)
     return f"- {titulo}\n  " + "\n  ".join(l.strip() for l in corpo.splitlines() if l.strip())[:limite]
 
@@ -66,6 +76,7 @@ def _do_site(numero: str) -> str | None:
                 linhas.append(linha)
     # "Lodge 20 — Praia de Iporanga - SP": o divisor de trechos leva o cabeçalho para o título do trecho.
     titulo = next((l[2:] for l in linhas if l.startswith("# ")), trechos[0]["titulo"].split(" › ")[0])
+    titulo += _coletado(trechos)
     corpo = [l for l in linhas if not l.startswith("# ")]
     return f"- {titulo}\n  " + "\n  ".join(dict.fromkeys(corpo))
 

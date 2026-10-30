@@ -238,8 +238,27 @@ def link_de(tarefa_id: int) -> str | None:
     return f"/relatorios/{achados[-1].name}" if achados else None
 
 
+VALIDADE_DIAS = 30
+SCRIPT_EMBUTIDO = re.compile(r"<script>(.*?)</script>", re.S)
+
+
 @rotas.get("/relatorios/{nome}")
 def abrir(nome: str):
+    """O endereço tem 18 bytes aleatórios e vale 30 dias (revisão de 30/10/2026: antes nunca expirava). A política de
+    segurança desta página libera o Chart.js do cdnjs e só os scripts embutidos deste arquivo, pelo hash (a política
+    geral bloqueava os dois e os gráficos nunca apareciam)."""
     if not NOME_ARQUIVO.match(nome) or not (arquivo := PASTA / nome).is_file():
         raise HTTPException(status_code=404, detail="Relatório não encontrado")
-    return FileResponse(arquivo, media_type="text/html; charset=utf-8")
+    import hashlib
+    import time
+    from base64 import b64encode
+
+    if time.time() - arquivo.stat().st_mtime > VALIDADE_DIAS * 86400:
+        arquivo.unlink(missing_ok=True)
+        raise HTTPException(status_code=404, detail="Relatório expirado: peça de novo ao Analista de Métricas.")
+    texto = arquivo.read_text(encoding="utf-8")
+    hashes = " ".join(f"'sha256-{b64encode(hashlib.sha256(s.encode()).digest()).decode()}'"
+                      for s in SCRIPT_EMBUTIDO.findall(texto))
+    politica = (f"default-src 'none'; script-src https://cdnjs.cloudflare.com {hashes}; style-src 'unsafe-inline'; "
+                "img-src data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+    return FileResponse(arquivo, media_type="text/html; charset=utf-8", headers={"Content-Security-Policy": politica})

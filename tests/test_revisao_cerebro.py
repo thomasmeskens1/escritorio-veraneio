@@ -88,3 +88,22 @@ def test_pasta_de_manuais_vazia_nao_desativa_os_oficiais(tmp_path, monkeypatch):
     monkeypatch.setattr(cerebro, "PASTA_CONHECIMENTO", tmp_path)  # pasta vazia (Drive fora, renomeada)
     assert cerebro.indexar_oficiais() == 0
     assert base.db().execute("SELECT ativo FROM conhecimento WHERE id = ?", (trecho,)).fetchone()[0] == 1
+
+
+def test_relatorio_libera_so_os_proprios_scripts_e_expira(tmp_path, monkeypatch):
+    import os
+
+    import pytest
+    from fastapi import HTTPException
+
+    import relatorios
+
+    monkeypatch.setattr(relatorios, "PASTA", tmp_path)
+    nome = "5-" + "a" * 24 + ".html"
+    (tmp_path / nome).write_text("<html><script>const graficos = [];</script></html>", encoding="utf-8")
+    politica = relatorios.abrir(nome).headers["content-security-policy"]
+    assert "https://cdnjs.cloudflare.com" in politica and "'sha256-" in politica and "unsafe-inline" not in politica.split("style-src")[0]
+    os.utime(tmp_path / nome, (1, 1))  # 1970: passou dos 30 dias
+    with pytest.raises(HTTPException):
+        relatorios.abrir(nome)
+    assert not (tmp_path / nome).exists()
