@@ -120,6 +120,28 @@ class MaxSemCota(RuntimeError):
     """O Claude Code recusou por cota ou login do plano Max."""
 
 
+CAIXA_DE_AREIA = Path(__file__).with_name("caixa_de_areia")  # sitecustomize.py: entra em todo python da produção
+PROGRAMAS_DA_PRODUCAO = ("ffmpeg", "ffprobe", "chrome", "msedge", "python", "pythonw", "python3",
+                         Path(sys.executable).stem.lower())
+
+
+def caixa_de_areia(pasta_da_peca: Path) -> dict:
+    """Variáveis que prendem o python da produção (revisão de 30/10/2026, item 1.1): sem ler o repositório, a pasta dev
+    e credenciais do usuário, gravando só na pasta da peça e no TEMP, sem rede externa e sem outros programas."""
+    casa = Path.home()
+    local, roaming = Path(os.environ.get("LOCALAPPDATA", casa)), Path(os.environ.get("APPDATA", casa))
+    bloqueadas = [RAIZ.parent, casa / ".claude", casa / ".ssh", casa / ".aws", casa / ".config", casa / ".docker",
+                  local / "Google" / "Chrome" / "User Data", local / "Microsoft" / "Edge" / "User Data",
+                  roaming / "Mozilla", roaming / "Microsoft" / "Credentials", local / "Microsoft" / "Credentials"]
+    return {
+        "PYTHONPATH": str(CAIXA_DE_AREIA),
+        "VERANEIO_AREIA_BLOQUEADAS": os.pathsep.join(map(str, bloqueadas)),
+        "VERANEIO_AREIA_LIBERADAS": str(Path(__file__).parent),  # o renderizador e a própria caixa (código público)
+        "VERANEIO_AREIA_ESCRITA": os.pathsep.join([str(pasta_da_peca), tempfile.gettempdir()]),
+        "VERANEIO_AREIA_PROGRAMAS": ",".join(PROGRAMAS_DA_PRODUCAO),
+    }
+
+
 ARQUIVO_PROGRESSO = "progresso.txt"  # o Claude Code anota cada peça que começa ("1/4 | Criando Story 1")
 INTERVALO_PROGRESSO = 10
 

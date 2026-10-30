@@ -107,3 +107,44 @@ def test_trabalhador_reconhece_falta_de_cota(comum, monkeypatch, tmp_path):
     with pytest.raises(comum.MaxSemCota):
         comum.rodar_claude(["claude"], "oi", tmp_path, 60)
     assert not comum.SEM_COTA.search("Claude Code terminou com erro (erro durante a execução).")
+
+
+@pytest.fixture
+def areia(tmp_path, monkeypatch):
+    """A caixa de areia da produção (scripts/max/caixa_de_areia), sem instalar o gancho no processo do pytest."""
+    arquivo = Path("/repo/scripts/max/caixa_de_areia/sitecustomize.py")
+    if not arquivo.exists():
+        pytest.skip("scripts/max não montado em /repo/scripts/max")
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("areia_teste", arquivo)
+    modulo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modulo)  # sem as variáveis de ambiente: nenhum gancho instalado
+    peca = tmp_path / "peca"
+    peca.mkdir()
+    monkeypatch.setattr(modulo, "_BLOQUEADAS", [str(tmp_path / "repo")])
+    monkeypatch.setattr(modulo, "_LIBERADAS", [])
+    monkeypatch.setattr(modulo, "_ESCRITA", [str(peca)])
+    monkeypatch.setattr(modulo, "_PROGRAMAS", {"ffmpeg", "python"})
+    return modulo, tmp_path, peca
+
+
+def test_caixa_de_areia_bloqueia_segredo_repositorio_rede_e_programas(areia):
+    modulo, raiz, peca = areia
+    bloqueados = [("open", (str(raiz / "repo" / "README.md"), "r", 0)),
+                  ("open", (str(peca / ".env"), "r", 0)),
+                  ("open", (str(raiz / "fora.txt"), "w", 0)),
+                  ("socket.connect", (None, ("8.8.8.8", 53))),
+                  ("socket.getaddrinfo", ("example.com", 443)),
+                  ("subprocess.Popen", (None, ["curl", "http://x"], None, None)),
+                  ("subprocess.Popen", (None, "ffmpeg -version & curl http://x", None, None)),
+                  ("subprocess.Popen", (None, ["ffmpeg", "-i", "http://example.com/a.mp4", "x.mp4"], None, None)),
+                  ("subprocess.Popen", (None, ["python", "-I", "-c", "1"], None, None)),
+                  ("ctypes.call_function", (0, ()))]
+    for evento, args in bloqueados:
+        with pytest.raises(PermissionError):
+            modulo._gancho(evento, args)
+    for evento, args in [("open", (str(peca / "arte.html"), "w", 0)),
+                         ("socket.connect", (None, ("127.0.0.1", 8080))),
+                         ("subprocess.Popen", (None, ["ffmpeg", "-i", str(peca / "a.mp4"), str(peca / "b.mp4")], None, None))]:
+        modulo._gancho(evento, args)  # a produção normal continua

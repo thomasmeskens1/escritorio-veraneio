@@ -1,12 +1,21 @@
 """Renderiza um layout HTML em PNG com o Chrome headless.
 
 Uso: python renderizar_png.py layout.html saida.png 1080x1350
+
+O HTML é servido por um servidor local preso à pasta dele (127.0.0.1), não aberto como arquivo: uma página
+file:// lê qualquer arquivo do PC (ex.: um <iframe> com o .env) e o print levaria isso para a entrega (revisão de
+30/10/2026). Imagens e fontes precisam estar na pasta do HTML (caminhos relativos); fontes da web continuam valendo.
 """
 
+import functools
+import http.server
+import re
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
+from urllib.parse import quote
 
 CHROMES = [
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
@@ -29,9 +38,25 @@ def main() -> None:
         sys.exit(__doc__)
     html, saida, tamanho = Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve(), sys.argv[3]
     largura, altura = tamanho.lower().split("x")
-    subprocess.run([chrome(), "--headless=new", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1",
-                    f"--window-size={largura},{altura}", f"--screenshot={saida}", html.as_uri()],
-                   check=True, capture_output=True, timeout=120)
+    # Caminho absoluto file:/// para a própria pasta (peça #81) vira relativo, numa cópia apagada no fim.
+    texto = html.read_text(encoding="utf-8", errors="replace")
+    base = re.compile(re.escape(html.parent.as_uri() + "/"), re.IGNORECASE)
+    pagina = html
+    if base.search(texto):
+        pagina = html.with_name(f"_render_{html.name}")
+        pagina.write_text(base.sub("", texto), encoding="utf-8")
+    quieto = type("Quieto", (http.server.SimpleHTTPRequestHandler,), {"log_message": lambda *_a: None})
+    servidor = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(quieto, directory=str(html.parent)))
+    threading.Thread(target=servidor.serve_forever, daemon=True).start()
+    try:
+        endereco = f"http://127.0.0.1:{servidor.server_address[1]}/{quote(pagina.name)}"
+        subprocess.run([chrome(), "--headless=new", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1",
+                        f"--window-size={largura},{altura}", f"--screenshot={saida}", endereco],
+                       check=True, capture_output=True, timeout=120)
+    finally:
+        servidor.shutdown()
+        if pagina != html:
+            pagina.unlink(missing_ok=True)
     print(f"PNG gerado: {saida} ({largura}x{altura})")
 
 
