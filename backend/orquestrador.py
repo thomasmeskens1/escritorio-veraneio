@@ -10,6 +10,7 @@ import logging
 import re
 import time
 import traceback
+from datetime import timedelta
 from pathlib import Path
 
 import aprendizado
@@ -95,12 +96,23 @@ async def _falhar_interno(tarefa_id: int, erro: Exception) -> None:
     await _entregar(tarefas.obter(tarefa_id))
 
 
+JANELA_HISTORICO = timedelta(hours=24)
+
+
+def _recentes(historico: list) -> list:
+    """Trocas das últimas 24 h, mais a mais recente sempre (continuar o trabalho de ontem). Antes, só a contagem:
+    uma legenda do Lodge 35 de outro dia entrou no carrossel de 6 Lodges (revisão de 30/10/2026, item 1.9)."""
+    limite = tarefas._agora(-JANELA_HISTORICO)
+    return [h for n, h in enumerate(historico) if n == len(historico) - 1 or (h["criada_em"] or "") >= limite]
+
+
 async def _tentar(tarefa, agente: Agente, etapa: Etapa):
     """Uma tentativa num modelo, com o histórico da conversa. Devolve (resultado ou None, erro)."""
     from agents.executor import LocalOcupado, MaxOcupado, executar  # import tardio: CrewAI é pesado
 
     historico = tarefas.historico(tarefa["usuario"], tarefa["andar"], tarefa["agente"], tarefa["id"], limite=4,
                                   empresa=tarefa["empresa"])  # 4 trocas: o briefing sobrevive a 3 rodadas de formulário
+    historico = _recentes(historico)
     inicio = time.monotonic()
     try:
         tarefas.registrar_evento(tarefa["id"], "tentativa", agente.id, etapa.modelo)

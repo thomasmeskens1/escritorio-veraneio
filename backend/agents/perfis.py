@@ -390,9 +390,12 @@ def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: st
     if pedido:  # imóvel citado: a ficha oficial DA EMPRESA entra inteira (fichas.py, nível 2 da árvore)
         import fichas  # import tardio: o Cérebro carrega o banco
 
-        # Imóveis citados no pedido e no briefing da conversa (a resposta a um formulário não repete a lista).
-        # A troca mais recente primeiro: é a que o pedido atual mais provavelmente continua.
-        citados = "\n".join([pedido, *(h["texto"] for h in reversed(historico))])
+        # Imóveis do pedido; se ele não cita nenhum, os da troca mais recente que citou (a resposta a um formulário não
+        # repete a lista). Antes entravam os de todas as trocas, e a ficha de um Lodge antigo virou o assunto (#232).
+        citados = pedido
+        if not fichas.cita_imovel(pedido):
+            ultima = next((h["texto"] for h in reversed(historico) if fichas.cita_imovel(h["texto"])), "")
+            citados = f"{pedido}\n{ultima}"
         if (fichas_lodges := fichas.fichas_citadas(citados, empresa)):
             partes.append(fichas_lodges)
     partes.append(INSTRUCOES)

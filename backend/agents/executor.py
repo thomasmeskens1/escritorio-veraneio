@@ -322,7 +322,7 @@ def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa,
             atividade.etapa_em_thread(tarefa_id, tipo, agente, detalhe)
 
         total.texto = projeto.executar_projeto(tarefa_id, texto, contexto("gestor", historico, texto, cerebro.empresa_da_tarefa(tarefa_id)), executar,
-                                               cancelar, avisar)
+                                               cancelar, avisar, etapa.modelo)
     else:
         esperado = ("Confirmação amigável, em texto (sem JSON), do agente criado: nome, andar, setor e função."
                     if agente_id == "construtor" else "Resposta completa ao pedido.")

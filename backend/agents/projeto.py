@@ -276,13 +276,42 @@ def _sem_aviso(tipo: str, agente: str, detalhe: str) -> None:
     pass
 
 
+# Revisão de 30/10/2026 (item 1.9): o plano do #232 (Lodge 35) foi feito por um gratuito fraco que caiu; o Max
+# assumiu e reaproveitou plano e etapas salvos sem reinterpretar o pedido. Plano de modelo fraco não é herdado.
+MODELOS_FORTES = ("claude-code/", "anthropic/", "claude-")
+REFEITOS_QUANDO_FORTE_ASSUME = ("plano.json", "plano.md", "entendimento.txt", "duvida.txt", "titulo.txt",
+                                "requisitos.md", "final.md", "passagem.md", "plano_modelo.txt")
+
+
+def _forte(modelo: str) -> bool:
+    return bool(modelo) and modelo.startswith(MODELOS_FORTES)
+
+
+def _descartar_plano_fraco(pasta: Path, modelo: str) -> bool:
+    """Modelo forte assumindo um projeto planejado por um fraco: apaga plano, entendimento e etapas (refaz do zero)."""
+    if not _forte(modelo) or not (pasta / "plano.json").exists() or _forte(_lido(pasta, "plano_modelo.txt")):
+        return False
+    for nome in REFEITOS_QUANDO_FORTE_ASSUME:
+        (pasta / nome).unlink(missing_ok=True)
+    for etapa in (pasta / "etapas").glob("*"):
+        etapa.unlink(missing_ok=True)
+    return True
+
+
 def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Executar,
-                     cancelar: threading.Event, avisar: Callable[[str, str, str], None] = _sem_aviso) -> str:
-    """`avisar(tipo, agente, detalhe)` recebe etapa_iniciada/etapa_salva (registro e animação do setor)."""
+                     cancelar: threading.Event, avisar: Callable[[str, str, str], None] = _sem_aviso,
+                     modelo: str = "") -> str:
+    """`avisar(tipo, agente, detalhe)` recebe etapa_iniciada/etapa_salva (registro e animação do setor). `modelo`: quem
+    coordena agora (o plano feito por um modelo fraco é refeito quando um forte assume)."""
     pasta = PASTA_PROJETOS / str(tarefa_id)
     (pasta / "etapas").mkdir(parents=True, exist_ok=True)
+    if _descartar_plano_fraco(pasta, modelo):
+        avisar("etapa_iniciada", "gestor", f"Plano refeito: {modelo} assumiu o projeto de um modelo gratuito")
     ficha = _ficha(pasta, pedido, contexto, executar)
+    novo = not (pasta / "plano.json").exists()
     plano = _plano(pasta, pedido, contexto, executar, ficha)
+    if novo and modelo:
+        _gravar(pasta / "plano_modelo.txt", modelo)
     entendimento = _lido(pasta, "entendimento.txt")
     if (duvida := _lido(pasta, "duvida.txt")):  # não deu para saber a que o pedido se refere: pergunta antes
         final = pasta / "final.md"

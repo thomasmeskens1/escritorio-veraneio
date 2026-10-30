@@ -163,6 +163,12 @@ def _numero_da_ref(ref: str) -> str:
     return ref.rsplit("-", 1)[-1]
 
 
+def cita_imovel(texto: str) -> bool:
+    """O texto cita algum imóvel (Lodge N, Vero N ou link de imóvel de um dos sites)?"""
+    texto = texto or ""
+    return bool(LODGE_CITADO.search(texto) or VERO_CITADO.search(texto) or LINK_SITE.search(texto))
+
+
 def fichas_citadas(texto: str, empresa: str = "casa_veraneio") -> str:
     """Fichas dos imóveis citados (pelo número ou pelo link do site) da empresa do trabalho; "" se nenhum.
     Link de OUTRA empresa mandado pelo usuário: a ficha entra marcada como exceção autorizada por ele.

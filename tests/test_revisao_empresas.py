@@ -71,3 +71,56 @@ def test_todas_as_empresas_busca_nas_tres_com_etiqueta():
 
 def test_ficha_com_empresa_todas_nao_quebra():
     assert isinstance(fichas.fichas_citadas("Compare o Lodge 20 com o Lodge 3", "*"), str)
+
+
+# --- Item 1.9: contexto velho e plano herdado de modelo fraco ---------------------------------------------------
+
+def test_historico_das_ultimas_24h_mais_a_troca_mais_recente():
+    import orquestrador
+
+    velho = {"texto": "Legenda do Lodge 35", "criada_em": "2026-10-20T10:00:00Z"}
+    ontem = {"texto": "Carrossel do feriado", "criada_em": "2026-10-21T10:00:00Z"}
+    agora = {"texto": "Com estes Lodges", "criada_em": tarefas._agora()}
+    assert orquestrador._recentes([velho, ontem, agora]) == [agora]
+    assert orquestrador._recentes([velho, ontem]) == [ontem]  # trabalho de ontem: a última troca continua
+
+
+def test_fichas_do_pedido_ou_da_ultima_troca_que_citou_imoveis(monkeypatch):
+    from agents import perfis
+
+    citados = []
+    monkeypatch.setattr(fichas, "fichas_citadas", lambda texto, empresa: citados.append(texto) or "")
+    historico = [{"texto": "Legenda do Lodge 35", "resposta": "...", "criada_em": tarefas._agora()},
+                 {"texto": "Carrossel com Lodge 02 e Lodge 119", "resposta": "...", "criada_em": tarefas._agora()},
+                 {"texto": "Respostas: data 20/11", "resposta": "...", "criada_em": tarefas._agora()}]
+    perfis.contexto("gestor", historico, "agora monte o carrossel")
+    assert "Lodge 119" in citados[-1] and "Lodge 35" not in citados[-1]
+    perfis.contexto("gestor", historico, "post do Lodge 7")
+    assert citados[-1] == "post do Lodge 7"
+
+
+def test_modelo_forte_refaz_o_plano_do_fraco(tmp_path, monkeypatch):
+    import threading
+
+    from agents import projeto
+
+    monkeypatch.setattr(projeto, "PASTA_PROJETOS", tmp_path)
+    plano = ('{"entendimento": "E", "duvida": "", "titulo": "T", "etapas": '
+             '[{"agente": "copywriter", "instrucao": "Textos", "fase": 1}]}')
+    chamadas = []
+
+    def executar(agente, descricao, esperado, papel):
+        chamadas.append(agente)
+        if "JSON com o entendimento" in esperado:
+            return plano
+        return f"entrega de {agente}"
+
+    pasta = tmp_path / "7"
+    (pasta / "etapas").mkdir(parents=True)
+    (pasta / "plano.json").write_text('[{"agente": "copywriter", "instrucao": "Lodge 35", "fase": 1}]', encoding="utf-8")
+    (pasta / "plano_modelo.txt").write_text("openrouter/fraco:free", encoding="utf-8")
+    (pasta / "etapas" / "1_copywriter.md").write_text("textos do Lodge 35", encoding="utf-8")
+    projeto.executar_projeto(7, "agora monte", "CTX", executar, threading.Event(), modelo="claude-code/max")
+    assert "Lodge 35" not in (pasta / "plano.json").read_text(encoding="utf-8")  # replanejado
+    assert (pasta / "plano_modelo.txt").read_text(encoding="utf-8") == "claude-code/max"
+    assert chamadas.count("copywriter") == 1  # a etapa do fraco foi refeita
