@@ -36,6 +36,7 @@ import cerebro_mapa
 import comercial
 import consolidacao_semanal
 import entrevista
+import folha_aprovacao
 import historico
 import insatisfacoes
 import orquestrador
@@ -191,6 +192,7 @@ app.include_router(consolidacao_semanal.rotas)
 app.include_router(triagem.rotas)
 app.include_router(caixa.rotas)
 app.include_router(insatisfacoes.rotas)
+app.include_router(folha_aprovacao.rotas)  # folha de aprovação da peça (Onda 2, designer-10)
 
 
 class Credenciais(BaseModel):

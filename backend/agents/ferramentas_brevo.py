@@ -1,6 +1,7 @@
 """Ferramenta do E-mail Marketing no Brevo: cria a campanha como RASCUNHO (decisão do Thomas, 26/10/2026).
 
-Nunca envia, nunca agenda e não escolhe lista: o Thomas revisa, põe as imagens e dispara pelo Brevo.
+Nunca envia, nunca agenda e não escolhe lista: o Thomas revisa, confere as fotos e dispara pelo Brevo. Cada imóvel
+entra com a foto de capa da página dele no site da empresa, ou com o aviso "FOTO DO LODGE N AQUI" (fotos_email.py).
 A chave é a do painel analítico (Sistema Casa Veraneio), lida do .env dele, montado só leitura em PAINEL_DIR
 (docker-compose.yml); nada é copiado para o Escritório.
 Remetente: o da última campanha enviada DA MESMA EMPRESA da tarefa (nunca o de outra marca); sem ela, um remetente
@@ -21,6 +22,7 @@ from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 
 import tarefas
+from agents import fotos_email
 
 API = "https://api.brevo.com/v3"
 ENV_PAINEL = Path(os.getenv("PAINEL_DIR", "/painel")) / ".env"
@@ -63,6 +65,7 @@ class _Rascunho(BaseModel):
     botao_principal_link: str = Field(description="Link do botão principal (site da empresa)")
     imoveis: list[_Imovel] = Field(default_factory=list, description="2 a 4 imóveis em destaque")
     fecho: str = Field("", description="Frase final")
+    com_fotos: bool = Field(True, description="false só se o usuário pedir o e-mail sem fotos")
     novo_email: bool = Field(False, description="true SÓ quando o usuário pedir outro e-mail ou uma versão B; ajustes "
                                                 "do mesmo e-mail alteram o rascunho já criado nesta conversa")
 
@@ -181,14 +184,16 @@ def _botao(texto: str, link: str, cor: str) -> str:
             f"{html.escape(texto)}</a>")
 
 
-def _html(r: _Rascunho, empresa: str) -> str:
+def _html(r: _Rascunho, empresa: str, fotos: list | None = None) -> str:
     cor, e = CORES.get(empresa, "#2f4a3a"), html.escape
+    fotos = fotos or [None] * len(r.imoveis)
     blocos = "".join(
         f'<tr><td style="padding:24px 32px;border-top:1px solid #e7e1d8">'
+        f"{fotos_email.bloco(f, i.botao_link) if f else ''}"
         f'<p style="margin:0;color:#7a7065;font-size:13px">{e(i.local)}</p>'
         f'<h3 style="margin:6px 0 10px;color:#2b2b2b;font-size:20px">{e(i.nome)}</h3>'
         f'<p style="margin:0 0 16px;color:#4a4a4a;font-size:15px;line-height:1.5">{e(i.texto)}</p>'
-        f"{_botao(i.botao_texto, i.botao_link, cor)}</td></tr>" for i in r.imoveis)
+        f"{_botao(i.botao_texto, i.botao_link, cor)}</td></tr>" for i, f in zip(r.imoveis, fotos))
     fecho = f'<tr><td style="padding:24px 32px;color:#4a4a4a;font-size:15px">{e(r.fecho)}</td></tr>' if r.fecho else ""
     return ('<!DOCTYPE html><html><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1"></head>'
@@ -206,7 +211,7 @@ def _html(r: _Rascunho, empresa: str) -> str:
 class CriarRascunhoBrevo(BaseTool):
     name: str = "criar_rascunho_brevo"
     description: str = ("Cria a campanha de e-mail como RASCUNHO no Brevo (nunca envia, agenda nem escolhe lista; o "
-                        "Thomas revisa, põe as imagens e dispara). Use depois de escrever o e-mail completo no padrão "
+                        "Thomas revisa e dispara; cada imóvel já vai com a foto da página dele no site). Use depois de escrever o e-mail completo no padrão "
                         "do manual. Nos ajustes do mesmo e-mail, chame de novo: o mesmo rascunho é atualizado. "
                         "Devolve o número do rascunho ou o erro.")
     args_schema: type[BaseModel] = _Rascunho
@@ -226,13 +231,14 @@ class CriarRascunhoBrevo(BaseTool):
         nome = nome_interno(self.empresa, mes, r.nome_campanha)
         anterior = None if r.novo_email else _rascunho_da_conversa(self.tarefa_id, mes)
         aviso = ""
+        fotos = fotos_email.fotos(r.imoveis, self.empresa) if r.com_fotos else []
         try:
             remetente = _remetente(chave, self.empresa)
             if not remetente:
                 return (f"Não achei no Brevo um remetente da {NOMES[self.empresa]} (nenhuma campanha enviada por ela "
                         "nem remetente com o nome dela). Entregue o e-mail só no chat.")
             corpo = {"name": nome, "subject": r.assunto, "previewText": r.pre_header,
-                     "htmlContent": _html(r, self.empresa), "sender": remetente}
+                     "htmlContent": _html(r, self.empresa, fotos), "sender": remetente}
             campanha, versao = None, 1
             if anterior:
                 atual = _api("GET", f"/emailCampaigns/{anterior[0]}", chave)
@@ -252,11 +258,12 @@ class CriarRascunhoBrevo(BaseTool):
         if self.tarefa_id:
             tarefas.registrar_evento(self.tarefa_id, "rascunho_brevo", "email_marketing",
                                      detalhe=f"campanha {campanha} (alterada {alterada}) {mes}: {r.assunto}")
+        linha_fotos = fotos_email.resumo(r.imoveis, fotos)
         if versao > 1:
             return (f"Atualizei o rascunho {campanha} no Brevo (versão {versao}, \"{nome}\"), sem criar outro. "
-                    "Continua como rascunho: falta escolher a lista, revisar, pôr as imagens e enviar.")
+                    f"Continua como rascunho: falta escolher a lista, revisar, conferir as fotos e enviar.{linha_fotos}")
         return (f"Rascunho criado no Brevo (campanha {campanha}, \"{nome}\").{aviso} Está em Campanhas > E-mail, "
-                "como rascunho: falta escolher a lista, revisar, pôr as imagens e enviar.")
+                f"como rascunho: falta escolher a lista, revisar, conferir as fotos e enviar.{linha_fotos}")
 
 
 def para(agente_id: str, empresa: str, tarefa_id: int = 0) -> list[BaseTool]:

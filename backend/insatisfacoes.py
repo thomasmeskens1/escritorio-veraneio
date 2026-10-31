@@ -24,6 +24,17 @@ CATEGORIAS = {
     "demora": "Demorou demais ou travou",
     "outro": "Outro motivo",
 }
+# Onde errou (Onda 2, cerebro-20): num projeto com várias etapas o 👎 caía todo no último agente. Pergunta opcional
+# do pop-up; o padrão é "não sei". A consolidação semanal usa para propor a regra ao agente daquela etapa.
+ETAPAS = {
+    "plano": "Plano/briefing",
+    "texto": "Texto",
+    "imagem": "Imagem/vídeo",
+    "dados": "Dados do Lodge",
+    "nao_sei": "Não sei",
+}
+AGENTES_DA_ETAPA = {"plano": "gestor", "texto": "copywriter", "imagem": "criador_imagens ou editor_video",
+                    "dados": "quem montou as fichas/dados (ou *)"}
 # Reação negativa escrita no chat: o pop-up abre depois do envio (js/avaliacao.js usa a mesma lista).
 NEGATIVA = re.compile(
     r"\b(n[aã]o\s+(gostei|curti|era\s+(isso|o\s+que)|foi\s+(isso|o\s+que)|ficou\s+(bom|legal)|[ée]\s+(isso|o\s+que))|"
@@ -45,6 +56,8 @@ def _db():
     db = tarefas._db()
     if not _pronto:
         db.execute(_ESQUEMA)
+        if "etapa" not in {c[1] for c in db.execute("PRAGMA table_info(insatisfacoes)")}:
+            db.execute("ALTER TABLE insatisfacoes ADD COLUMN etapa TEXT")
         _pronto = True
     return db
 
@@ -53,16 +66,51 @@ def e_negativa(texto: str) -> bool:
     return bool(NEGATIVA.search(texto or ""))
 
 
-def registrar(linha, usuario: str, origem: str, categoria: str, motivo: str = "", mensagem: str = "") -> int:
+def registrar(linha, usuario: str, origem: str, categoria: str, motivo: str = "", mensagem: str = "",
+              etapa: str = "") -> int:
     """Guarda a insatisfação com o pedido e a resposta da tarefa. `origem`: 'voto' (👎) ou 'mensagem' (chat)."""
     with _db() as db:
         cursor = db.execute(
             "INSERT INTO insatisfacoes (em, usuario, andar, agente, tarefa_id, origem, categoria, motivo, mensagem, "
-            "pedido, resposta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "pedido, resposta, etapa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (tarefas._agora(), usuario, linha["andar"], linha["agente"], linha["id"], origem,
              categoria if categoria in CATEGORIAS else "outro", (motivo or "")[:1000] or None,
-             (mensagem or "")[:1000] or None, (linha["texto"] or "")[:4000], (linha["resposta"] or "")[:4000]))
+             (mensagem or "")[:1000] or None, (linha["texto"] or "")[:4000], (linha["resposta"] or "")[:4000],
+             etapa if etapa in ETAPAS and etapa != "nao_sei" else None))
     return cursor.lastrowid
+
+
+def texto_seguro(texto: str) -> str:
+    """Motivo escrito pela equipe antes de ir ao Max: sem chaves/tokens (segredos.limpar) e sem e-mail, telefone,
+    CPF/CNPJ de cliente (cerebro.sem_contatos)."""
+    import cerebro  # import tardio: o Cérebro carrega o banco e os embeddings
+    import segredos
+
+    return cerebro.sem_contatos(segredos.limpar(texto or ""))
+
+
+def da_semana(desde: str) -> list[dict]:
+    """Insatisfações desde `desde`, com a empresa da tarefa e o texto já filtrado, para a consolidação semanal
+    (Onda 2, cerebro-08: antes o motivo do 👎 ficava só para o master e a regra saía "preventiva")."""
+    linhas = _db().execute(
+        "SELECT i.agente, i.categoria, i.etapa, i.motivo, i.nota, i.pedido, t.empresa FROM insatisfacoes i "
+        "LEFT JOIN tarefas t ON t.id = i.tarefa_id WHERE i.em >= ? ORDER BY i.id", (desde,)).fetchall()
+    return [{"agente": l["agente"], "empresa": l["empresa"], "categoria": CATEGORIAS.get(l["categoria"], l["categoria"]),
+             "etapa": ETAPAS.get(l["etapa"] or "", ""), "motivo": texto_seguro(l["motivo"] or "")[:300],
+             "nota_master": texto_seguro(l["nota"] or "")[:300], "pedido": texto_seguro(l["pedido"] or "")[:200]}
+            for l in linhas]
+
+
+def so_demora(tarefa_ids) -> set[int]:
+    """Tarefas cujas insatisfações são todas "demora": o 👎 delas não diz nada sobre o conteúdo (reranker)."""
+    try:
+        linhas = _db().execute("SELECT tarefa_id, categoria FROM insatisfacoes WHERE tarefa_id IS NOT NULL").fetchall()
+    except Exception:
+        return set()
+    categorias: dict[int, set] = {}
+    for l in linhas:
+        categorias.setdefault(l["tarefa_id"], set()).add(l["categoria"])
+    return {t for t in tarefa_ids if categorias.get(t) == {"demora"}}
 
 
 def novas() -> int:
@@ -89,6 +137,7 @@ class Insatisfacao(BaseModel):
     motivo: str = Field("", max_length=1000)
     mensagem: str = Field("", max_length=1000)
     origem: str = Field("voto", pattern="^(voto|mensagem)$")
+    etapa: str = Field("", max_length=20)  # opcional: onde errou (ETAPAS)
 
 
 @rotas.post("")
@@ -99,7 +148,8 @@ def criar(dados: Insatisfacao, authorization: str = Header("")):
         raise HTTPException(status_code=404, detail="Tarefa não encontrada")
     if not dados.motivo.strip() and dados.categoria not in CATEGORIAS:
         raise HTTPException(status_code=422, detail="Diga o motivo.")
-    novo = registrar(linha, usuario["sub"], dados.origem, dados.categoria, dados.motivo.strip(), dados.mensagem.strip())
+    novo = registrar(linha, usuario["sub"], dados.origem, dados.categoria, dados.motivo.strip(), dados.mensagem.strip(),
+                     dados.etapa)
     return {"ok": True, "id": novo}
 
 
@@ -114,8 +164,9 @@ def listar(status: str = "", authorization: str = Header("")):
         agente = buscar_agente(l["andar"], l["agente"])
         itens.append({**dict(l), "usuario_nome": nomes.get(l["usuario"], l["usuario"]),
                       "agente_nome": agente.nome if agente else l["agente"],
-                      "categoria_nome": CATEGORIAS.get(l["categoria"], l["categoria"])})
-    return {"itens": itens, "novas": novas(), "categorias": CATEGORIAS}
+                      "categoria_nome": CATEGORIAS.get(l["categoria"], l["categoria"]),
+                      "etapa_nome": ETAPAS.get(l["etapa"] or "", "")})
+    return {"itens": itens, "novas": novas(), "categorias": CATEGORIAS, "etapas": ETAPAS}
 
 
 class Analise(BaseModel):

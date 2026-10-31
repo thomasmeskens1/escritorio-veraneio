@@ -29,6 +29,7 @@ import link_drive
 import comum
 import emails_brevo
 import painel_analitico
+import pasta_final
 import planilha_lodges
 import redes_empresas
 import site_casaveraneio
@@ -590,6 +591,24 @@ def enviar_bloqueios(producao: dict, rascunho: Path) -> None:
         log(f"   bloqueios não enviados ao backend ({erro})")
 
 
+def organizar_final(producao: dict, entrega: Path, ambiente: dict) -> str:
+    """FINAL/ com a versão vigente de cada arquivo e a folha de aprovação, que vai ao chat (pasta_final.py). Nunca
+    derruba a entrega: a peça já está no Drive."""
+    try:
+        vigentes = pasta_final.atualizar(entrega)
+        folha = pasta_final.folha(entrega / pasta_final.PASTA, vigentes, entrega.name, ambiente)
+    except Exception as erro:  # noqa: BLE001
+        log(f"   pasta FINAL não atualizada ({erro})")
+        return ""
+    if folha:
+        try:
+            comum.enviar_arquivo(f"/api/producao/{producao['tarefa_id']}/folha", folha)
+        except Exception as erro:  # noqa: BLE001 - a folha fica no Drive mesmo assim
+            log(f"   folha de aprovação não enviada ao chat ({erro})")
+    return (f"Pasta {pasta_final.PASTA}/: {len(vigentes)} arquivo(s) na versão vigente (sem versões antigas)"
+            + (f"; folha de aprovação em {pasta_final.PASTA}/{pasta_final.NOME_FOLHA}." if folha else "."))
+
+
 def produzir(producao: dict) -> None:
     entrega = pasta_de_entrega(producao)
     relativa = entrega.relative_to(DRIVE).as_posix()
@@ -652,6 +671,8 @@ def produzir(producao: dict) -> None:
             log(f"   {conferencia}")
         if producao.get("monday"):  # antes de concluir: o item já recebe os criativos quando vira "Revisão"
             enviar_criativos(producao, entrega, arquivos)
+        if novos and (linha_final := organizar_final(producao, entrega, ambiente)):
+            resumo = f"{resumo}\n\n{linha_final}"
     except comum.MaxSemCota as erro:
         log(f"   Max sem cota agora; a peça volta para a fila ({erro})")
         try:

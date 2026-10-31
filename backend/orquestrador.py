@@ -430,7 +430,14 @@ def _mensagem(linha) -> dict:
     return {"tipo": "resposta_agente", **alvo, "texto": linha["resposta"], "modelo": linha["modelo"],
             "dificuldade": linha["dificuldade"], "tempo_segundos": round(linha["tempo_segundos"], 1),
             "adiada": linha["motivo"] is not None, "link": _link(linha),
-            "relatorio": relatorios.link_de(linha["id"])}
+            "relatorio": relatorios.link_de(linha["id"]), "anexos": _folha(linha)}
+
+
+def _folha(linha) -> list[dict]:
+    """Folha de aprovação da produção do Max (miniaturas numeradas), mostrada junto com a resposta."""
+    import folha_aprovacao  # import tardio: anexos -> produção -> orquestrador
+
+    return folha_aprovacao.de(linha["id"]) if linha["modelo"] == folha_aprovacao.producao.MODELO_MAX else []
 
 
 def _link(linha) -> str | None:

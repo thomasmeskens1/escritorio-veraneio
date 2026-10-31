@@ -1,8 +1,8 @@
 """Consolidação semanal do Cérebro (Thomas, 29/10/2026): toda segunda às 07:00 o Max lê a semana e propõe o que
 aprendemos.
 
-Junta, por empresa e por agente, as tarefas da semana (concluídas, falhas, tempo), os 👍/👎 com comentário e os
-elogios e correções. O Max (Claude Code, pela fila do trabalhador) devolve até 6 aprendizados curtos, que entram na
+Junta, por empresa e por agente, as tarefas da semana (concluídas, falhas, tempo), os 👍/👎 com comentário, os
+elogios e correções e os motivos das insatisfações (categoria, etapa e texto sem contatos nem segredos). O Max (Claude Code, pela fila do trabalhador) devolve até 6 aprendizados curtos, que entram na
 lista "Correções e elogios" como "🧠 Aprendizado da semana": a Diretoria aprova (vira regra para o agente ou para
 todos), edita ou descarta. Nada vira regra sozinho. Na mesma rodada, a rede neural do Cérebro é retreinada.
 """
@@ -10,13 +10,14 @@ todos), edita ou descarta. Nada vira regra sozinho. Na mesma rodada, a rede neur
 import asyncio
 import json
 import logging
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Header, HTTPException
 
 import correcoes
 import empresas
+import insatisfacoes
 import tarefas
 from auth import validar_token
 from estado import ANDARES
@@ -41,6 +42,7 @@ def _nomes() -> dict[str, str]:
 def coletar(dias: int = 7) -> dict:
     """Resumo da semana por empresa e agente (sem dados de clientes: só pedidos curtos, notas e comentários)."""
     db = correcoes._db()
+    limpo = insatisfacoes.texto_seguro  # nada vai ao Max com contato de cliente ou segredo
     desde = (datetime.now(timezone.utc) - timedelta(days=dias)).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
         votos = {l["tarefa_id"]: (l["valor"], l["comentario"]) for l in db.execute(
@@ -48,7 +50,8 @@ def coletar(dias: int = 7) -> dict:
     except Exception:
         votos = {}
     grupos: dict = defaultdict(lambda: {"concluidas": 0, "falhas": 0, "tempo_total": 0.0, "positivos": 0,
-                                        "negativos": 0, "exemplos": []})
+                                        "negativos": 0, "exemplos": [], "insatisfacoes": [],
+                                        "motivos": Counter()})
     for t in db.execute("SELECT id, agente, empresa, status, texto, tempo_segundos FROM tarefas WHERE criada_em >= ? "
                         "AND status IN ('concluida', 'falhou')", (desde,)):
         g = grupos[(empresas.nome(t["empresa"]), t["agente"])]
@@ -58,22 +61,31 @@ def coletar(dias: int = 7) -> dict:
         if valor:
             g["positivos" if valor > 0 else "negativos"] += 1
         if valor < 0 and len(g["exemplos"]) < MAX_EXEMPLOS_POR_AGENTE:
-            g["exemplos"].append({"pedido": t["texto"][:200], "nota": "👎", "comentario": comentario or ""})
+            g["exemplos"].append({"pedido": limpo(t["texto"])[:200], "nota": "👎", "comentario": limpo(comentario)})
     for o in db.execute("SELECT o.agente, o.tipo, o.correcao, t.empresa FROM observacoes o LEFT JOIN tarefas t "
                         "ON t.id = o.tarefa_anterior WHERE o.em >= ? AND o.tipo IN ('elogio', 'correcao')", (desde,)):
         g = grupos[(empresas.nome(o["empresa"]) if o["empresa"] else "—", o["agente"])]
         if len(g["exemplos"]) < MAX_EXEMPLOS_POR_AGENTE:
-            g["exemplos"].append({"tipo": o["tipo"], "texto": o["correcao"][:300]})
+            g["exemplos"].append({"tipo": o["tipo"], "texto": limpo(o["correcao"])[:300]})
+    # Motivo do 👎 (Onda 2, cerebro-08 e cerebro-20): categoria, etapa onde errou e texto já sem contatos/segredos.
+    for i in insatisfacoes.da_semana(desde):
+        g = grupos[(empresas.nome(i["empresa"]) if i["empresa"] else "—", i["agente"])]
+        g["motivos"][i["categoria"]] += 1
+        if len(g["insatisfacoes"]) < MAX_EXEMPLOS_POR_AGENTE:
+            g["insatisfacoes"].append({k: v for k, v in i.items() if v and k not in ("agente", "empresa")})
     nomes = _nomes()
     return {"desde": desde, "grupos": [
         {"empresa": empresa, "agente": agente, "agente_nome": nomes.get(agente, agente),
          "concluidas": g["concluidas"], "falhas": g["falhas"], "positivos": g["positivos"], "negativos": g["negativos"],
-         "tempo_medio_s": round(g["tempo_total"] / max(g["concluidas"] + g["falhas"], 1)), "exemplos": g["exemplos"]}
+         "tempo_medio_s": round(g["tempo_total"] / max(g["concluidas"] + g["falhas"], 1)), "exemplos": g["exemplos"],
+         **({"motivos_do_negativo": dict(g["motivos"].most_common()), "insatisfacoes": g["insatisfacoes"]}
+            if g["motivos"] else {})}
         for (empresa, agente), g in sorted(grupos.items(), key=lambda x: (str(x[0][0]), x[0][1]))]}
 
 
 def _prompt(dados: dict) -> str:
     agentes = ", ".join(f"{i} ({n})" for i, n in sorted(_nomes().items()))
+    etapas = "; ".join(f"{insatisfacoes.ETAPAS[e]} = {a}" for e, a in insatisfacoes.AGENTES_DA_ETAPA.items())
     return (
         "Você é o Cérebro do Escritório Veraneio e faz a consolidação semanal do que a equipe aprendeu. Não pesquise "
         "na web: trabalhe só com os dados abaixo (tarefas da semana por empresa e agente, notas 👍/👎, elogios e "
@@ -82,6 +94,10 @@ def _prompt(dados: dict) -> str:
         f"Proponha no máximo {MAX_APRENDIZADOS} aprendizados práticos, cada um uma regra curta e acionável (até 300 "
         "caracteres) que o agente deve seguir daqui em diante, apoiada nos dados (cite a evidência em `porque`). "
         "Prefira padrões repetidos a casos isolados. Se não houver nada sólido, devolva lista vazia.\n\n"
+        "Quando houver `motivos_do_negativo`, o aprendizado mira a causa real e o `porque` cita a categoria mais "
+        "repetida com a contagem (ex.: \"3 de 4 👎 do Designer foram dados errados\"); \"Demorou demais ou travou\" é "
+        "problema de operação, não vira regra de conteúdo. Quando a insatisfação disser a `etapa` onde errou, proponha "
+        f"a regra ao agente daquela etapa ({etapas}), não ao último agente da entrega.\n\n"
         f"Agentes válidos (use o id; \"*\" = todos os agentes): {agentes}\n\n"
         f"Dados da semana:\n{json.dumps(dados, ensure_ascii=False)[:20000]}\n\n"
         "Responda SOMENTE com este bloco:\n<<APRENDIZADOS>>\n"

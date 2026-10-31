@@ -338,12 +338,13 @@ function mensagemDoAgente(andar, agente, dados) {
   const meta = metadadosResposta(dados);
   const autor = !meta && dados.modelo ? `${nome} · ${dados.modelo}` : nome;
   return { autor, texto: dados.texto, tipo: 'agente', meta, tarefa_id: dados.tarefa_id, link: dados.link,
-    relatorio: dados.relatorio, formulario_encerrado: dados.formulario_encerrado, avaliacao: dados.avaliacao };
+    relatorio: dados.relatorio, formulario_encerrado: dados.formulario_encerrado, avaliacao: dados.avaliacao,
+    anexos: dados.anexos }; // anexos: folha de aprovação da peça do Max (backend/folha_aprovacao.py)
 }
 
 function converterDoServidor(andar, agente, m) {
   if (m.autor === 'voce') return { autor: 'Você', texto: m.texto, tipo: 'voce', tarefa_id: m.tarefa_id, anexos: m.anexos };
-  if (m.autor === 'agente') return mensagemDoAgente(andar, agente, { ...m.meta, texto: m.texto, tarefa_id: m.tarefa_id });
+  if (m.autor === 'agente') return mensagemDoAgente(andar, agente, { ...m.meta, texto: m.texto, tarefa_id: m.tarefa_id, anexos: m.anexos });
   return { autor: 'sistema', texto: m.texto, tipo: 'sistema', tarefa_id: m.tarefa_id };
 }
 
