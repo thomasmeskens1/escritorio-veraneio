@@ -60,7 +60,15 @@ Cores do status: cinza = dormindo, verde = disponível, laranja = trabalhando.
 - Cada tarefa é classificada automaticamente como simples, média ou complexa.
 - Primeiro tentam modelos de IA gratuitos; se um falhar, o próximo assume com o histórico recente da conversa.
 - Se demorar demais ou falhar, a tarefa é ADIADA para a fila e a resposta chega assim que for processada, mesmo que você tenha saído.
-- Clique no Despachante, no Porão, para ver o painel com todas as tarefas e tempos.
+- Para acompanhar os seus pedidos: o painel "Andamento" no chat mostra cada passo, e a Caixa de entrada (ícone no topo) junta o que espera você e o que ficou pronto. A resposta sempre volta ao chat onde você pediu.
+- O painel completo da fila (Despachante, no Porão) é só para quem tem acesso ao Porão; indique-o apenas a essas pessoas.
+
+## Caixa de entrada, Triagem e avaliação
+- Caixa de entrada (ícone no topo, com contador): "Para aprovar" (formulários e produções esperando você) e "Concluídos" (pedidos prontos que você ainda não abriu). Clicar abre o chat do pedido.
+- Triagem: dentro de um andar, sem chat ou janela aberta, aperte a barra de espaço duas vezes. Escreva o pedido e a triagem indica o agente certo; o pedido vai para o chat dele. Trocar o agente sugerido ensina a triagem.
+- 👍/👎 em cada resposta: o 👍 ensina o Cérebro o que ajudou. O 👎 (ou uma frase como "não era isso") abre um pop-up com o motivo; com texto, ele vira uma correção para a Diretoria aprovar. Clicar de novo no voto retira o voto.
+- Ajuste de peça: escreva no próprio chat "Ajuste na peça #N: ..." (ou use "Pedir ajuste"); vai para quem produziu, e a nova versão volta para esse chat.
+- Monday: item enviado pelo botão "Enviar" do quadro volta com o resultado no próprio item, e você recebe um aviso no sino do Monday. Item citado no chat recebe a resposta no chat e no item.
 
 ## Histórico, rotinas e novos agentes
 - O chat guarda o histórico: ao abrir um agente, a conversa anterior volta (inclusive em outro computador).

@@ -1,0 +1,46 @@
+#!/bin/sh
+# Antes de cada push (repositório PÚBLICO): o gitleaks, se estiver instalado, e SEMPRE o verificador próprio
+# (scripts/verificar_segredos.py, com os padrões privados de backend/dados/padroes_segredos.txt).
+# Ativação: python scripts/instalar_hooks.py. Pular só com certeza absoluta: git push --no-verify.
+
+raiz=$(git rev-parse --show-toplevel) || exit 1
+entrada=$(cat)
+falhou=0
+
+if command -v gitleaks >/dev/null 2>&1; then
+  while read -r ref_local sha_local ref_remota sha_remoto; do
+    [ -n "$sha_local" ] || continue
+    case "$sha_local" in *[!0]*) ;; *) continue ;; esac   # remoção de branch: nada sai
+    case "$sha_remoto" in
+      *[!0]*) faixa="$sha_remoto..$sha_local" ;;
+      *) faixa="$sha_local --not --remotes" ;;
+    esac
+    if gitleaks git --help >/dev/null 2>&1; then
+      gitleaks git --no-banner --redact --log-opts="$faixa" "$raiz" || falhou=1
+    else
+      gitleaks detect --no-banner --redact --source "$raiz" --log-opts="$faixa" || falhou=1
+    fi
+  done <<EOF
+$entrada
+EOF
+else
+  echo "pre-push: gitleaks não instalado; segue só o verificador próprio." >&2
+fi
+
+python=""
+for candidato in python3 python py; do
+  if command -v "$candidato" >/dev/null 2>&1; then python=$candidato; break; fi
+done
+if [ -z "$python" ]; then
+  echo "pre-push: Python não encontrado; push bloqueado (o verificador de segredos não pôde rodar)." >&2
+  exit 1
+fi
+"$python" "$raiz/scripts/verificar_segredos.py" --pre-push <<EOF || falhou=1
+$entrada
+EOF
+
+if [ "$falhou" -ne 0 ]; then
+  echo "pre-push: push bloqueado pelo verificador de segredos." >&2
+  exit 1
+fi
+exit 0

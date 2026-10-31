@@ -4,7 +4,9 @@ Liberado pelo Thomas (26/10/2026) junto com o painel analítico (C:\\dev\\social
 do .env do painel na hora (nunca copiada para o Escritório) e a API é usada SÓ para leitura.
 Cada campanha enviada vira um documento da empresa dela: assunto, pré-header, remetente, o texto do e-mail na
 ordem em que aparece, os botões (CTAs), quantas imagens e o desempenho (abertura e cliques, do painel analítico).
-Marca: a regra do painel (nome com Corp, off-site, empresa, confraternização...) mais o assunto (painel_analitico).
+Marca: o prefixo que o Escritório põe nos rascunhos ("[Rascunho Escritório] VERO | ..."); senão Casa Vero pelo nome
+("Vero 76", remetente Casa Vero) e a regra do painel (nome com Corp, off-site, empresa, confraternização...) mais o
+assunto (painel_analitico). O resto é da Casa Veraneio.
 Telefones e WhatsApp saem do texto (regra de ouro).
 
 Uso: python scripts/max/emails_brevo.py (também roda no ciclo de 6 h do trabalhador).
@@ -25,6 +27,10 @@ from sites_empresas import TELEFONE
 
 ENV_PAINEL = BANCO.parent / ".env"
 API = "https://api.brevo.com/v3"
+# Mesmo critério de backend/agents/ferramentas_brevo.py (empresa_da_campanha).
+PREFIXOS = {"VERANEIO": "casa_veraneio", "CORP": "cv_corporativo", "VERO": "casa_vero"}
+NOME_PADRAO = re.compile(r"\[Rascunho Escrit[óo]rio\]\s*(?:(VERANEIO|CORP|VERO)\s*\|\s*)?(?:\d{4}-\d{2}\s*\|\s*)?", re.I)
+VERO = re.compile(r"\bvero\b", re.I)
 
 
 def _chave() -> str | None:
@@ -34,6 +40,15 @@ def _chave() -> str | None:
         if linha.startswith("BREVO_API_KEY="):
             return linha.split("=", 1)[1].strip()
     return None
+
+
+def empresa_da_campanha(nome: str, assunto: str, remetente: str = "", marca_painel: str | None = None) -> str:
+    if (achado := NOME_PADRAO.match((nome or "").strip())) and achado.group(1):
+        return PREFIXOS[achado.group(1).upper()]
+    texto = f"{NOME_PADRAO.sub('', nome or '')} {assunto or ''} {remetente or ''}"
+    if VERO.search(texto):
+        return "casa_vero"
+    return "cv_corporativo" if marca_painel == "corp" or EMAIL_CORP.search(texto) else "casa_veraneio"
 
 
 def _get(caminho: str, chave: str) -> dict:
@@ -78,8 +93,8 @@ def documentos() -> list[dict]:
         if not conteudo or (numeros.get(c["id"]) or {}).get("teste"):
             continue
         assunto, nome = c.get("subject") or "", c.get("name") or ""
-        empresa = "cv_corporativo" if (numeros.get(c["id"], {}).get("marca") == "corp"
-                                       or EMAIL_CORP.search(f"{nome} {assunto}")) else "casa_veraneio"
+        empresa = empresa_da_campanha(nome, assunto, (c.get("sender") or {}).get("name") or "",
+                                      numeros.get(c["id"], {}).get("marca"))
         enviado = (c.get("sentDate") or c.get("scheduledAt") or "")[:10]
         partes = [f"Fonte: Brevo, campanha {c['id']} \"{nome}\" (e-mail marketing enviado em {enviado})",
                   f"Assunto: {assunto}", f"Pré-header: {c.get('previewText') or '—'}",

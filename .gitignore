@@ -4,8 +4,15 @@ __pycache__/
 .venv/
 venv/
 .env
+# Variantes do .env (.env.local, .env.prod...). O .env.example também fica fora até alguém conferir que ele tem
+# só nomes de variáveis, sem valores reais (o repositório é público).
+.env.*
 .pytest_cache/
 backend/dados/
+# Credenciais soltas em qualquer pasta (tokens OAuth, chaves privadas, padrões privados do verificador de segredos)
+*.token.json
+*.pem
+padroes_segredos.txt
 
 # ===== Node / ferramentas =====
 node_modules/
@@ -33,6 +40,10 @@ Thumbs.db
 .hive-mind/
 .claude-flow/*
 !.claude-flow/config.yaml
+# Estado do Ruflo criado em subpastas (ex.: backend/.claude-flow/sessions, com trechos de conversa e caminhos)
+/*/**/.claude-flow/
+/*/**/.swarm/
+/*/**/.hive-mind/
 
 # Conteúdo genérico gerado pelo `npx ruflo@latest init` (recriável)
 .claude/agents/
