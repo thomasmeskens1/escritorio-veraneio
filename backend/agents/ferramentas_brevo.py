@@ -44,7 +44,7 @@ RODAPE = ('<tr><td style="padding:24px 32px;border-top:1px solid #e7e1d8;color:#
 
 
 class _Imovel(BaseModel):
-    local: str = Field(description="Cidade e capacidade, ex.: 'Atibaia, SP | Até 40 hóspedes'")
+    local: str = Field(description="Cidade / UF e capacidade, ex.: 'Atibaia / SP | Até 40 hóspedes'")
     nome: str = Field(description="Ex.: 'Lodge 16' ou 'Vero 76'")
     texto: str = Field(description="1 a 2 frases com os diferenciais da ficha")
     botao_texto: str = Field(description="Ex.: 'QUERO CONHECER O LODGE 16'")
@@ -100,7 +100,38 @@ def _chave() -> str | None:
     return None
 
 
+# Trava (prospectador-16, 31/10/2026): o Brevo só recebe contato com consentimento (cadastro ou pedido da própria
+# pessoa). Lead da Prospecção Ativa nunca vira contato nem lista: e-mail frio em massa fere a política antispam do
+# Brevo e pode suspender a conta das 3 empresas. Esta ferramenta só lê campanhas/remetentes e grava rascunho; nunca
+# toca em contatos, listas ou importação, e nunca escolhe destinatários.
+CAMINHOS_PERMITIDOS = ("/emailCampaigns", "/senders")
+CAMPOS_PROIBIDOS = ("recipients", "listIds", "scheduledAt")
+LEAD_PROSPECCAO = re.compile(r"prospec[cç][aã]o|\bprospect\w*|\bleads?\s+(?:d[aeo]s?\s+)?(?:prospec|comercial|monday)",
+                             re.I)
+RECUSA_PROSPECCAO = ("Lead da Prospecção Ativa nunca entra em lista nem campanha do Brevo (só contato com "
+                     "consentimento recebe e-mail marketing). O primeiro contato com o lead é individual, pelo "
+                     "comercial, do e-mail de trabalho. Não criei rascunho: entregue o texto só no chat.")
+
+
+class BrevoBloqueado(PermissionError):
+    """Chamada ao Brevo fora do que esta ferramenta pode fazer (contatos, listas, importação, destinatários)."""
+
+
+def _conferir(metodo: str, caminho: str, corpo: dict | None) -> None:
+    if not caminho.startswith(CAMINHOS_PERMITIDOS) or re.search(r"/(contacts|lists|import)\b", caminho, re.I):
+        raise BrevoBloqueado(f"Brevo: {metodo} {caminho.split('?')[0]} não é permitido (só campanhas e remetentes).")
+    if metodo != "GET" and (corpo is None or any(c in corpo for c in CAMPOS_PROIBIDOS)):
+        raise BrevoBloqueado("Brevo: o rascunho nunca escolhe lista, destinatários nem agendamento.")
+
+
+def pedido_de_prospeccao(tarefa_id: int) -> bool:
+    """O pedido da tarefa fala dos leads da prospecção? (texto do usuário e contexto anexado, ex.: item do Monday)"""
+    linha = tarefas.obter(tarefa_id) if tarefa_id else None
+    return bool(linha) and bool(LEAD_PROSPECCAO.search(f"{linha['texto']}\n{linha['contexto_anexos'] or ''}"))
+
+
 def _api(metodo: str, caminho: str, chave: str, corpo: dict | None = None) -> dict:
+    _conferir(metodo, caminho, corpo)  # antes de qualquer rede
     requisicao = urllib.request.Request(f"{API}{caminho}", method=metodo,
                                         data=json.dumps(corpo).encode() if corpo is not None else None,
                                         headers={"api-key": chave, "accept": "application/json",
@@ -185,6 +216,8 @@ class CriarRascunhoBrevo(BaseTool):
     def _run(self, **campos) -> str:
         if self.empresa not in NOMES:
             return "Empresa da conversa não reconhecida para o Brevo. Entregue o e-mail só no chat."
+        if pedido_de_prospeccao(self.tarefa_id):
+            return RECUSA_PROSPECCAO
         chave = _chave()
         if not chave:
             return "Brevo indisponível (chave do painel não encontrada). Entregue o e-mail só no chat."
@@ -212,6 +245,8 @@ class CriarRascunhoBrevo(BaseTool):
             if campanha is None:
                 campanha = _api("POST", "/emailCampaigns", chave, corpo).get("id")
             alterada = _api("GET", f"/emailCampaigns/{campanha}", chave).get("modifiedAt") or ""
+        except BrevoBloqueado as erro:
+            return f"{erro} Entregue o e-mail só no chat."
         except Exception as erro:
             return f"Não foi possível salvar o rascunho no Brevo: {erro}"
         if self.tarefa_id:

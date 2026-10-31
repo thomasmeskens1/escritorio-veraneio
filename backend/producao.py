@@ -30,6 +30,7 @@ import fichas
 import monday
 import segredos
 import tarefas
+import uso_max
 from auth import validar_token
 from conexoes import gerenciador
 from agents.perfis import _historico_relevante
@@ -330,11 +331,13 @@ class Conclusao(BaseModel):
     arquivos: list[str] = []
     link: str = ""           # pasta no Google Drive (botão "Visualizar"); vazio se o Drive ainda não sincronizou
     so_texto: bool = False   # pedido só de texto: o resumo É a entrega (sem arquivo nem pasta no Drive)
+    uso: uso_max.Uso | None = None  # números de consumo do Max (trabalhador novo; o antigo não envia)
 
 
 class Falha(BaseModel):
     erro: str
     texto: str = ""          # o que o Max escreveu antes de falhar (ex.: o motivo de não ter gerado o arquivo)
+    uso: uso_max.Uso | None = None
 
 
 class Bloqueios(BaseModel):
@@ -343,6 +346,17 @@ class Bloqueios(BaseModel):
 
 class Resultado(BaseModel):
     resultado: str
+    uso: uso_max.Uso | None = None
+
+
+def _registrar_uso(trabalho: dict | None, status: str, uso: "uso_max.Uso | None", saida: str) -> None:
+    """Consumo do trabalho do Max que terminou (despachante-07). Texto: a tarefa e o agente vêm no payload."""
+    if not trabalho:
+        return
+    payload = trabalho.get("payload") or {}
+    uso_max.registrar(trabalho["tipo"], status, uso, tarefa_id=payload.get("tarefa_id"), trabalho_id=trabalho["id"],
+                      agente=payload.get("agente") or "", chars_entrada=len(payload.get("prompt") or ""),
+                      chars_saida=len(saida or ""))
 
 
 class NovoTrabalho(BaseModel):
@@ -432,6 +446,7 @@ async def concluir_trabalho(trabalho_id: int, dados: Resultado, authorization: s
     _exigir_operador(authorization)
     dados.resultado = segredos.limpar(dados.resultado)  # o que o Max devolve nunca leva chave/token adiante
     trabalho = _finalizar_trabalho(trabalho_id, "concluido", dados.resultado)
+    _registrar_uso(trabalho, "concluido", dados.uso, dados.resultado)
     if trabalho and trabalho["tipo"] == "anexo" and trabalho["payload"].get("anexo_id"):
         import anexos  # import tardio: anexos depende deste módulo
         anexos.salvar_descricao(trabalho["payload"]["anexo_id"], dados.resultado)
@@ -449,8 +464,20 @@ async def status_do_trabalho(trabalho_id: int, authorization: str = Header("")):
 @rotas.post("/trabalhos/{trabalho_id}/falhar")
 async def falhar_trabalho(trabalho_id: int, falha: Falha, authorization: str = Header("")):
     _exigir_operador(authorization)
-    _finalizar_trabalho(trabalho_id, "falhou", segredos.limpar(falha.erro[:500]))
+    trabalho = _finalizar_trabalho(trabalho_id, "falhou", segredos.limpar(falha.erro[:500]))
+    _registrar_uso(trabalho, "falhou", falha.uso, falha.texto)
     return {"ok": True}
+
+
+@rotas.get("/uso-max")
+async def uso_do_max(authorization: str = Header("")):
+    """Resumo do consumo do Max nos últimos 7 dias (só a Diretoria: decisão 11, números do painel)."""
+    usuario = validar_token(authorization.removeprefix("Bearer ").strip())
+    if not usuario or usuario.get("role") != "diretoria":
+        raise HTTPException(status_code=403, detail="Apenas a Diretoria")
+    from api_painel import _nome_do_agente  # import tardio: o painel importa a produção
+
+    return await asyncio.to_thread(uso_max.resumo, 7, _nome_do_agente)
 
 
 # --- Fila do trabalhador -----------------------------------------------------------------
@@ -591,6 +618,7 @@ async def concluir(tarefa_id: int, conclusao: Conclusao, authorization: str = He
                          "entregue como texto" if so_texto else f"{len(conclusao.arquivos)} arquivo(s) em {conclusao.pasta}")
     except Descartada:
         return {"ok": True, "descartada": True}
+    uso_max.registrar("producao", "concluido", conclusao.uso, tarefa_id=tarefa_id, chars_saida=len(conclusao.resumo))
     monday.andamento(tarefa_id, "produzida", f"🎨 {'Texto pronto' if so_texto else 'Criativos prontos'} (Claude Code)."
                                              f"\n\n{conclusao.resumo.strip()[:3000]}\n\n{local}")
     return {"ok": True}
@@ -661,5 +689,6 @@ async def falhar(tarefa_id: int, falha: Falha, authorization: str = Header("")):
         await _finalizar(tarefa_id, "falhou", motivo, "falhou", falha.erro[:300])
     except Descartada:
         return {"ok": True, "descartada": True}
+    uso_max.registrar("producao", "falhou", falha.uso, tarefa_id=tarefa_id, chars_saida=len(falha.texto or ""))
     monday.andamento(tarefa_id, "falhou", motivo)
     return {"ok": True}

@@ -186,7 +186,7 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
 async def _executar_etapas(tarefa, agente: Agente, etapas: list[Etapa]) -> bool:
     """Troca de modelo a cada falha, até um concluir. Ordem e limites dos gratuitos aprendidos com o histórico; se o
     primeiro demora mais do que costuma, o segundo larga em paralelo e vale a primeira resposta (corrida.py)."""
-    etapas = corrida.ajustar(etapas)
+    etapas = corrida.ajustar(etapas, agente.id, tarefa["texto"])  # planejamento do Social Media/Gestor: sem Groq
     i = 0
     while i < len(etapas):
         if tarefas.parada(tarefa["id"]):  # o usuário parou: nenhum modelo a mais, nem fila

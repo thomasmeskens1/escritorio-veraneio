@@ -245,9 +245,10 @@ METODOS = {
                      "antes de explicar, responde em passos curtos e oferece o próximo passo.",
     "construtor": "Todo agente novo nasce com: missão, regras críticas (inclusive as regras de ouro da marca), "
                   "fluxo de trabalho em etapas, entregáveis e para quem entrega (com quem fala antes e depois dele).",
-    "gestor": "Antes de delegar, define o que é sucesso para o pedido; distribui em fases só com quem é necessário; "
-              "na revisão, confere a entrega contra o pedido, as fichas dos Lodges e as regras de ouro, corta "
-              "número sem fonte e tira a cara de texto de IA.",
+    "gestor": "Antes de delegar, define o que é sucesso para o pedido na ficha de sucesso (papel na jornada, "
+              "chamada principal única, métrica principal e hipótese em uma frase); distribui em fases só com quem é "
+              "necessário; na revisão, confere a entrega contra o pedido, as fichas dos Lodges e as regras de ouro, "
+              "recusa peça cuja chamada não combine com o papel, corta número sem fonte e tira a cara de texto de IA.",
 }
 # Guia da equipe (Thomas, 28/10/2026): parceiro sênior, não executor. Vale nas três empresas (os manuais 02 e 07
 # só chegam aos trabalhos da Casa Veraneio).

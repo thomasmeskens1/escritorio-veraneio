@@ -96,6 +96,25 @@ def sigilosa(agente_id: str, pedido: str = "", contexto: str = "", tarefa_id: in
     return False
 
 
+# --- Planejamento nunca no Groq (social_media-19, 31/10/2026) -------------------------------------------------
+# O Groq responde em ~3 s e, em pedido de planejamento, errava: "planejamento mensal de dezembro" virou um post só
+# (tarefa 47) e formulários pediram dados da ficha (43, 55, 59). Planejamento de grade/calendário do Social Media ou
+# do Gestor vai direto aos outros gratuitos (mais lentos, 2 a 3 min, e completos) e, se falharem, ao Max.
+AGENTES_DE_PLANEJAMENTO = frozenset({"social_media", "gestor"})
+TEXTO_PLANEJAMENTO = re.compile(r"\b(planej\w*|calend[aá]rio|cronograma|mensal|grade|m[eê]s)\b", re.I)
+
+
+def planejamento(agente_id: str, texto: str) -> bool:
+    """Pedido de planejamento (grade, calendário, mês, botão "Só o planejamento") do Social Media ou do Gestor."""
+    return agente_id in AGENTES_DE_PLANEJAMENTO and bool(TEXTO_PLANEJAMENTO.search(texto or ""))
+
+
+def sem_groq_no_planejamento(etapas: list[Etapa], agente_id: str, texto: str) -> list[Etapa]:
+    if not planejamento(agente_id, texto):
+        return etapas
+    return [e for e in etapas if not e.modelo.startswith("groq/")]
+
+
 def _utilizaveis(etapas: list[Etapa]) -> list[Etapa]:
     return [e for e in etapas if config.modelo_disponivel(e.modelo) and saude.disponivel(e.modelo)]
 

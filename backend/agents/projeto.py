@@ -182,6 +182,69 @@ def _campo(texto: str, nome: str) -> str:
         return achado.group(1).strip()
 
 
+# Ficha de sucesso (gestor-07, 31/10/2026): todo projeto diz o que precisa gerar e como saber se deu certo, no
+# padrão do manual 15 (papel na jornada -> chamada -> métrica; "proponha hipótese, teste e o que medir").
+PAPEIS = ("Descoberta", "Consideração", "Confiança", "Conversão", "Relacionamento")
+CAMPOS_SUCESSO = (("papel", "PAPEL"), ("cta", "CHAMADA PRINCIPAL"), ("metrica", "MÉTRICA PRINCIPAL"),
+                  ("hipotese", "HIPÓTESE"))
+SUCESSO = (
+    "Defina também a FICHA DE SUCESSO do projeto: \"papel\" (um destes papéis na jornada: " + ", ".join(PAPEIS) + "), "
+    "\"cta\" (uma única chamada principal, coerente com o papel), \"metrica\" (a métrica principal que mostra se deu "
+    "certo, ex.: mensagens no Direct, salvamentos, envios) e \"hipotese\" (uma frase testável, ex.: \"capa sem casa "
+    "gera mais deslizes do que capa com casa\"). ")
+NAO_DEFINIDO = "(não definido)"
+
+
+def _papel(texto: str) -> str:
+    """Papel válido do manual 15 (aceita sem acento/maiúsculas); "" se não for um dos cinco."""
+    return next((p for p in PAPEIS if _chave(p) and _chave(p) in _chave(texto)), "")
+
+
+def _ler_sucesso(texto: str) -> dict[str, str]:
+    """Campos da ficha de sucesso no JSON do plano ("papel": "...") ou em linhas ("PAPEL: ...")."""
+    campos = {}
+    for chave, rotulo in CAMPOS_SUCESSO:
+        valor = _campo(texto, chave)
+        if not valor and (linha := re.search(rf"^\s*{rotulo}\s*:\s*(.+)$", texto, re.M | re.I)):
+            valor = linha.group(1).strip()
+        campos[chave] = _papel(valor) if chave == "papel" else valor.strip(" .\"'")
+    return {c: v for c, v in campos.items() if v}
+
+
+def ficha_sucesso_texto(campos: dict[str, str]) -> str:
+    return "\n".join(f"{rotulo}: {campos.get(chave) or NAO_DEFINIDO}" for chave, rotulo in CAMPOS_SUCESSO)
+
+
+def _sucesso(pasta: Path, pedido: str, entendimento: str, executar: "Executar", resposta_plano: str = "") -> str:
+    """Ficha de sucesso gravada em sucesso.md. Faltou campo no plano: pede só a ficha de novo (uma vez); se ainda
+    faltar, grava o que veio (a entrega não trava por isso)."""
+    arquivo = pasta / "sucesso.md"
+    if arquivo.exists():
+        return arquivo.read_text(encoding="utf-8")
+    campos = _ler_sucesso(resposta_plano)
+    if len(campos) < len(CAMPOS_SUCESSO):
+        descricao = (f"Pedido do usuário: {pedido[:1500]}\n\nEntendimento: {entendimento or '-'}\n\n{SUCESSO}"
+                     "Responda SOMENTE nestas quatro linhas:\n" +
+                     "\n".join(f"{rotulo}: <...>" for _, rotulo in CAMPOS_SUCESSO))
+        campos = {**_ler_sucesso(executar("gestor", descricao, "Ficha de sucesso em quatro linhas.", "gestor")),
+                  **campos}
+    ficha = ficha_sucesso_texto(campos)
+    _gravar(arquivo, ficha)
+    return ficha
+
+
+def como_medir(ficha_sucesso: str) -> str:
+    """Bloco que fecha a entrega (e vai junto no comentário do item do Monday)."""
+    linhas = [f"- {l.split(':', 1)[0].capitalize()}:{l.split(':', 1)[1]}" for l in ficha_sucesso.splitlines()
+              if ":" in l and NAO_DEFINIDO not in l]
+    return "Como vamos medir\n" + "\n".join(linhas) if linhas else ""
+
+
+def sucesso_do_projeto(tarefa_id: int) -> str:
+    """Ficha de sucesso do projeto (para a medição posterior); "" se não houver."""
+    return _lido(PASTA_PROJETOS / str(tarefa_id), "sucesso.md")
+
+
 def _lido(pasta: Path, nome: str) -> str:
     arquivo = pasta / nome
     return arquivo.read_text(encoding="utf-8").strip() if arquivo.exists() else ""
@@ -218,8 +281,11 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar, ficha: s
             "recebe só os resultados das fases anteriores. "
             "Dê também um título curto ao projeto (até 6 palavras, sem data, ex.: \"Post Réveillon Lodge 1\"). "
             "As instruções das etapas seguem o entendimento (citem os imóveis e dados dele). "
+            f"{SUCESSO}"
             'Responda SOMENTE com um JSON: {"entendimento": "<o que o usuário quer agora>", "duvida": "", '
-            '"titulo": "<título>", "etapas": [{"agente": "<id>", "instrucao": "<o que entregar>", "fase": <número>}]}.'
+            '"titulo": "<título>", "papel": "<papel>", "cta": "<chamada>", "metrica": "<métrica>", '
+            '"hipotese": "<hipótese>", '
+            '"etapas": [{"agente": "<id>", "instrucao": "<o que entregar>", "fase": <número>}]}.'
         )
         resposta = executar("gestor", descricao, "JSON com o entendimento, o título e as etapas.", "gestor")
         if (entendimento := _campo(resposta, "entendimento")):
@@ -230,6 +296,7 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar, ficha: s
             _gravar(arquivo, "[]")
             return []
         plano, titulo = _extrair_plano(resposta)
+        _sucesso(pasta, pedido, entendimento, executar, resposta)
         if ideacao:  # rede de segurança: nada de produção num pedido de ideias
             plano = [p for p in plano if p["agente"] not in AGENTES_PRODUCAO] or [
                 {"agente": "social_media", "instrucao": pedido, "fase": 1}]
@@ -281,7 +348,7 @@ def _sem_aviso(tipo: str, agente: str, detalhe: str) -> None:
 # assumiu e reaproveitou plano e etapas salvos sem reinterpretar o pedido. Plano de modelo fraco não é herdado.
 MODELOS_FORTES = ("claude-code/", "anthropic/", "claude-")
 REFEITOS_QUANDO_FORTE_ASSUME = ("plano.json", "plano.md", "entendimento.txt", "duvida.txt", "titulo.txt",
-                                "requisitos.md", "final.md", "passagem.md", "plano_modelo.txt")
+                                "requisitos.md", "final.md", "passagem.md", "plano_modelo.txt", "sucesso.md")
 
 
 def _forte(modelo: str) -> bool:
@@ -319,12 +386,15 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
         if not final.exists():
             _gravar(final, (f"{entendimento}\n\n" if entendimento else "") + f"PERGUNTA: {duvida}")
         return final.read_text(encoding="utf-8")
+    sucesso = _sucesso(pasta, pedido, entendimento, executar)  # já gravada no plano; projeto antigo pede agora
     fase = lambda n, p: p.get("fase", n)  # plano antigo (sem fases): uma etapa por vez
     # Pedido longo: a etapa recebe a ficha (não o texto gigante) e termina com a âncora do objetivo.
     projeto_txt = (f"Projeto (ficha de requisitos de um pedido de {len(pedido)} caracteres; é a sua referência):\n"
                    f"{ficha}" if ficha else f"Projeto: {pedido}")
     if entendimento:
         projeto_txt += f"\n\nENTENDIMENTO DO GESTOR (o que o usuário quer agora, lido na conversa): {entendimento}"
+    if sucesso:
+        projeto_txt += f"\n\nFICHA DE SUCESSO (a sua entrega serve a este papel e a esta chamada):\n{sucesso}"
 
     def rodar_etapa(n: int, passo: dict) -> None:
         if cancelar.is_set():
@@ -380,6 +450,10 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
                      "produzir, não assuma nada: termine com uma linha \"PERGUNTA: <pergunta objetiva>\" "
                      "(a produção espera a resposta). "
                      f"{ESTILO_CHAT}")
+        if sucesso:  # revisão: peça com chamada que não serve ao papel volta a ser ajustada antes de entregar
+            descricao += (f"\n\nFICHA DE SUCESSO:\n{sucesso}\n\nRecuse (reescreva) qualquer peça cuja chamada não "
+                          "combine com o papel na jornada; a entrega usa a chamada principal da ficha. Não escreva o "
+                          "bloco de medição: o sistema acrescenta.")
         if ficha:  # checklist: cada requisito do pedido longo conferido antes de entregar
             descricao += (f"\n\nFICHA DE REQUISITOS:\n{ficha}\n\nAntes de entregar, confira cada R# contra a "
                           "entrega. Depois do texto final, acrescente o bloco <<CHECAGEM>> com uma linha por "
@@ -389,6 +463,8 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
             raise Cancelado
         if ficha:
             texto = _aplicar_checagem(pasta, texto)
+        if (medir := como_medir(sucesso)):  # vai ao chat e, pelo andamento "concluida", ao comentário do Monday
+            texto = f"{texto.rstrip()}\n\n{medir}"
         _gravar(final, texto)
     return final.read_text(encoding="utf-8")
 

@@ -554,7 +554,8 @@ def rodar_producao(producao: dict, rascunho: Path, prompt: str, ambiente: dict, 
     try:  # o pedido vai pela entrada padrão (texto longo, com quebras de linha)
         return comum.rodar_claude(comando_producao(producao.get("empresa") or "casa_veraneio"), prompt, rascunho,
                                   TEMPO_LIMITE, ambiente, ao_progresso=lambda linhas: comum.chamar(
-                                      "POST", f"/api/producao/{producao['tarefa_id']}/progresso", {"linhas": linhas}))
+                                      "POST", f"/api/producao/{producao['tarefa_id']}/progresso", {"linhas": linhas}),
+                                  tipo="producao")
     except comum.MaxSemCota:
         raise  # sem cota: a peça inteira volta para a fila (o rascunho fica para a próxima tentativa)
     except (RuntimeError, subprocess.TimeoutExpired) as parada:
@@ -600,6 +601,7 @@ def produzir(producao: dict) -> None:
     if (dir_ffmpeg := ffmpeg_dir()):
         ambiente["PATH"] = dir_ffmpeg + os.pathsep + ambiente.get("PATH", "")
     so_texto = False
+    comum.zerar_uso()  # medição do Max: soma as rodadas desta peça (vai com a conclusão/falha)
     try:
         anexos = copiar_anexos(producao, rascunho)
         faltaram: list[str] = []
@@ -659,6 +661,7 @@ def produzir(producao: dict) -> None:
         log(f"   falhou: {erro}")
         # Sem arquivo: vai junto o que o Max escreveu (o motivo dele), não só a mensagem genérica.
         corpo = {"erro": SemArquivo.MENSAGEM, "texto": erro.texto} if isinstance(erro, SemArquivo) else {"erro": str(erro)}
+        corpo["uso"] = comum.uso_acumulado()
         try:
             comum.chamar("POST", f"/api/producao/{producao['tarefa_id']}/falhar", corpo)
         except Exception as erro_api:
@@ -672,7 +675,7 @@ def produzir(producao: dict) -> None:
         try:
             comum.chamar("POST", f"/api/producao/{producao['tarefa_id']}/concluir",
                          {"resumo": resumo, "pasta": relativa, "arquivos": arquivos, "link": link,
-                          "so_texto": so_texto})
+                          "so_texto": so_texto, "uso": comum.uso_acumulado()})
             log(f"   concluída: {', '.join(arquivos) or 'como texto'}")
             return
         except Exception as erro_api:

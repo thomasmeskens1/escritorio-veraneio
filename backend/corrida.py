@@ -91,8 +91,13 @@ def _gratuito(modelo: str) -> bool:
     return not modelo.startswith(_FIXOS)
 
 
-def ajustar(etapas: list) -> list:
-    """Reordena os gratuitos pelo tempo esperado e ajusta o limite de cada um; os demais ficam onde estão."""
+def ajustar(etapas: list, agente_id: str = "", texto: str = "") -> list:
+    """Reordena os gratuitos pelo tempo esperado e ajusta o limite de cada um; os demais ficam onde estão.
+    Com `agente_id` e `texto`: pedido de planejamento do Social Media/Gestor sai do Groq (roteamento.py)."""
+    if agente_id:
+        import roteamento  # import tardio: o roteamento importa saude e aprendizado
+
+        etapas = roteamento.sem_groq_no_planejamento(etapas, agente_id, texto)
     posicoes = [i for i, e in enumerate(etapas) if _gratuito(e.modelo)]
     gratuitos = [etapas[i] for i in posicoes]
 
