@@ -73,6 +73,9 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
   if (tipo === 'agente' && link && LINK_DRIVE.test(link)) div.append(criarBotaoVisualizar(link));
   if (tipo === 'agente' && relatorio && LINK_RELATORIO.test(relatorio)) div.append(criarBotaoRelatorio(relatorio));
   if (tipo === 'agente' && tarefa_id && /^✅ Pedido concluído/.test(texto)) div.append(criarBotaoAjuste(tarefa_id));
+  if (tipo === 'agente' && tarefa_id && /^✅ Pedido concluído/.test(texto) && /\.png\b/i.test(texto)) {
+    div.append(criarBotaoDesdobrar(tarefa_id)); // arte pronta: 4:5 e 9:16 pelo molde (backend/desdobrar.py)
+  }
   if (opcoes?.length) div.append(criarOpcoes(opcoes));
   const repetir = tipo === 'agente' && tarefa_id && criarBotaoRepetir(tarefa_id, texto); // js/referencias.js
   if (repetir) div.append(repetir);
@@ -214,6 +217,34 @@ function criarBotaoAjuste(tarefaId) {
     modalInput.value = `Ajuste na peça #${tarefaId}: `;
     ajustarAlturaInput();
     modalInput.focus();
+  });
+  return botao;
+}
+
+// Entrega de arte: "Desdobrar 4:5 e 9:16" gera os outros formatos a partir do molde da peça, em código (sem refazer
+// a arte); peça feita fora dos moldes vai para o Max como ajuste. O aviso de pronto chega depois neste chat.
+function criarBotaoDesdobrar(tarefaId) {
+  const botao = document.createElement('button');
+  botao.type = 'button';
+  botao.className = 'botao-secundario msg-ajuste msg-desdobrar';
+  botao.textContent = 'Desdobrar 4:5 e 9:16';
+  botao.title = 'Gera as versões 4:5 (1080x1350) e 9:16 (1080x1920) desta peça, na pasta FORMATOS/';
+  botao.addEventListener('click', async () => {
+    if (!sessao || botao.disabled) return;
+    botao.disabled = true;
+    let texto;
+    try {
+      const resposta = await fetch(`/api/producao/${tarefaId}/desdobrar`, {
+        method: 'POST', headers: { Authorization: `Bearer ${sessao.token}` },
+      });
+      const dados = await resposta.json().catch(() => ({}));
+      texto = resposta.ok ? dados.texto : (dados.detail || 'Não foi possível desdobrar agora.');
+    } catch {
+      texto = 'Não foi possível desdobrar agora (sem conexão com o servidor).';
+    } finally {
+      botao.disabled = false;
+    }
+    if (chatAberto && texto) adicionarMensagem(chatAberto.andar, chatAberto.agente, { autor: 'sistema', texto, tipo: 'sistema' });
   });
   return botao;
 }

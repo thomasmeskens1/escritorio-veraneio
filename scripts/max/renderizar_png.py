@@ -36,8 +36,13 @@ def chrome() -> str:
 def main() -> None:
     if len(sys.argv) != 4 or "x" not in sys.argv[3]:
         sys.exit(__doc__)
-    html, saida, tamanho = Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve(), sys.argv[3]
-    largura, altura = tamanho.lower().split("x")
+    largura, altura = sys.argv[3].lower().split("x")
+    renderizar(Path(sys.argv[1]), Path(sys.argv[2]), int(largura), int(altura))
+
+
+def renderizar(html: Path, saida: Path, largura: int, altura: int, espera_ms: int = 0) -> None:
+    """HTML -> PNG no tamanho pedido. `espera_ms`: tempo virtual para fontes e imagens locais carregarem (moldes)."""
+    html, saida = Path(html).resolve(), Path(saida).resolve()
     # Caminho absoluto file:/// para a própria pasta (peça #81) vira relativo, numa cópia apagada no fim.
     texto = html.read_text(encoding="utf-8", errors="replace")
     base = re.compile(re.escape(html.parent.as_uri() + "/"), re.IGNORECASE)
@@ -50,9 +55,11 @@ def main() -> None:
     threading.Thread(target=servidor.serve_forever, daemon=True).start()
     try:
         endereco = f"http://127.0.0.1:{servidor.server_address[1]}/{quote(pagina.name)}"
+        espera = [f"--virtual-time-budget={espera_ms}"] if espera_ms else []
         subprocess.run([chrome(), "--headless=new", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1",
-                        f"--window-size={largura},{altura}", f"--screenshot={saida}", endereco],
-                       check=True, capture_output=True, timeout=120)
+                        f"--window-size={largura},{altura}", *espera, f"--screenshot={saida}", endereco],
+                       check=True, capture_output=True, timeout=120,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))  # sem janela no PC
     finally:
         servidor.shutdown()
         if pagina != html:

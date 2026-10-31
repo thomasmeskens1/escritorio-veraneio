@@ -469,8 +469,14 @@
   text-decoration: none;
 }
 
-.msg-visualizar + .msg-ajuste {
+.msg-visualizar + .msg-ajuste,
+.msg-ajuste.msg-desdobrar {
   display: inline-block;
+}
+
+/* "Desdobrar 4:5 e 9:16" ao lado de "Pedir ajuste" */
+.msg-visualizar + .msg-ajuste + .msg-desdobrar {
+  margin-left: 8px;
 }
 
 /* Respostas rápidas (ex.: planejamento ou peça final), lado a lado */

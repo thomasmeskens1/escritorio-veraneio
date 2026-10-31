@@ -1,0 +1,85 @@
+/* Moldes da Casa Veraneio (Onda 3, 31/10/2026). Tokens da marca (manuais 03, 06 e 08) e zonas de cada formato.
+   Ajuste de layout aprovado pela equipe entra AQUI uma vez e vale para todas as peças seguintes. */
+@font-face { font-family: "Playfair"; src: url("PlayfairDisplay-Variavel.ttf"); font-weight: 400 900; font-style: normal; }
+@font-face { font-family: "Playfair"; src: url("PlayfairDisplay-Italico-Variavel.ttf"); font-weight: 400 900; font-style: italic; }
+@font-face { font-family: "Muli"; src: url("Muli-Variavel.ttf"); font-weight: 200 900; font-style: normal; }
+
+:root {
+  --verde: #00361B; --creme: #F0DBC3; --caramelo: #D9A15B; --branco: #FFFFFF;
+  --verde-0: rgba(0, 54, 27, 0); --verde-88: rgba(0, 54, 27, .88); --verde-92: rgba(0, 54, 27, .92);
+  --serifa: "Playfair", "Playfair Display", Georgia, serif;
+  --sans: "Muli", "Mulish", "Segoe UI", Arial, sans-serif;
+  --margem: 80px;
+  /* Feed 3:4 (padrão): ~60 px de folga nas bordas (manual 08, seção 3) */
+  --topo: 96px; --base: 90px; --logo: 112px; --logo-fim: 135px;
+  --deg-topo: 600px; --deg-base: 560px;
+  --titulo: 84px; --subtitulo: 54px; --contagem: 170px;
+  --ficha-foto: 720px; --ficha-titulo: 58px; --fim-titulo: 92px;
+}
+/* 4:5 (1080x1350): mesmas posições, um pouco mais baixas */
+.f45 { --topo: 90px; --base: 84px; --deg-topo: 560px; --deg-base: 520px; --ficha-foto: 660px; --contagem: 150px; }
+/* 1:1: tudo mais compacto */
+.f11 { --topo: 72px; --base: 72px; --deg-topo: 480px; --deg-base: 440px; --titulo: 72px; --subtitulo: 46px;
+       --contagem: 120px; --ficha-foto: 470px; --ficha-titulo: 48px; --fim-titulo: 80px; --logo: 96px; }
+/* 9:16: texto e logo fora das faixas da interface (topo ~250-300 px, base ~340-380 px; manual 08) */
+.f916 { --topo: 300px; --base: 380px; --logo: 135px; --deg-topo: 860px; --deg-base: 980px;
+        --titulo: 96px; --subtitulo: 60px; --contagem: 230px; --ficha-foto: 860px; --ficha-titulo: 64px;
+        --fim-titulo: 100px; }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { overflow: hidden; background: var(--verde); }
+.palco { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.foto { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+:empty:not(img):not(hr):not(.degrade) { display: none; }  /* campo não preenchido não deixa buraco */
+
+.kicker { font: 600 24px/1.2 var(--sans); letter-spacing: 7px; text-transform: uppercase; color: var(--creme); }
+.titulo { font: 800 var(--titulo)/1.04 var(--serifa); color: var(--branco); text-wrap: balance; }
+.subtitulo { font: italic 400 var(--subtitulo)/1.12 var(--serifa); color: var(--branco); text-wrap: balance; }
+.logo { height: var(--logo); width: auto; display: block; flex: none; }
+
+/* --- capa: foto cheia, título no topo, selo e logo na base --- */
+.degrade { position: absolute; left: 0; right: 0; }
+.degrade-topo { top: 0; height: var(--deg-topo); background: linear-gradient(to bottom, var(--verde-88) 0%, rgba(0, 54, 27, .55) 45%, var(--verde-0) 100%); }
+.degrade-base { bottom: 0; height: var(--deg-base); background: linear-gradient(to top, var(--verde-92) 0%, rgba(0, 54, 27, .6) 50%, var(--verde-0) 100%); }
+.capa-topo { position: absolute; left: var(--margem); right: var(--margem); top: var(--topo); }
+.capa-topo .kicker { margin-bottom: 22px; }
+.capa-topo .subtitulo { margin-top: 10px; }
+.contagem { display: flex; align-items: baseline; gap: 22px; margin-top: 18px; }
+.contagem-numero { font: 800 var(--contagem)/1 var(--serifa); color: var(--caramelo); }
+.contagem-texto { font: italic 400 44px/1.1 var(--serifa); color: var(--branco); max-width: 420px; }
+.capa-base { position: absolute; left: var(--margem); right: var(--margem); bottom: var(--base);
+             display: flex; align-items: flex-end; justify-content: space-between; gap: 36px; }
+.selo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.selo-lodge { font: 700 26px/1.2 var(--sans); letter-spacing: 5px; color: var(--branco); }
+.selo-local { font: italic 400 40px/1.15 var(--serifa); color: var(--branco); }
+.selo-dados { font: 400 24px/1.2 var(--sans); letter-spacing: 4px; color: var(--creme); }
+
+/* --- ficha: foto no alto, Creme com os dados, faixa Verde com CTA e logo --- */
+.ficha { display: flex; flex-direction: column; background: var(--creme); }
+.ficha-foto { position: relative; height: var(--ficha-foto); flex: none; overflow: hidden; }
+.painel { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: 36px var(--margem); }
+.painel .kicker { font-weight: 700; color: var(--caramelo); letter-spacing: 6px; }
+.painel .titulo { color: var(--verde); font-size: var(--ficha-titulo); }
+.painel .subtitulo { color: var(--verde); font-size: calc(var(--ficha-titulo) * .82); }
+.numeros { display: flex; gap: 72px; margin-top: 18px; }
+.coluna { display: flex; flex-direction: column; gap: 4px; }
+.numero { font: 800 56px/1 var(--serifa); color: var(--verde); }
+.rotulo { font: 600 18px/1.2 var(--sans); letter-spacing: 4px; color: var(--caramelo); }
+.extra { font: 400 20px/1.2 var(--sans); letter-spacing: 3px; color: var(--verde); }
+.faixa { flex: none; background: var(--verde); display: flex; align-items: center; justify-content: space-between;
+         gap: 32px; padding: 26px var(--margem) 26px; }
+.f916 .faixa { padding-bottom: var(--base); }
+.cta { font: 600 24px/1.3 var(--sans); letter-spacing: 3px; text-transform: uppercase; color: var(--creme); }
+
+/* --- fechamento: Verde, tudo centralizado (manual 06, seção 3) --- */
+.fechamento { background: var(--verde); }
+.fim { position: absolute; left: var(--margem); right: var(--margem); top: var(--topo); bottom: var(--base);
+       display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.fim .kicker { font: 700 26px/1.2 var(--sans); letter-spacing: 8px; color: var(--caramelo); margin-bottom: 28px; }
+.fim .titulo { font-size: var(--fim-titulo); }
+.fim .subtitulo { font-size: calc(var(--fim-titulo) * .78); color: var(--creme); margin-top: 6px; }
+.filete { width: 140px; height: 2px; border: 0; background: var(--caramelo); margin: 44px auto 36px; }
+.linhas { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.linhas li { font: 400 26px/1.3 var(--sans); letter-spacing: 2px; color: var(--creme); }
+.fim .cta { font-weight: 700; font-size: 28px; color: var(--branco); margin-top: 40px; }
+.fim .logo { height: var(--logo-fim); margin-top: 64px; }

@@ -26,6 +26,7 @@ import catalogo_fotos_empresas
 import catalogo_lodges
 import conferencia_arte
 import link_drive
+import molde
 import comum
 import emails_brevo
 import painel_analitico
@@ -367,6 +368,8 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
         aviso,
         INSTRUCOES.get(producao["agente"], "Entregue o resultado como arquivo."),
         entrega,
+        # Moldes prontos da Casa Veraneio (Onda 3, item 1): o Max preenche o molde.json em vez de desenhar do zero.
+        molde.instrucao(producao["agente"], producao.get("empresa") or "casa_veraneio", producao.get("entrega") or ""),
         "Contexto: Escritório Veraneio, equipe de marketing da Casa Veraneio. Responda em português do Brasil.",
         f"Conversa recente:\n{historico}" if historico else "",
         f"Pedido: {producao['texto']}",

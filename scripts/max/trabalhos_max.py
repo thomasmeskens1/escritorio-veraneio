@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import comum
+import desdobrar_formatos
 import site_casaveraneio
 from comum import log
 
@@ -106,7 +107,8 @@ def executar_prospeccao(payload: dict) -> str:
 
 
 EXECUTORES = {"anexo": executar_anexo, "site": executar_site, "texto": executar_texto,
-              "prospeccao": executar_prospeccao}
+              "prospeccao": executar_prospeccao,
+              "desdobrar": desdobrar_formatos.executar}  # botão "Desdobrar": 4:5 e 9:16 pelo molde, em código (sem Max)
 
 
 _em_execucao: int | None = None  # trabalho rodando agora (um por vez)
