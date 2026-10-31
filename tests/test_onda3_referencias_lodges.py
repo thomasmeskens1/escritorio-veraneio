@@ -44,7 +44,9 @@ def _documento(ref: str, conteudo: str) -> None:
 
 
 def _lodges() -> None:
-    if base.db().execute("SELECT 1 FROM conhecimento WHERE fonte_ref = 'site/lodges/lodge-801'").fetchone():
+    # Outros arquivos de teste remontam a tabela de imóveis com os próprios Lodges: refaz sempre no fim.
+    if base.db().execute("SELECT 1 FROM conhecimento WHERE ativo = 1 AND fonte_ref = 'site/lodges/lodge-801'").fetchone():
+        imoveis.atualizar("casa_veraneio", forcar=True)
         return
     _documento("site/lodges/lodge-801", "# Lodge 801 — Cidade Modelo - SP\nFonte: https://www.casaveraneio.com/lodges/"
                "lodge-801\nResumo: 6 quartos | até 14 pessoas | categoria: Campo\n\n## Acomodações\n5 suítes.\n\n"

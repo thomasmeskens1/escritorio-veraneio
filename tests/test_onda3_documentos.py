@@ -135,8 +135,9 @@ def _xml(conteudo: bytes, parte: str = "word/document.xml") -> str:
     return texto
 
 
-def test_estudo_do_estrategista_vira_docx_com_selo(pasta_anexos, monkeypatch):
+def test_estudo_do_estrategista_vira_docx_com_selo(pasta_anexos, monkeypatch, tmp_path):
     monkeypatch.setattr(auth, "ve_financeiro", lambda login: False)
+    monkeypatch.setenv("DOCUMENTOS_MARCAS_DIR", str(tmp_path / "sem_marcas"))  # a cópia real do logo não conta aqui
     tarefa_id = _tarefa("estrategista", "Faça a matriz BCG das empresas", ESTUDO, modelo="claude-code/max")
     assert entrega.documento_da_resposta(tarefas.obter(tarefa_id))
     assert entrega.documento_da_resposta(tarefas.obter(tarefa_id)) is None  # uma vez só por resposta
