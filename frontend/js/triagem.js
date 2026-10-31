@@ -42,6 +42,17 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// Botão "Não sei com quem falar" no topo (recepcionista-08, professor-15, 31/10/2026): o novato não descobria o
+// atalho do espaço duplo. Abre a mesma caixa; o atalho continua valendo.
+document.getElementById('abrir-triagem')?.addEventListener('click', (e) => {
+  e.currentTarget.blur();
+  if (!sessao || onboarding) return;
+  if (chatAberto && typeof fecharChat === 'function') fecharChat();
+  if (typeof fecharPainel === 'function') fecharPainel();
+  if (typeof fecharRegistro === 'function') fecharRegistro();
+  abrirTriagem();
+});
+
 async function pedirTriagem(caminho, corpo) {
   const resposta = await fetch(caminho, {
     method: 'POST',

@@ -65,7 +65,7 @@ Cores do status: cinza = dormindo, verde = disponível, laranja = trabalhando.
 
 ## Caixa de entrada, Triagem e avaliação
 - Caixa de entrada (ícone no topo, com contador): "Para aprovar" (formulários e produções esperando você) e "Concluídos" (pedidos prontos que você ainda não abriu). Clicar abre o chat do pedido.
-- Triagem: dentro de um andar, sem chat ou janela aberta, aperte a barra de espaço duas vezes. Escreva o pedido e a triagem indica o agente certo; o pedido vai para o chat dele. Trocar o agente sugerido ensina a triagem.
+- Triagem ("com quem eu falo?"): clique no botão "Não sei com quem falar", no topo da tela, ou, dentro de um andar sem chat ou janela aberta, aperte a barra de espaço duas vezes. Escreva o pedido e a triagem indica o agente certo; o pedido vai para o chat dele. Trocar o agente sugerido ensina a triagem.
 - 👍/👎 em cada resposta: o 👍 ensina o Cérebro o que ajudou. O 👎 (ou uma frase como "não era isso") abre um pop-up com o motivo; com texto, ele vira uma correção para a Diretoria aprovar. Clicar de novo no voto retira o voto.
 - Ajuste de peça: escreva no próprio chat "Ajuste na peça #N: ..." (ou use "Pedir ajuste"); vai para quem produziu, e a nova versão volta para esse chat.
 - Monday: item enviado pelo botão "Enviar" do quadro volta com o resultado no próprio item, e você recebe um aviso no sino do Monday. Item citado no chat recebe a resposta no chat e no item.
