@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 import acesso
 import agendamentos
+import alarme_telegram
 import andamento
 import anexos
 import agentes_dinamicos
@@ -111,7 +112,9 @@ async def ciclo_de_vida(_: FastAPI):
     if (retomados := monday.retomar_fila()):  # itens do Monday que esperavam o Gestor quando o servidor caiu
         log.warning("Monday: %d item(ns) voltaram a esperar o Gestor.", retomados)
     copias = asyncio.create_task(copiar_banco_periodicamente())
+    alarme = asyncio.create_task(alarme_telegram.vigiar())  # avisos de operação no celular (despachante-16)
     yield
+    alarme.cancel()
     agendamentos.parar()
     fila.cancel()
     copias.cancel()
