@@ -396,6 +396,8 @@ function mostrarToast(andar, agente, texto, titulo) {
   if (texto) toast.append(novoEl('span', null, texto.length > 80 ? `${texto.slice(0, 80)}…` : texto));
   toast.addEventListener('click', () => {
     removerToast(toast);
+    // Pop-up aberto (caixa de entrada, formulário, correção) ficaria por cima do chat: fecha antes, como a caixa faz.
+    if (typeof fecharFormularioPopup === 'function') fecharFormularioPopup();
     abrirAgente(andar, agente);
   });
   toasts.append(toast);

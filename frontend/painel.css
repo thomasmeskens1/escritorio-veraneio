@@ -308,7 +308,7 @@
   position: fixed;
   right: 16px;
   bottom: 16px;
-  z-index: 20;
+  z-index: 40; /* acima dos pop-ups (.modal-formulario, 30) e abaixo do tour (50): antes o clique caía no fundo do pop-up */
   display: flex;
   flex-direction: column;
   align-items: flex-end;
