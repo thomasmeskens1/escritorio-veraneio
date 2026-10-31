@@ -34,7 +34,7 @@ def test_diretoria_que_nao_e_o_thomas_aprova_e_o_cerebro_aprende(monkeypatch):
         ensinados.append(login)
         return "ok"
 
-    monkeypatch.setattr(correcoes, "_dono", lambda _a: {"sub": "lucca@casaveraneio.com", "nome": "Lucca",
+    monkeypatch.setattr(correcoes, "_dono", lambda _a: {"sub": "usuario.teste@exemplo.com", "nome": "Lucca",
                                                          "role": "diretoria"})
     monkeypatch.setattr(cerebro, "ensinar", ensinar)
     tarefa = tarefas.criar("ana", "marketing", "copywriter", "Legenda", "simples")

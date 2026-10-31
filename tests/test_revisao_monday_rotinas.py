@@ -31,9 +31,9 @@ def test_conta_do_item_e_a_empresa_da_tarefa(monkeypatch):
 def test_rotina_de_usuario_desativado_para(monkeypatch):
     import auth
 
-    rotina = agendamentos.criar("saiu@casaveraneio.com", "marketing", "copywriter", "Legenda semanal",
+    rotina = agendamentos.criar("usuario.teste@exemplo.com", "marketing", "copywriter", "Legenda semanal",
                                 {"tipo": "intervalo", "minutos": 60}, "A cada hora", "casa_veraneio")["id"]
-    monkeypatch.setattr(auth, "carregar_usuarios", lambda: {"saiu@casaveraneio.com": {"ativo": False}})
+    monkeypatch.setattr(auth, "carregar_usuarios", lambda: {"usuario.teste@exemplo.com": {"ativo": False}})
     asyncio.run(agendamentos._executar(rotina))
     assert not agendamentos._obter(rotina)["ativo"]
 
