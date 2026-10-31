@@ -644,6 +644,7 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+  pointer-events: auto; /* o contêiner .toasts ignora cliques; sem isto o clique atravessava o ratinho */
   animation: rato-entra 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both, rato-flutua 3.2s ease-in-out 0.7s infinite;
 }
 
