@@ -81,6 +81,12 @@ def _painel(financeiro: bool = True) -> str:
             blocos.append(f"### {titulo}\n{str(ler())[:MAX_DADOS]}")
         except Exception as erro:
             blocos.append(f"### {titulo}\n(não foi possível ler: {erro})")
+    try:  # clientes que voltam, por empresa: só contagens; a receita de quem volta só para a Diretoria
+        import agenda_clientes
+
+        blocos.append(agenda_clientes.recorrencia_para_estudo(financeiro))
+    except Exception:
+        log.exception("Estudo: indicador de recorrência falhou.")
     if financeiro:
         blocos.insert(0, _receita_por_empresa())
     else:
@@ -136,8 +142,13 @@ def prompt(agente_id: str, texto: str, empresa: str, historico: list = (), finan
               f"{perfil['backstory']}\nMétodo: {METODOS.get(agente_id, '')}",
               empresas.contexto(empresa) or empresas.contexto(empresas.PADRAO)]
     for troca in historico:  # conversa recente: o pedido pode continuar um estudo anterior
+        resposta = (troca['resposta'] or '')[:1500]
+        if agente_id == "estrategista":  # a agenda de clientes (nomes) pode estar na conversa: não vai à web
+            import carteira
+
+            resposta = carteira.ocultar(resposta)
         partes.append(f"Conversa anterior — pedido: {troca['texto'][:600]}\n"
-                      f"Sua resposta: {(troca['resposta'] or '')[:1500]}")
+                      f"Sua resposta: {resposta}")
     if agente_id == "analista_tendencias":
         partes.append(calendario_eventos.texto())
         partes.append(

@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import acesso
+import agenda_clientes
 import agendamentos
 import alarme_telegram
 import andamento
@@ -428,6 +429,10 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
             texto_aviso := await orquestrador.retomar_producao(pendente, texto)) is not None:
         return await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "titulo": "Produção", "liberar": True,
                                              "texto": texto_aviso})
+    # Agenda de clientes (reativação, recompra, fim de ano, recorrência): cálculo no sistema, sem IA nem Max (item 14).
+    if agenda_clientes.e_pedido(agente.id, texto):
+        await agenda_clientes.iniciar(usuario["sub"], andar, agente, texto)
+        return
     # Estudo com pesquisa na web (Analista de Tendências, Estrategista): no Max, só na conta do Thomas. Para as
     # outras contas, ou pergunta simples ("o que é a Matriz BCG?"), o agente responde pelos modelos gratuitos.
     if config.usa_max(usuario["sub"]) and estudos.e_estudo(agente.id, texto):
