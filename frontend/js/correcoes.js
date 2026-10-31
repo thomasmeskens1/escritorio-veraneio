@@ -171,6 +171,7 @@ function abrirCorrecao(o) {
       decidir(`${o.id}/aprovar`, () => ({ regra: regra.value, escopo: 'todos', todas_as_empresas: caixaTodas.checked }))),
     botao('Descartar', 'botao-secundario botao-perigo', decidir(`${o.id}/descartar`)),
   );
+  if (o.tipo === 'elogio') acoes.append(botaoGuardarModelo(o.id)); // texto inteiro como modelo (js/referencias.js)
   corpo.append(rotulo, regra, todas, acoes);
   janela.append(barra, corpo);
   fundo.append(janela);
@@ -259,7 +260,7 @@ function criarCorrecoes() {
     item.append(linha);
     lista.append(item);
   });
-  bloco.append(lista);
+  bloco.append(lista, criarModelosEstilo()); // modelos de estilo e candidatos 👍 (js/referencias.js)
   if (d.regras?.length) {
     const regras = novoEl('details', 'correcao-regras');
     regras.append(novoEl('summary', null, `Regras aprendidas ativas (${d.regras.length})`));
