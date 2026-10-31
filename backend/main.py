@@ -36,6 +36,7 @@ import cerebro_conferir
 import cerebro_mapa
 import comercial
 import consolidacao_semanal
+import desdobrar
 import entrevista
 import folha_aprovacao
 import historico
@@ -194,6 +195,7 @@ app.include_router(triagem.rotas)
 app.include_router(caixa.rotas)
 app.include_router(insatisfacoes.rotas)
 app.include_router(folha_aprovacao.rotas)  # folha de aprovação da peça (Onda 2, designer-10)
+app.include_router(desdobrar.rotas)  # botão Desdobrar: 4:5 e 9:16 pelo molde (Onda 3, item 3)
 
 
 class Credenciais(BaseModel):
