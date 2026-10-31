@@ -108,6 +108,29 @@ def _erro_nosso(erro: BaseException) -> bool:
         "agents/executor.py") and arquivo.startswith(_BACKEND)
 
 
+# Erro interno passageiro (brainstorm de 31/10/2026, despachante-19; tarefa 134 falhou em 0 s com "cannot start a
+# transaction within a transaction"): tenta de novo até 2 vezes (10 s e 60 s) antes de falhar. Os demais erros
+# internos continuam falhando na hora (repetir só atrasaria a falha).
+ERRO_PASSAGEIRO = re.compile(r"database is locked|within a transaction|timed? ?out|connection (refused|reset|aborted)|"
+                             r"connecterror|connecttimeout|readtimeout|temporarily unavailable|remoteprotocolerror|"
+                             r"server disconnected", re.IGNORECASE)
+ESPERAS_ERRO_INTERNO = (10, 60)
+
+
+async def _executar_com_retentativa(tarefa, agente: Agente, etapas: list[Etapa]) -> bool:
+    for espera_s in (*ESPERAS_ERRO_INTERNO, None):
+        try:
+            return await _executar_etapas(tarefa, agente, etapas)
+        except ErroInterno as erro:
+            if espera_s is None or not ERRO_PASSAGEIRO.search(str(erro)) or tarefas.parada(tarefa["id"]):
+                raise
+            tarefas.registrar_evento(tarefa["id"], "retentativa", agente.id,
+                                     detalhe=f"erro interno passageiro; nova tentativa em {espera_s} s: {erro}")
+            await asyncio.sleep(espera_s)
+            tarefa = tarefas.obter(tarefa["id"])
+    return False
+
+
 async def _falhar_interno(tarefa_id: int, erro: Exception) -> None:
     _falhar(tarefa_id, "Erro interno do escritório ao preparar o pedido (não é do modelo de IA). Ele ficou registrado "
                        f"para correção; tente reformular o pedido. Detalhe: {str(erro)[:150]}")
@@ -193,8 +216,8 @@ async def _executar_imediata(tarefa_id: int, agente: Agente, dificuldade: Dificu
             tarefas.atualizar(tarefa_id, contexto_anexos=juntos or None)
             tarefa = tarefas.obter(tarefa_id)
         try:
-            if await _executar_etapas(tarefa, agente, _com_max(etapas_imediatas(dificuldade, agente.id),
-                                                                tarefa["usuario"], agente.id)):
+            if await _executar_com_retentativa(tarefa, agente, _com_max(etapas_imediatas(dificuldade, agente.id),
+                                                                         tarefa["usuario"], agente.id)):
                 return
         except ErroInterno as erro:
             return await _falhar_interno(tarefa_id, erro)
@@ -236,12 +259,27 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
             pergunta = espera.pergunta_pendente(resultado.texto)
             await _esperar_resposta(linha, pergunta, confirmar_arquivo=True)
             producao_a_seguir = True
-        elif (pergunta := espera.pergunta_pendente(resultado.texto)) and _vai_produzir(linha["id"]):
+        elif (pergunta := espera.pergunta_pendente(resultado.texto) or _decisao_em_aberto(resultado.texto)) \
+                and _vai_produzir(linha["id"]):
             await _esperar_resposta(linha, pergunta)  # a produção só começa quando o usuário responder
             producao_a_seguir = True                  # o item do Monday não vai para Revisão ainda
         else:
             producao_a_seguir = await _produzir_pecas(linha, resultado.texto)
     monday.andamento(tarefa_id, "concluida", resultado.texto, producao_a_seguir)
+
+
+# "Faltam duas decisões suas" (#75) e "Ainda não tenho o MP4..." (#132) seguiram para o Max e falharam em segundos
+# (brainstorm de 31/10/2026, editor_video-24). Sem IA: a frase segura a produção como uma pergunta do Gestor.
+DECISAO_EM_ABERTO = re.compile(r"\bfalta(m)?\s+(\w+\s+){0,3}decis(ão|ao|ões|oes)\b|\bainda\s+n[aã]o\s+tenho\b|"
+                               r"\bdecis(ões|oes)\s+(suas\s+)?(em\s+aberto|pendentes)\b", re.IGNORECASE)
+
+
+def _decisao_em_aberto(texto: str) -> str | None:
+    """O parágrafo do Gestor que diz que falta decisão do usuário; None se não há."""
+    for paragrafo in (p.strip() for p in (texto or "").split("\n\n")):
+        if DECISAO_EM_ABERTO.search(paragrafo):
+            return paragrafo[:500]
+    return None
 
 
 def _vai_produzir(tarefa_id: int) -> bool:
@@ -486,8 +524,9 @@ async def _processar_proxima() -> int:
 
 
 async def _rodar_da_fila(linha, agente: Agente, etapas: list[Etapa]) -> None:
+    inicio = tarefas._agora()
     try:
-        concluiu = await _executar_etapas(linha, agente, etapas)
+        concluiu = await _executar_com_retentativa(linha, agente, etapas)
     except ErroInterno as erro:
         return await _falhar_interno(linha["id"], erro)
     except Exception:  # em segundo plano o erro não chega mais ao laço da fila: registra e reagenda
@@ -495,6 +534,11 @@ async def _rodar_da_fila(linha, agente: Agente, etapas: list[Etapa]) -> None:
         concluiu = False
     finally:
         await atividade.liberar(agente.id)
-    if not concluiu and not tarefas.reagendar(linha["id"]):
-        _falhar(linha["id"], "Nenhum modelo conseguiu concluir a tarefa após várias tentativas.")
+    # Brainstorm de 31/10/2026 (despachante-18): só conta tentativa quando um modelo de verdade rodou e errou (Max
+    # ocupado ou local ocupado não gastam), e a tarefa só morre depois de 24 h (antes, 6 tentativas em 3 h matavam
+    # o pedido mesmo que o Max voltasse da cota uma hora depois).
+    rodou = tarefas.falhas_de_modelo_desde(linha["id"], inicio) > 0
+    if not concluiu and not tarefas.reagendar(linha["id"], rodou_modelo=rodou):
+        _falhar(linha["id"], "Nenhum modelo conseguiu concluir a tarefa em 24 h de tentativas (o pedido ficou na "
+                             "fila enquanto os modelos estavam fora). Peça de novo se ainda precisar.")
         await _entregar(tarefas.obter(linha["id"]))

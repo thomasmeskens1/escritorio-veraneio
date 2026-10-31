@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 import atividade
 import config
+import correcoes
 import max_texto
 import saude
 import fichas
@@ -204,6 +205,38 @@ def produtor_da_peca(texto: str, pedido: str = "") -> str:
     return "editor_video" if E_VIDEO.search(sem_descricoes) else "criador_imagens"
 
 
+# Tipo de entrega da peça (brainstorm de 31/10/2026, despachante-02 e criador_imagens-28): "preciso criar uma legenda
+# nesse estilo" (#114) foi ao Max como arte e falhou sem PNG. Regra sem IA, só nas pontas do pedido do usuário (no meio
+# de um briefing longo, "fotos" é conteúdo). Na dúvida, "visual", como antes.
+SO_TEXTO = re.compile(r"\b(legendas?|textos?|copy|roteiros?|personas?|t[ií]tulos?|hashtags?|descri[cç][aã]o|"
+                      r"descri[cç][oõ]es|scripts?)\b", re.IGNORECASE)
+DOCUMENTO = re.compile(r"\b(docx|pptx|word|powerpoint|apresenta[cç][aã]o|apresenta[cç][oõ]es|documentos?|"
+                       r"relat[oó]rios?)\b", re.IGNORECASE)
+_BRIEFING_DO_GESTOR = re.compile(r"Pedido original: (.*?)\n\nResultado consolidado do Gestor", re.DOTALL)
+
+
+def tipo_de_entrega(texto: str) -> str:
+    """"visual" (PNG/MP4/PDF), "documento" (.docx/.pptx) ou "texto" (o texto do Max é a entrega)."""
+    import encaminhamento
+    from orquestrador import PEDE_ARQUIVO  # import tardio: o orquestrador importa este módulo
+
+    texto = texto or ""
+    if "FORMATO DA PEÇA" in texto:  # item do Monday: sempre peça
+        return "visual"
+    do_gestor = _BRIEFING_DO_GESTOR.search(texto)
+    pedido = encaminhamento.pedido_original(do_gestor.group(1) if do_gestor else texto)
+    linhas = [l for l in pedido.strip().splitlines() if l.strip()]
+    pontas = f"{linhas[0][:300]}\n{linhas[-1][-300:]}" if linhas else ""
+    if PEDE_ARQUIVO.search(pontas) or E_VIDEO.search(pontas):
+        return "visual"
+    if DOCUMENTO.search(pontas):
+        return "documento"
+    if do_gestor:  # o orquestrador já decidiu produzir (pedido de peça ou confirmação do usuário)
+        return "visual"
+    so_texto, peca = SO_TEXTO.search(pontas), encaminhamento.PECAS.search(pontas)
+    return "texto" if so_texto and (not peca or so_texto.start() < peca.start()) else "visual"
+
+
 def agente_da_peca(login: str, texto: str) -> str | None:
     """"Ajuste na peça #33: ..." pedido em qualquer chat -> agente que produziu a peça #33 (None se não for)."""
     citada = re.match(r"\s*ajuste na pe[cç]a #(\d+)", texto, re.IGNORECASE)
@@ -296,10 +329,16 @@ class Conclusao(BaseModel):
     pasta: str               # caminho relativo dentro de "ESCRITÓRIO VERANEIO"
     arquivos: list[str] = []
     link: str = ""           # pasta no Google Drive (botão "Visualizar"); vazio se o Drive ainda não sincronizou
+    so_texto: bool = False   # pedido só de texto: o resumo É a entrega (sem arquivo nem pasta no Drive)
 
 
 class Falha(BaseModel):
     erro: str
+    texto: str = ""          # o que o Max escreveu antes de falhar (ex.: o motivo de não ter gerado o arquivo)
+
+
+class Bloqueios(BaseModel):
+    linhas: list[str] = []
 
 
 class Resultado(BaseModel):
@@ -494,6 +533,8 @@ async def _montar_producao(linha) -> dict:
         "referencias": await asyncio.to_thread(monday.referencias_da_tarefa, linha["id"]),
         "fichas": await asyncio.to_thread(fichas.fichas_citadas, linha["texto"], linha["empresa"]),  # da empresa
         "empresa": linha["empresa"],  # o trabalhador escolhe manuais e acervo da empresa (nunca misturar)
+        "entrega": "visual" if base else tipo_de_entrega(linha["texto"]),  # ajuste: sempre sobre a peça
+        "regras": correcoes.regras_da_producao(linha["agente"], linha["empresa"]),  # correções aprovadas
     }
 
 
@@ -531,20 +572,63 @@ async def _finalizar(tarefa_id: int, status: str, resposta: str, evento: str, de
 @rotas.post("/{tarefa_id}/concluir")
 async def concluir(tarefa_id: int, conclusao: Conclusao, authorization: str = Header("")):
     _exigir_operador(authorization)
-    with _db() as db:  # a pasta fica registrada para os ajustes desta peça
+    so_texto = conclusao.so_texto and not conclusao.arquivos
+    with _db() as db:  # a pasta fica registrada para os ajustes desta peça (entrega só de texto: sem pasta)
         link = conclusao.link if LINK_DRIVE.fullmatch(conclusao.link or "") else None
-        db.execute("UPDATE producao_info SET pasta = ?, link = ? WHERE tarefa_id = ?", (conclusao.pasta, link, tarefa_id))
+        db.execute("UPDATE producao_info SET pasta = ?, link = ? WHERE tarefa_id = ?",
+                   (None if so_texto else conclusao.pasta, link, tarefa_id))
     arquivos = "\n".join(f"- {nome}" for nome in conclusao.arquivos) or "- (nenhum arquivo listado)"
     conclusao.resumo = segredos.limpar(conclusao.resumo)  # vai ao chat e ao Monday: nunca leva chave/token
-    resposta = (f"✅ Pedido concluído pelo Claude Code (Max).\n\n{conclusao.resumo.strip()}\n\n"
-                f"Arquivos em ESCRITÓRIO VERANEIO/{conclusao.pasta}:\n{arquivos}")
+    if so_texto:  # brainstorm de 31/10/2026 (despachante-01): pedido só de texto não vira "falha sem PNG"
+        resposta = f"✅ Pedido concluído pelo Claude Code (Max), entregue como texto.\n\n{conclusao.resumo.strip()}"
+        local = "texto no chat"
+    else:
+        resposta = (f"✅ Pedido concluído pelo Claude Code (Max).\n\n{conclusao.resumo.strip()}\n\n"
+                    f"Arquivos em ESCRITÓRIO VERANEIO/{conclusao.pasta}:\n{arquivos}")
+        local = f"Pasta no Drive: ESCRITÓRIO VERANEIO/{conclusao.pasta}\n{arquivos}"
     try:
         await _finalizar(tarefa_id, "concluida", resposta, "concluida",
-                         f"{len(conclusao.arquivos)} arquivo(s) em {conclusao.pasta}")
+                         "entregue como texto" if so_texto else f"{len(conclusao.arquivos)} arquivo(s) em {conclusao.pasta}")
     except Descartada:
         return {"ok": True, "descartada": True}
-    monday.andamento(tarefa_id, "produzida", f"🎨 Criativos prontos (Claude Code).\n\n{conclusao.resumo.strip()[:3000]}"
-                                             f"\n\nPasta no Drive: ESCRITÓRIO VERANEIO/{conclusao.pasta}\n{arquivos}")
+    monday.andamento(tarefa_id, "produzida", f"🎨 {'Texto pronto' if so_texto else 'Criativos prontos'} (Claude Code)."
+                                             f"\n\n{conclusao.resumo.strip()[:3000]}\n\n{local}")
+    return {"ok": True}
+
+
+# --- Caixa de areia: tentativas barradas (brainstorm de 31/10/2026, despachante-27) ------------------------------
+# Antes a caixa barrava calada; agora cada peça com bloqueio aparece nos avisos de operação do painel da Diretoria
+# (saude.avisos_da_operacao), com tarefa, usuário e item do Monday. Na primeira fase só avisa: não segura a entrega.
+_ESQUEMA_BLOQUEIOS = ("CREATE TABLE IF NOT EXISTS bloqueios_caixa (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                      "tarefa_id INTEGER NOT NULL, em TEXT NOT NULL, linhas TEXT NOT NULL)")
+JANELA_BLOQUEIOS = timedelta(hours=24)
+
+
+def bloqueios_recentes() -> list[dict]:
+    """Peças com tentativa barrada nas últimas 24 h: tarefa, usuário, item do Monday, quantidade e a primeira linha."""
+    db = _db()
+    db.execute(_ESQUEMA_BLOQUEIOS)
+    desde = (datetime.now(timezone.utc) - JANELA_BLOQUEIOS).strftime("%Y-%m-%dT%H:%M:%SZ")
+    linhas = db.execute("SELECT b.tarefa_id, b.linhas, t.usuario FROM bloqueios_caixa b LEFT JOIN tarefas t "
+                        "ON t.id = b.tarefa_id WHERE b.em >= ? ORDER BY b.id", (desde,)).fetchall()
+    return [{"tarefa_id": l["tarefa_id"], "usuario": l["usuario"] or "?", "monday": monday.item_da_tarefa(l["tarefa_id"]),
+             "total": len(json.loads(l["linhas"])), "exemplo": (json.loads(l["linhas"]) or [""])[0]} for l in linhas]
+
+
+@rotas.post("/{tarefa_id}/bloqueios")
+async def registrar_bloqueios(tarefa_id: int, dados: Bloqueios, authorization: str = Header("")):
+    _exigir_operador(authorization)
+    linhas = [segredos.limpar(l)[:200] for l in dados.linhas[-50:] if l.strip()]
+    if not linhas:
+        return {"ok": True}
+    with _db() as db:
+        db.execute(_ESQUEMA_BLOQUEIOS)
+        db.execute("INSERT INTO bloqueios_caixa (tarefa_id, em, linhas) VALUES (?, ?, ?)",
+                   (tarefa_id, _agora(), json.dumps(linhas, ensure_ascii=False)))
+    linha = tarefas.obter(tarefa_id)
+    tarefas.registrar_evento(tarefa_id, "bloqueio_caixa", linha["agente"] if linha else None, MODELO_MAX,
+                             f"{len(linhas)} tentativa(s) barrada(s) pela caixa de areia: {linhas[0]}")
+    log.warning("Produção %s: a caixa de areia barrou %s tentativa(s): %s", tarefa_id, len(linhas), linhas[0])
     return {"ok": True}
 
 
@@ -571,6 +655,8 @@ async def falhar(tarefa_id: int, falha: Falha, authorization: str = Header("")):
     _exigir_operador(authorization)
     falha.erro = segredos.limpar(falha.erro)
     motivo = f"A produção pelo Claude Code (Max) falhou: {falha.erro[:300]}"
+    if (texto := segredos.limpar(falha.texto or "").strip()):  # o motivo nas palavras do Max (despachante-01)
+        motivo += f"\n\nO que o Max escreveu:\n{texto[:1500]}"
     try:
         await _finalizar(tarefa_id, "falhou", motivo, "falhou", falha.erro[:300])
     except Descartada:

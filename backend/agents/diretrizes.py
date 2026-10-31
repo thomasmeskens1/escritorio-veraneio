@@ -104,10 +104,21 @@ DOC_DA_EMPRESA = {"cv_corporativo": "11", "casa_vero": "12"}
 FUNCAO_TODAS_EMPRESAS = ("13", "15")  # e-mail marketing e grade de publicações: um manual para as três
 FUNCAO_DA_EMPRESA = {"cv_corporativo": ("14",)}  # persona do cliente corporativo (Prospectador)
 COMUNS_OUTRAS = {"00": ("ouro", "2"), "08": ("1", "2", "3", "5"), "09": ("1", "2", "3", "4"), "10": ("1", "2", "3", "4")}
+# Método de mídia paga do manual 02 para o Tráfego também no Corporativo e na Casa Vero (brainstorm de 31/10/2026,
+# gestor_trafego-09): sem ele, o agente não tinha estrutura de campanha, critério de vencedor nem nomenclatura. Vão só
+# as seções da função (mapa SECOES), com o aviso de que públicos, criativos e dados ali são da Casa Veraneio.
+METODO_OUTRAS = {"gestor_trafego": ("02",)}
+AVISO_METODO = ("MÉTODO DE MÍDIA PAGA (manual da Casa Veraneio): use como estrutura de trabalho (campanha, conjuntos, "
+                "rodadas, critério de vencedor, KPIs, nomenclatura e UTMs). Públicos, criativos, ganchos, nomes, "
+                "valores e o prefixo \"CV\" ali são da Casa Veraneio: adapte à empresa desta tarefa, nunca copie.")
 
 
 def _de_outra_empresa(agente_id: str, empresa: str) -> str:
-    partes = []
+    partes, metodo = [], []
+    for prefixo in METODO_OUTRAS.get(agente_id, ()):
+        caminho = _arquivo(prefixo)
+        if caminho and (texto := _ler(caminho, caminho.stat().st_mtime, agente_id, False)):
+            metodo.append(f"{AVISO_METODO}\n\n{texto}")
     # Documentos da função que valem para as 3 empresas (o de e-mail traz as regras de cada uma).
     da_funcao = tuple(p for p in DA_FUNCAO.get(agente_id, ())
                       if p in FUNCAO_TODAS_EMPRESAS or p in FUNCAO_DA_EMPRESA.get(empresa, ()))
@@ -120,6 +131,7 @@ def _de_outra_empresa(agente_id: str, empresa: str) -> str:
             secoes = [s for s in secoes if _chave(s) in COMUNS_OUTRAS[prefixo]]
         if secoes:
             partes.append("\n".join(secoes))
+    partes += metodo  # depois do documento da empresa, que vale sobre ele
     cabecalho = (f"DIRETRIZES ({EMPRESAS_NOMES[empresa]}). O documento da empresa diz o que já está confirmado; o que "
                  "estiver marcado como PENDENTE ou não aparecer, pergunte ao usuário. Nunca use marca, tom, assinatura, "
                  "imóveis ou dados de outra empresa do grupo.")
