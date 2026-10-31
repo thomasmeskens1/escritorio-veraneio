@@ -519,6 +519,10 @@ def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: st
         import calendario_eventos
 
         partes.append(calendario_eventos.texto())
+    import calendario  # datas da empresa e contagem pela data da postagem (Onda 2, item 4)
+
+    if (datas := calendario.bloco(agente_id, empresa, pedido)):
+        partes.append(datas)
     return "\n\n".join(partes)
 
 

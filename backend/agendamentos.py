@@ -253,7 +253,11 @@ async def _encaminhar(linha, agente) -> None:
 
     usuario, andar, texto = linha["usuario"], linha["andar"], linha["tarefa"]
     empresa = linha["empresa"] or empresas.PADRAO
-    if agente.id in AGENTES_PRODUCAO:  # PNG/MP4 seguem pela produção, como no chat
+    import pauta_semana
+
+    if agente.id == pauta_semana.AGENTE and pauta_semana.e_pedido(texto):  # leitura do Monday, sem IA (item 15)
+        await pauta_semana.entregar(usuario, andar, agente, linha["empresa"])
+    elif agente.id in AGENTES_PRODUCAO:  # PNG/MP4 seguem pela produção, como no chat
         import producao
         await producao.enfileirar(usuario, andar, agente, texto, empresa=empresa)
     elif config.usa_max(usuario) and estudos.e_estudo(agente.id, texto):
@@ -364,6 +368,12 @@ def agendar(dados: Pedido, authorization: str = Header("")):
         regra, descricao = regra_do_formulario(dados)
     except ValueError as erro:
         raise HTTPException(status_code=422, detail=str(erro)) from None
+    import pauta_semana
+
+    # Pauta da semana: nada de madrugada (decisão 4 em aberto).
+    if agente.id == pauta_semana.AGENTE and pauta_semana.e_pedido(tarefa) and (
+            erro := pauta_semana.horario_invalido(regra)):
+        raise HTTPException(status_code=422, detail=erro)
     ativas = _db().execute("SELECT COUNT(*) FROM agendamentos WHERE usuario = ? AND ativo = 1",
                            (usuario["sub"],)).fetchone()[0]
     if ativas >= MAX_ROTINAS_POR_USUARIO and not usuario.get("master"):
