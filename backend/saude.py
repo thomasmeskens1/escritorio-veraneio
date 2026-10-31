@@ -257,6 +257,11 @@ def avisos_da_operacao() -> list[str]:
     if not ollama_ok():
         avisos.append("Ollama fora do ar: o Cérebro está só com a busca por palavras e o modelo local de reserva "
                       "não funciona. Abra o Ollama no PC.")
+    import agentes_dinamicos  # agente novo proposto e parado (construtor-02/27): aparece aqui até alguém decidir
+
+    if (propostas := agentes_dinamicos.propostas_pendentes()):
+        avisos.append(f"{propostas} agente(s) proposto(s) pelo Construtor esperando a aprovação de quem pediu "
+                      "(chat do Construtor: Aprovar, Pedir ajuste ou Descartar).")
     no_ar = [m for m in config.modelos_gratuitos() if config.modelo_disponivel(m) and disponivel(m)]
     if len(no_ar) < ROTA_MINIMA:
         avisos.append(f"Só {len(no_ar)} modelo(s) gratuito(s) no ar agora: as tarefas podem cair no modelo local "

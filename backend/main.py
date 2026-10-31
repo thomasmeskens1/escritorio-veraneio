@@ -388,6 +388,14 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
             and (anterior := tarefas.obter(responde_a)) and anterior["usuario"] == usuario["sub"] \
             and empresas.valida(anterior["empresa"]):
         empresa = anterior["empresa"]
+    # "Nas 3 empresas" a quem tem a visão do grupo: as três, cada uma no seu bloco, mesmo com o seletor numa só
+    # (levantamento de 31/10/2026, analista_metricas-04).
+    elif agente.id in VISAO_DO_GRUPO and empresa != empresas.COMUM and empresas.pede_grupo(texto):
+        await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "titulo": "Empresa",
+                                      "texto": "O pedido fala das três empresas: respondo pelas três, cada uma no seu "
+                                               "bloco (o seletor da conversa estava em "
+                                               f"{empresas.nome(empresa)})."})
+        empresa = empresas.COMUM
     # A empresa dita no pedido vale mais que o seletor ("A empresa é a Casa Veraneio" com o seletor em Casa Vero).
     elif (dita := empresas.citada(texto)) and empresas.valida(empresa) and dita != empresa \
             and (andar in EXIGEM_EMPRESA or agente.id == cerebro.ID) and not cerebro.e_ensino(texto):

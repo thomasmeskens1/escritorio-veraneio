@@ -1,7 +1,8 @@
 """Agentes criados pelo Construtor: validação, persistência (SQLite) e registro no escritório.
 
-O agente nasce com status "construindo", vira "disponivel" após alguns segundos e sobrevive a
-reinícios (`carregar()` na subida). A persona vai para `PERFIS`, então o executor o atende como os demais.
+Ficha de contratação (levantamento de 31/10/2026, construtor-02 e decisão 16): o Construtor grava uma PROPOSTA, fora
+do prédio e de `PERFIS`. Só quando a pessoa da Diretoria que pediu lê a persona e aprova ("Aprovar o agente proposto
+<id>") ele ganha mesa: nasce "construindo", vira "disponivel" em segundos e volta nos reinícios (`carregar()`).
 """
 
 import asyncio
@@ -10,13 +11,14 @@ import json
 import logging
 import re
 import unicodedata
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import ValidationError
 
 import acesso
+import agentes_persona
 import atividade
+import config
 import tarefas
 from agents.perfis import PERFIS
 from auth import carregar_usuarios, validar_token
@@ -44,10 +46,13 @@ ESTILOS_CABELO = ["curto", "longo", "coque", "careca", "cacheado", "moicano"]
 ESTILOS_ROUPA = ["camiseta", "camisa", "blazer", "moletom", "macacao", "avental"]
 ACESSORIOS = ["nenhum", "oculos", "fone", "bone", "capacete", "cracha", "gravata", "camera", "lapis"]
 
-# Campo -> (mínimo, máximo) de caracteres.
+# Campo -> (mínimo, máximo) de caracteres. Persona com menos de 400 caracteres não cabe missão, regras, fluxo,
+# entregáveis e com quem fala (construtor-04: o Vendedor de Pacotes nasceu com 141).
 LIMITES = {"nome": (2, 40), "funcao": (3, 80), "descricao": (0, 300), "exemplo": (0, 200),
-           "role": (2, 80), "goal": (10, 600), "backstory": (10, 900)}
+           "role": (2, 80), "goal": (10, 600), "backstory": (400, 2500)}
 SEGUNDOS_CONSTRUINDO = 5
+LIMITE_POR_DIA = 3     # construtor-27: um abuso (sessão roubada, instrução escondida) fica pequeno e visível
+PROPOSTA, APROVADO, DESCARTADO = "proposta", "aprovado", "descartado"
 
 _ESQUEMA = """
 CREATE TABLE IF NOT EXISTS agentes_criados (
@@ -59,8 +64,12 @@ CREATE TABLE IF NOT EXISTS agentes_criados (
     ativo INTEGER NOT NULL DEFAULT 1
 );
 """
+# Os já existentes estavam em serviço: entram como aprovados.
+_COLUNAS_NOVAS = {"situacao": "TEXT NOT NULL DEFAULT 'aprovado'", "tarefa_id": "INTEGER",
+                  "aprovado_por": "TEXT", "aprovado_em": "TEXT"}
 _tabela_pronta = False
 _pendentes: set[asyncio.Task] = set()  # referências às tarefas "construindo -> disponivel"
+CRIADOS: set[str] = set()  # ids no prédio que vieram do Construtor (persona escrita por modelo: fora do Max)
 
 
 class ErroValidacao(ValueError):
@@ -71,11 +80,19 @@ class SemPermissao(PermissionError):
     """Só a diretoria cria agentes."""
 
 
+class LimiteAtingido(PermissionError):
+    """Limite diário de criações (o Construtor não deve tentar de novo)."""
+
+
 def _db():
     global _tabela_pronta
     db = tarefas._db()
     if not _tabela_pronta:
         db.executescript(_ESQUEMA)
+        existentes = {c[1] for c in db.execute("PRAGMA table_info(agentes_criados)")}
+        for coluna, tipo in _COLUNAS_NOVAS.items():
+            if coluna not in existentes:
+                db.execute(f"ALTER TABLE agentes_criados ADD COLUMN {coluna} {tipo}")
         _tabela_pronta = True
     return db
 
@@ -166,11 +183,15 @@ def _exclusiva(aparencia: Aparencia) -> Aparencia:
     return aparencia
 
 
-def _id_livre(agente_id: str) -> bool:
+def _id_livre(agente_id: str, ajuste_de: str = "") -> bool:
+    """Livre: ninguém no prédio com o id e nenhum cadastro ativo. A proposta da própria pessoa (`ajuste_de`) não
+    ocupa o id: refazer a especificação dela é o "Pedir ajuste"."""
     if andar_do_agente(agente_id) or agente_id in PERFIS:
         return False
-    linha = _db().execute("SELECT ativo FROM agentes_criados WHERE id = ?", (agente_id,)).fetchone()
-    return linha is None or not linha["ativo"]  # id de agente desativado pode ser reaproveitado
+    linha = _db().execute("SELECT ativo, situacao, criado_por FROM agentes_criados WHERE id = ?", (agente_id,)).fetchone()
+    if linha is None or not linha["ativo"]:  # id de agente desativado ou descartado pode ser reaproveitado
+        return True
+    return linha["situacao"] == PROPOSTA and bool(ajuste_de) and linha["criado_por"] == ajuste_de
 
 
 def vagas(andar: str, setor: str) -> int:
@@ -184,7 +205,7 @@ def setores_com_vagas() -> str:
                      for andar, setores in SETORES.items())
 
 
-def validar(spec: dict) -> dict:
+def validar(spec: dict, ajuste_de: str = "") -> dict:
     """Normaliza a especificação; levanta ErroValidacao com a explicação do problema."""
     if not isinstance(spec, dict):
         raise ErroValidacao("a especificação deve ser um objeto.")
@@ -203,15 +224,16 @@ def validar(spec: dict) -> dict:
     agente_id = _snake(str(spec.get("id") or "")) or _snake(nome)
     if not re.fullmatch(r"[a-z][a-z0-9_]{1,39}", agente_id):
         raise ErroValidacao(f"id inválido {agente_id!r}: use snake_case começando por letra (2 a 40 caracteres).")
-    if not _id_livre(agente_id):
-        raise ErroValidacao(f"já existe um agente com id {agente_id!r}; escolha outro nome/id.")
-    return {
-        "id": agente_id, "nome": nome, "andar": andar, "setor": setor,
-        "funcao": _texto(spec, "funcao"), "descricao": _texto(spec, "descricao"),
-        "exemplo": _texto(spec, "exemplo"), "role": _texto(spec, "role", nome),
-        "goal": _texto(spec, "goal"), "backstory": _texto(spec, "backstory"),
-        "aparencia": _exclusiva(_aparencia(spec.get("aparencia"))).model_dump(),
-    }
+    if not _id_livre(agente_id, ajuste_de):
+        raise ErroValidacao(f"já existe um agente com id {agente_id!r}; se é o mesmo agente, não crie de novo: "
+                            "apenas confirme ao usuário. Se é outro agente, escolha outro nome/id.")
+    textos = {"nome": nome, "funcao": _texto(spec, "funcao"), "descricao": _texto(spec, "descricao"),
+              "exemplo": _texto(spec, "exemplo"), "role": _texto(spec, "role", nome),
+              "goal": _texto(spec, "goal"), "backstory": _texto(spec, "backstory")}
+    if (falha := agentes_persona.problema(textos)):
+        raise ErroValidacao(falha)
+    return {"id": agente_id, "andar": andar, "setor": setor, **textos,
+            "aparencia": _exclusiva(_aparencia(spec.get("aparencia"))).model_dump()}
 
 
 # --- Registro no escritório ----------------------------------------------------------------
@@ -222,7 +244,13 @@ def _registrar(registro: dict, status: Status) -> Agente:
                     aparencia=Aparencia.model_validate(registro["aparencia"]), status=status)
     ANDARES[registro["andar"]][agente.id] = agente
     PERFIS[agente.id] = {k: registro[k] for k in ("role", "goal", "backstory")}
+    CRIADOS.add(agente.id)
     return agente
+
+
+def do_construtor(agente_id: str) -> bool:
+    """Agente criado pelo Construtor (persona escrita por modelo): fica fora do Max (construtor-06)."""
+    return agente_id in CRIADOS
 
 
 def _da_linha(linha) -> dict:
@@ -245,40 +273,65 @@ async def _concluir_construcao(agente_id: str) -> None:
         await atividade.transmitir_estado()
 
 
+_agora = tarefas._agora
+
+
+# construtor-18 e -27: um agente por tarefa. A troca de modelo no meio da tarefa recebe o que já foi registrado, em vez
+# de criar "vendedor_2". O mesmo nome pela mesma pessoa em outra tarefa atualiza a proposta dela ("Pedir ajuste").
+def _ja_proposto(tarefa_id: int | None):
+    return tarefa_id and _db().execute("SELECT * FROM agentes_criados WHERE tarefa_id = ? AND ativo = 1",
+                                       (tarefa_id,)).fetchone()
+
+
+CHAT_CONSTRUTOR = {"andar": "porao", "agente": "construtor"}
+
+
 async def criar(spec: dict, criado_por: str, tarefa_id: int | None = None) -> dict:
-    """Valida, persiste e coloca o agente no escritório (construindo -> disponivel)."""
+    """Valida e grava a PROPOSTA (fora do prédio). Devolve o registro, com "repetido" quando já existia."""
     if _role_de(criado_por) != "diretoria":
         raise SemPermissao("Somente a diretoria pode criar agentes.")
-    registro = validar(spec)
-    registro.update(criado_por=criado_por, criado_em=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    ativo=True)
+    agente_id = _snake(str((spec or {}).get("id") or "")) or _snake(str((spec or {}).get("nome") or ""))
+    if (anterior := _ja_proposto(tarefa_id)):
+        return {**_da_linha(anterior), "repetido": True}
+    ajuste = _db().execute("SELECT 1 FROM agentes_criados WHERE id = ? AND criado_por = ? AND ativo = 1 AND "
+                           "situacao = ?", (agente_id, criado_por, PROPOSTA)).fetchone()
+    hoje = _db().execute("SELECT COUNT(*) FROM agentes_criados WHERE criado_em >= ?", (_agora()[:10],)).fetchone()[0]
+    if not ajuste and hoje >= LIMITE_POR_DIA:
+        raise LimiteAtingido(f"o limite é de {LIMITE_POR_DIA} agentes novos por dia, e ele já foi atingido hoje.")
+    registro = validar(spec, ajuste_de=criado_por)
+    registro.update(criado_por=criado_por, criado_em=_agora(), ativo=True, situacao=PROPOSTA, tarefa_id=tarefa_id)
     with _db() as db:
         db.execute(
             "INSERT OR REPLACE INTO agentes_criados (id, nome, andar, setor, funcao, descricao, exemplo, role, goal, "
-            "backstory, aparencia, criado_por, criado_em, ativo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+            "backstory, aparencia, criado_por, criado_em, ativo, situacao, tarefa_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
             (*(registro[k] for k in ("id", "nome", "andar", "setor", "funcao", "descricao", "exemplo", "role",
                                      "goal", "backstory")),
-             json.dumps(registro["aparencia"]), criado_por, registro["criado_em"]))
-    _registrar(registro, Status.construindo)
-    await atividade.transmitir_estado()
-
+             json.dumps(registro["aparencia"]), criado_por, registro["criado_em"], PROPOSTA, tarefa_id))
     andar, setor = NOMES_ANDARES[registro["andar"]], NOMES_SETORES[registro["setor"]]
     if tarefa_id:
-        tarefas.registrar_evento(tarefa_id, "agente_criado", registro["id"],
-                                 detalhe=f"{registro['nome']} criado no setor {setor} ({andar}).")
+        tarefas.registrar_evento(tarefa_id, "agente_proposto", registro["id"],
+                                 detalhe=f"{registro['nome']} proposto para o setor {setor} ({andar}).")
     await gerenciador.enviar_para_usuario(criado_por, {
-        "tipo": "aviso", "andar": registro["andar"], "agente": registro["id"], "titulo": "Novo agente",
-        "texto": f"{registro['nome']} chegou ao setor {setor} ({andar}).",
+        "tipo": "aviso", **CHAT_CONSTRUTOR, "titulo": "Agente proposto",
+        "texto": f"{registro['nome']} ({setor}, {andar}) está como PROPOSTA: leia a persona na resposta do Construtor "
+                 "e decida. Ele só entra no escritório quando você aprovar.",
+        "opcoes": [{"rotulo": "Aprovar", "texto": f"Aprovar o agente proposto {registro['id']}"},
+                   {"rotulo": "Pedir ajuste", "texto": f"Ajuste o agente proposto {registro['id']}: ", "preencher": True},
+                   {"rotulo": "Descartar", "texto": f"Descartar o agente proposto {registro['id']}"}],
     })
-    tarefa = asyncio.create_task(_concluir_construcao(registro["id"]))
-    _pendentes.add(tarefa)
-    tarefa.add_done_callback(_pendentes.discard)
-    log.info("Agente criado: %s (%s/%s) por %s", registro["id"], registro["andar"], registro["setor"], criado_por)
+    if criado_por != config.DONO_MAX:  # construtor-27: toda criação chega ao Thomas, com quem pediu
+        await gerenciador.enviar_para_usuario(config.DONO_MAX, {
+            "tipo": "aviso", **CHAT_CONSTRUTOR, "titulo": "Agente proposto",
+            "texto": f"{criado_por} pediu ao Construtor o agente {registro['nome']} ({setor}, {andar}); aguarda a "
+                     "aprovação de quem pediu."})
+    log.warning("Agente proposto: %s (%s/%s) por %s, tarefa %s", registro["id"], registro["andar"], registro["setor"],
+                criado_por, tarefa_id)
     return registro
 
 
 def criar_em_thread(spec: dict, criado_por: str, tarefa_id: int | None = None) -> str:
-    """Para a ferramenta do CrewAI (thread): cria no loop principal e devolve texto para o LLM."""
+    """Para a ferramenta do CrewAI (thread): grava a proposta no loop principal e devolve texto para o LLM."""
     loop = atividade._loop
     if not loop:
         return "Erro: o servidor não está pronto para criar agentes agora. Avise o usuário."
@@ -286,18 +339,111 @@ def criar_em_thread(spec: dict, criado_por: str, tarefa_id: int | None = None) -
         registro = asyncio.run_coroutine_threadsafe(criar(spec, criado_por, tarefa_id), loop).result(timeout=30)
     except ErroValidacao as erro:
         return f"Erro de validação: {erro} Corrija a especificação e chame criar_agente de novo."
-    except SemPermissao as erro:
+    except (SemPermissao, LimiteAtingido) as erro:
         return f"Não autorizado: {erro} Explique isso ao usuário; não tente de novo."
     except (TimeoutError, concurrent.futures.TimeoutError):
         return "Erro: a criação demorou demais. Avise o usuário para tentar novamente."
-    return (f"Agente criado com sucesso: {registro['nome']} (id {registro['id']}), "
-            f"setor {NOMES_SETORES[registro['setor']]} do andar {NOMES_ANDARES[registro['andar']]}. "
-            f"Ele aparece como 'construindo' e fica disponível em alguns segundos. Agora confirme ao usuário.")
+    if registro.get("repetido"):
+        return (f"Este agente já foi registrado nesta tarefa ({registro['nome']}, id {registro['id']}); não chame "
+                "criar_agente de novo. Apenas confirme ao usuário que a proposta está pronta para ele revisar.")
+    return (f"Proposta registrada: {registro['nome']} (id {registro['id']}), setor "
+            f"{NOMES_SETORES[registro['setor']]} do andar {NOMES_ANDARES[registro['andar']]}. Ele AINDA NÃO está no "
+            "escritório: só entra quando quem pediu ler a persona e aprovar. Não diga que o agente foi criado; diga que "
+            "a proposta está pronta para revisão.")
+
+
+# --- Decisão de quem pediu (decisão 16) --------------------------------------------------------
+
+COMANDO = re.compile(r"^\s*(aprov\w*|descart\w*)\s+(?:o\s+)?agente\s+proposto\s+([a-z][a-z0-9_]{1,39})\b", re.I)
+
+
+def comando(texto: str) -> tuple[str, str] | None:
+    """"Aprovar o agente proposto vendedor" -> ("aprovar", "vendedor"); None se não for decisão."""
+    achado = COMANDO.match(texto or "")
+    if not achado:
+        return None
+    return ("aprovar" if achado.group(1).lower().startswith("aprov") else "descartar"), achado.group(2).lower()
+
+
+async def decidir(agente_id: str, login: str, acao: str, tarefa_id: int | None = None) -> str:
+    """Só a pessoa da Diretoria que pediu decide. Aprovado: ganha mesa (construindo -> disponivel)."""
+    linha = _db().execute("SELECT * FROM agentes_criados WHERE id = ? AND ativo = 1 AND situacao = ?",
+                          (agente_id, PROPOSTA)).fetchone()
+    if not linha:
+        no_predio = andar_do_agente(agente_id)
+        return (f"O agente {agente_id} já foi aprovado e está no escritório." if no_predio
+                else f"Não achei nenhuma proposta pendente com o id {agente_id}.")
+    if _role_de(login) != "diretoria" or linha["criado_por"] != (login or "").strip().lower():
+        return "Só a pessoa da Diretoria que pediu este agente pode aprová-lo ou descartá-lo."
+    registro = _da_linha(linha)
+    if acao == "descartar":
+        with _db() as db:
+            db.execute("UPDATE agentes_criados SET ativo = 0, situacao = ?, aprovado_por = ?, aprovado_em = ? "
+                       "WHERE id = ?", (DESCARTADO, login, _agora(), agente_id))
+        return f"Proposta do {registro['nome']} descartada. Nada entrou no escritório."
+    if andar_do_agente(agente_id) or agente_id in PERFIS:
+        return f"Já existe um agente com o id {agente_id} no escritório; peça ao Construtor outro nome."
+    if vagas(registro["andar"], registro["setor"]) <= 0:
+        return (f"O setor {NOMES_SETORES[registro['setor']]} lotou desde a proposta. Peça um ajuste com outro setor "
+                f"({setores_com_vagas()}).")
+    with _db() as db:
+        db.execute("UPDATE agentes_criados SET situacao = ?, aprovado_por = ?, aprovado_em = ? WHERE id = ?",
+                   (APROVADO, login, _agora(), agente_id))
+    _registrar(registro, Status.construindo)
+    await atividade.transmitir_estado()
+    andar, setor = NOMES_ANDARES[registro["andar"]], NOMES_SETORES[registro["setor"]]
+    for tarefa in {t for t in (registro.get("tarefa_id"), tarefa_id) if t}:
+        tarefas.registrar_evento(tarefa, "agente_criado", agente_id,
+                                 detalhe=f"{registro['nome']} aprovado por {login} no setor {setor} ({andar}).")
+    await gerenciador.enviar_para_usuario(login, {
+        "tipo": "aviso", "andar": registro["andar"], "agente": agente_id, "titulo": "Novo agente",
+        "texto": f"{registro['nome']} chegou ao setor {setor} ({andar})."})
+    pendente = asyncio.create_task(_concluir_construcao(agente_id))
+    _pendentes.add(pendente)
+    pendente.add_done_callback(_pendentes.discard)
+    return (f"Aprovado: {registro['nome']} entrou no setor {setor} ({andar}). Ele aparece como \"construindo\" e fica "
+            "disponível em alguns segundos.")
+
+
+def decidir_em_thread(texto: str, login: str, tarefa_id: int | None = None) -> str | None:
+    """Mensagem ao Construtor que é uma decisão: resolve sem modelo (None quando não é decisão)."""
+    if not (pedido := comando(texto)):
+        return None
+    loop = atividade._loop
+    if not loop:
+        return "O servidor não está pronto agora. Tente de novo em instantes."
+    return asyncio.run_coroutine_threadsafe(decidir(pedido[1], login, pedido[0], tarefa_id), loop).result(timeout=30)
+
+
+# construtor-07: o chat só diz "criado" quando o registro existe. Sem registro e o modelo dizendo que criou, a
+# resposta é descartada e o próximo modelo tenta (como no raciocínio vazado).
+DISSE_QUE_CRIOU = re.compile(r"\b(?<!n[aã]o )(?<!n[aã]o foi )(?:foi |est[aá] |j[aá] )?(?:criad[oa]|registrad[oa]|"
+                             r"cadastrad[oa])\b(?! ainda)|chegou ao setor|j[aá] est[aá] no (?:escrit[oó]rio|setor|andar)",
+                             re.I)
+
+
+def conferir_resposta(tarefa_id: int, texto: str) -> str:
+    linha = _db().execute("SELECT * FROM agentes_criados WHERE tarefa_id = ? AND situacao IN (?, ?)",
+                          (tarefa_id, PROPOSTA, APROVADO)).fetchone() if tarefa_id else None
+    if not linha:
+        # "O Designer já existe no setor Criação" fala de quem já está no prédio: não é falso sucesso.
+        ja_no_predio = any(a.nome.lower() in (texto or "").lower() for a in _todos_agentes() if len(a.nome) > 3)
+        if DISSE_QUE_CRIOU.search(texto or "") and "<<FORMULARIO>>" not in (texto or "") and not ja_no_predio:
+            raise RuntimeError("o Construtor disse que criou o agente sem registrar a proposta")
+        return texto
+    r = _da_linha(linha)
+    situacao = ("aprovado e já no escritório" if r["situacao"] == APROVADO else
+                f"PROPOSTA, ainda fora do escritório. Para decidir, use os botões do aviso ou escreva \"Aprovar o "
+                f"agente proposto {r['id']}\" / \"Descartar o agente proposto {r['id']}\" (ou peça um ajuste)")
+    return (f"{texto}\n\nRegistro do sistema: {r['nome']} (id {r['id']}), {NOMES_SETORES[r['setor']]} · "
+            f"{NOMES_ANDARES[r['andar']]}: {situacao}.\nFunção: {r['funcao']}\nObjetivo: {r['goal']}\n"
+            f"Persona (instrução permanente dele):\n{r['backstory']}")
 
 
 def carregar() -> None:
-    """Na subida: devolve ao escritório e às personas os agentes criados ativos."""
-    for linha in _db().execute("SELECT * FROM agentes_criados WHERE ativo = 1 ORDER BY criado_em"):
+    """Na subida: devolve ao escritório e às personas os agentes criados ativos e aprovados (propostas não)."""
+    for linha in _db().execute("SELECT * FROM agentes_criados WHERE ativo = 1 AND situacao = ? ORDER BY criado_em",
+                               (APROVADO,)):
         registro = _da_linha(linha)
         if registro["andar"] not in ANDARES or andar_do_agente(registro["id"]):
             log.warning("Agente criado ignorado (andar inválido ou id repetido): %s", registro["id"])
@@ -315,8 +461,13 @@ async def desativar(agente_id: str) -> bool:
     if andar:
         ANDARES[andar].pop(agente_id, None)
     PERFIS.pop(agente_id, None)
+    CRIADOS.discard(agente_id)
     await atividade.transmitir_estado()
     return True
+
+
+def propostas_pendentes() -> int:
+    return _db().execute("SELECT COUNT(*) FROM agentes_criados WHERE ativo = 1 AND situacao = ?", (PROPOSTA,)).fetchone()[0]
 
 
 # --- Rotas ---------------------------------------------------------------------------------
@@ -334,7 +485,8 @@ def _usuario(authorization: str) -> dict:
 @rotas.get("")
 def listar(authorization: str = Header("")):
     usuario = _usuario(authorization)
-    linhas = _db().execute("SELECT * FROM agentes_criados WHERE ativo = 1 ORDER BY criado_em").fetchall()
+    linhas = _db().execute("SELECT * FROM agentes_criados WHERE ativo = 1 AND situacao = ? ORDER BY criado_em",
+                           (APROVADO,)).fetchall()
     return {"agentes": [_da_linha(l) for l in linhas if acesso.pode_ver_andar(usuario, l["andar"])]}
 
 

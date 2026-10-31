@@ -59,6 +59,16 @@ def citada(texto: str) -> str | None:
     return achadas[0] if len(achadas) == 1 else None
 
 
+# "Métricas do meu Instagram nas 3 empresas" (tarefa 87, 28/10/2026) voltou só com a Casa Veraneio do seletor.
+GRUPO = re.compile(r"\b(?:as\s+)?(?:3|tr[eê]s)\s+(?:empresas|marcas|contas)\b|\btodas\s+as\s+(?:empresas|marcas|contas)\b|"
+                   r"\bdo\s+grupo\b|\bgrupo\s+(?:inteiro|todo)\b|\bcada\s+(?:uma\s+das\s+)?(?:empresa|marca)s?\b", re.I)
+
+
+def pede_grupo(texto: str) -> bool:
+    """O pedido é das três empresas: expressão de grupo ou duas marcas citadas (de passagem, uma só não conta)."""
+    return bool(GRUPO.search(texto or "")) or sum(bool(p.search(texto or "")) for p in CITACOES.values()) >= 2
+
+
 def contexto(empresa: str) -> str:
     """Bloco que abre o contexto de todo agente: de qual empresa é o trabalho e a proibição de misturar."""
     if empresa == COMUM:  # visão do grupo (Analista de Métricas): as três, sempre separadas

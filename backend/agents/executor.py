@@ -91,9 +91,9 @@ class _Pergunta(BaseModel):
 
 class ConsultarCerebro(BaseTool):
     name: str = "consultar_cerebro"
-    description: str = ("Consulta o Cérebro, o conhecimento central da Casa Veraneio (lodges de alto padrão para "
-                        "temporada, serviços do Hotel Privativo, marca, preços, regras e trabalhos anteriores do time). "
-                        "Use antes de afirmar qualquer fato sobre a empresa e cite a fonte que ele devolver.")
+    description: str = ("Consulta o Cérebro, o conhecimento central do grupo, sempre na empresa deste trabalho (imóveis, "
+                        "serviços, marca, preços, regras e trabalhos anteriores do time). Use antes de afirmar "
+                        "qualquer fato sobre a empresa e cite a fonte que ele devolver.")
     args_schema: type[BaseModel] = _Pergunta
     agente: str
     tarefa_id: int
@@ -117,8 +117,9 @@ class _Especificacao(BaseModel):
 
 class CriarAgente(BaseTool):
     name: str = "criar_agente"
-    description: str = ("Cria de verdade um novo agente no escritório a partir da especificação completa. "
-                        "Devolve a confirmação ou o erro de validação a corrigir.")
+    description: str = ("Registra a PROPOSTA de um novo agente a partir da especificação completa (ele só entra no "
+                        "escritório quando quem pediu aprovar). Um por tarefa. Devolve a confirmação ou o erro de "
+                        "validação a corrigir.")
     args_schema: type[BaseModel] = _Especificacao
     tarefa_id: int
 
@@ -196,7 +197,7 @@ def _rodar_max_ou_api(agente_id: str, descricao: str, esperado: str, limite_s: i
     """Etapa de projeto com o Max na rota: Max se livre; senão a API em paralelo; sem API, espera o Max."""
     fim = time.monotonic() + limite_s
     while True:
-        if agente_id not in max_texto.AGENTES_COM_FERRAMENTAS:
+        if agente_id not in max_texto.AGENTES_COM_FERRAMENTAS and not agentes_dinamicos.do_construtor(agente_id):
             try:
                 return _rodar_no_max(agente_id, descricao, esperado, max(60, int(fim - time.monotonic())), tarefa_id)
             except MaxOcupado:
@@ -340,11 +341,19 @@ def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa,
 
         total.texto = projeto.executar_projeto(tarefa_id, texto, contexto("gestor", historico, texto, cerebro.empresa_da_tarefa(tarefa_id)), executar,
                                                cancelar, avisar, etapa.modelo)
+    elif agente_id == "construtor" and (decisao := agentes_dinamicos.decidir_em_thread(
+            texto, (tarefas.obter(tarefa_id) or {"usuario": ""})["usuario"], tarefa_id)) is not None:
+        return Resultado(texto=decisao)  # "Aprovar o agente proposto X": decidido sem modelo
     else:
-        esperado = ("Confirmação amigável, em texto (sem JSON), do agente criado: nome, andar, setor e função."
+        esperado = ("Confirmação amigável, em texto (sem JSON), da PROPOSTA do agente: nome, andar, setor e função, "
+                    "lembrando que ele só entra no escritório depois da aprovação."
                     if agente_id == "construtor" else "Resposta completa ao pedido.")
         total.texto = _rodar(agente_id, descricao_tarefa(agente_id, texto, historico, tarefa_id), esperado,
                              etapa.modelo, etapa.limite_s, total, tarefa_id)
+        if agente_id == "construtor":  # o chat só diz "criado" quando o registro existe (construtor-07)
+            total.texto = agentes_dinamicos.conferir_resposta(tarefa_id, total.texto)
+        elif agente_id == cerebro.ID:  # [n] da resposta conferido contra o trecho n (cerebro-03)
+            total.texto = cerebro.conferir_citacoes(tarefa_id, total.texto)
     total.texto = _garantir_formulario(total.texto)
     total.texto = empresas.sem_precos(total.texto, cerebro.empresa_da_tarefa(tarefa_id), texto)  # Casa Vero
     total.texto = sem_espanhol(total.texto)

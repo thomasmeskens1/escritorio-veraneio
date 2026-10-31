@@ -149,10 +149,10 @@ ANDARES: dict[str, dict[str, Agente]] = {
                aparencia=_ap("#f1c27d", "curto", "#9a9a9a", "blazer", "#22333b", "#111111", "oculos")),
     ),
     "cobertura": _andar(
-        Agente(id="cerebro", nome="Cérebro", funcao="Conhecimento central da Casa Veraneio", setor="laboratorio",
+        Agente(id="cerebro", nome="Cérebro", funcao="Conhecimento central do grupo (cada empresa separada)", setor="laboratorio",
                visual="cerebro",
-               descricao="Guarda e aprende o conhecimento da empresa: lodges, serviços do Hotel Privativo, marca, "
-                         "regras e o trabalho do time. Responde citando a fonte; os agentes o consultam sempre.",
+               descricao="Guarda e aprende o conhecimento de cada empresa do grupo, separado: imóveis, serviços, "
+                         "marca, regras e o trabalho do time. Responde citando a fonte; os agentes o consultam sempre.",
                exemplo="Quais serviços do Hotel Privativo podemos oferecer e como eles são cobrados?",
                aparencia=_ap("#d9d9d9", "careca", "#9e9e9e", "avental", "#ffffff", "#5c677d", "oculos")),
         *(Agente(id=f"estagiario_{n}", nome=f"Estagiário {n}", funcao="Repassa o conhecimento do Cérebro aos agentes",
