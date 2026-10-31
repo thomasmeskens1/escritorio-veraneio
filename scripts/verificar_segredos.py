@@ -133,6 +133,9 @@ def verificar_faixa(faixa: list[str], privados: list) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
+    for saida in (sys.stdout, sys.stderr):  # acentos no terminal do Git no Windows
+        if hasattr(saida, "reconfigure"):
+            saida.reconfigure(encoding="utf-8", errors="replace")
     pasta = raiz()
     caminho = Path(os.getenv("PADROES_SEGREDOS") or pasta / "backend" / "dados" / "padroes_segredos.txt")
     privados = carregar_privados(caminho)
