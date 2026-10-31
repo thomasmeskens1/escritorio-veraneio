@@ -55,7 +55,8 @@ INTERVALO_REVISAO = 600           # o trabalhador de embeddings revisa os penden
 ROTULOS_FONTE = {"oficial": "documento oficial", "ensinado": "ensinado pela diretoria", "site": "site",
                  "drive": "Drive", "rede": "redes sociais (YouTube/Instagram)",
                  "dados": "dados do painel analítico",
-                 "tarefa": "trabalho anterior da equipe", "estudo": "estudo (estimativa)"}
+                 "tarefa": "trabalho anterior da equipe", "estudo": "estudo (estimativa)",
+                 "modelo": "modelo de estilo aprovado"}
 
 # Resposta de tarefa é referência de estilo, não fonte de dado (cerebro-13): "8 suítes" errado numa legenda antiga
 # voltava como conhecimento e contaminava as peças seguintes.
@@ -65,8 +66,12 @@ AGENTES_ESTUDO = {"estrategista", "analista_tendencias"}
 AVISO_ESTUDO = " (ESTUDO: contém estimativas; não use como fato em peça pública e, ao citar, diga que é estimativa)"
 
 
+# Modelo de estilo aprovado (cerebro-12, cerebro_modelos.py): vale o tom e a estrutura, nunca os fatos.
+AVISO_MODELO = " (MODELO DE ESTILO: siga o tom e a estrutura; nunca copie Lodge, números ou datas: a ficha vale mais)"
+
+
 def _aviso(t: dict) -> str:
-    return AVISO_TAREFA if t["fonte_tipo"] == "tarefa" else AVISO_ESTUDO if t["fonte_tipo"] == "estudo" else ""
+    return {"tarefa": AVISO_TAREFA, "estudo": AVISO_ESTUDO, "modelo": AVISO_MODELO}.get(t["fonte_tipo"], "")
 
 _ENSINO = re.compile(r"^\s*(aprenda|anote|memorize|lembre(?:-se)?|ensinar|registre)\b\s*(?:-\s*se\b)?\s*:?\s*",
                      re.IGNORECASE)

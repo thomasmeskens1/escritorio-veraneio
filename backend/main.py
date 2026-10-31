@@ -34,6 +34,7 @@ import monday
 import cerebro
 import cerebro_conferir
 import cerebro_mapa
+import cerebro_modelos
 import comercial
 import consolidacao_semanal
 import entrevista
@@ -44,6 +45,7 @@ import orquestrador
 import parar
 import producao
 import relatorios
+import repetir_lodges
 import reranker
 import saude
 import tarefas
@@ -194,6 +196,8 @@ app.include_router(triagem.rotas)
 app.include_router(caixa.rotas)
 app.include_router(insatisfacoes.rotas)
 app.include_router(folha_aprovacao.rotas)  # folha de aprovação da peça (Onda 2, designer-10)
+app.include_router(cerebro_modelos.rotas)  # modelos de estilo aprovados (Onda 3, cerebro-12)
+app.include_router(repetir_lodges.rotas)   # "Repetir para…" até 5 Lodges (Onda 3, copywriter-04)
 
 
 class Credenciais(BaseModel):

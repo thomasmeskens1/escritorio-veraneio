@@ -24,7 +24,8 @@ from cerebro_texto import BM25, dividir, mesmo_assunto, termos
 log = logging.getLogger(__name__)
 
 PESOS_FONTE = {"ensinado": 1.3, "oficial": 1.2, "site": 1.1, "drive": 1.0, "dados": 1.0, "rede": 0.85, "tarefa": 0.6,
-               "estudo": 0.5}  # rede: YouTube/Instagram (fala e legenda valem menos que a ficha)
+               "estudo": 0.5, "modelo": 0.7}  # rede: YouTube/Instagram (fala e legenda valem menos que a ficha)
+# modelo: texto aprovado pela Diretoria como exemplo de estilo (cerebro_modelos.py); vale como tom, nunca como fato.
 # Estudo do Estrategista e do Analista de Tendências (estrategista-27): estimativa, peso menor e validade de 90 dias
 # (refazer o estudo renova: o novo substitui o antigo do mesmo assunto).
 VALIDADE_ESTUDO = timedelta(days=90)
@@ -44,7 +45,7 @@ FATOR_PONTUACAO = 0.15     # multiplicador = 1 + 0.15 * pontuação  (0.7 a 1.3)
 # Documentos com identidade própria (cada página do site, cada lodge da planilha/acervo, cada documento
 # oficial): só o substituir_ref troca a versão. Lodges seguem o mesmo modelo de texto e não podem se
 # substituir, e o catálogo de um documento oficial não apaga a página atualizada do site.
-FONTES_COM_REF = {"site", "drive", "oficial"}
+FONTES_COM_REF = {"site", "drive", "oficial", "modelo"}  # um modelo nunca apaga outro nem a ficha
 LOTE_EMBEDDINGS = 8
 
 _ESQUEMA = """

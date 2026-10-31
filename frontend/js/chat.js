@@ -74,6 +74,8 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
   if (tipo === 'agente' && relatorio && LINK_RELATORIO.test(relatorio)) div.append(criarBotaoRelatorio(relatorio));
   if (tipo === 'agente' && tarefa_id && /^✅ Pedido concluído/.test(texto)) div.append(criarBotaoAjuste(tarefa_id));
   if (opcoes?.length) div.append(criarOpcoes(opcoes));
+  const repetir = tipo === 'agente' && tarefa_id && criarBotaoRepetir(tarefa_id, texto); // js/referencias.js
+  if (repetir) div.append(repetir);
   if (tipo === 'agente' && tarefa_id) div.append(criarAvaliacao(tarefa_id, avaliacao)); // 👍/👎 (js/avaliacao.js)
   if (meta) {
     const linha = document.createElement('span');
