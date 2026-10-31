@@ -25,6 +25,7 @@ import avaliacoes
 import caixa
 import config
 import correcoes
+import documentos_entrega
 import empresas
 import encaminhamento
 import espera
@@ -194,6 +195,7 @@ app.include_router(triagem.rotas)
 app.include_router(caixa.rotas)
 app.include_router(insatisfacoes.rotas)
 app.include_router(folha_aprovacao.rotas)  # folha de aprovação da peça (Onda 2, designer-10)
+app.include_router(documentos_entrega.rotas)  # planilha do catálogo e .docx da resposta (Onda 3, item 8)
 
 
 class Credenciais(BaseModel):

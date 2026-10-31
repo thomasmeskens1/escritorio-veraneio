@@ -60,7 +60,8 @@ async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str, anexos
     if ao_criar:
         ao_criar(tarefa_id)
     tarefas.registrar_evento(tarefa_id, "recebida", agente.id, detalhe=f"Dificuldade: {dificuldade.value}")
-    if agente.id == cerebro.ID and (tabela := await asyncio.to_thread(cerebro.imoveis.responder, texto, empresa)):
+    if agente.id == cerebro.ID and (tabela := await asyncio.to_thread(_planilha, tarefa_id, texto, empresa)
+                                    or await asyncio.to_thread(cerebro.imoveis.responder, texto, empresa)):
         from agents.executor import Resultado  # lista/contagem de imóveis: a tabela responde, sem IA (cerebro-01)
 
         await _concluir(tarefa_id, "tabela de imóveis", Resultado(texto=tabela))
@@ -70,6 +71,17 @@ async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str, anexos
     _execucoes[tarefa_id] = execucao
     execucao.add_done_callback(lambda _: _execucoes.pop(tarefa_id, None))
     return tarefa_id
+
+
+def _planilha(tarefa_id: int, texto: str, empresa: str) -> str | None:
+    """"Planilha do catálogo" no Cérebro: .xlsx anexado à resposta, sem IA (Onda 3, cerebro-21)."""
+    import documentos_entrega  # import tardio: anexos -> produção -> orquestrador
+
+    try:
+        return documentos_entrega.planilha_no_chat(tarefa_id, texto, empresa)
+    except Exception:
+        log.exception("Planilha do catálogo da tarefa %s falhou; segue pela tabela/busca.", tarefa_id)
+        return None
 
 
 def _em_segundo_plano(corrotina) -> asyncio.Task:
@@ -256,6 +268,9 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
     linha = tarefas.obter(tarefa_id)
     if linha["agente"] == relatorios.AGENTE:  # "Ver relatório" (em teste): só redes sociais, vale para todos
         await asyncio.to_thread(relatorios.gerar, linha)
+    import documentos_entrega  # estudo do Estrategista e plano do Gestor de Tráfego também em .docx (Onda 3)
+
+    await asyncio.to_thread(documentos_entrega.documento_da_resposta, linha)
     await _entregar(linha)
     await entregar_na_origem(linha)
     producao_a_seguir = False
@@ -447,9 +462,11 @@ def _mensagem(linha) -> dict:
 
 def _folha(linha) -> list[dict]:
     """Folha de aprovação da produção do Max (miniaturas numeradas), mostrada junto com a resposta."""
+    import documentos_entrega
     import folha_aprovacao  # import tardio: anexos -> produção -> orquestrador
 
-    return folha_aprovacao.de(linha["id"]) if linha["modelo"] == folha_aprovacao.producao.MODELO_MAX else []
+    folha = folha_aprovacao.de(linha["id"]) if linha["modelo"] == folha_aprovacao.producao.MODELO_MAX else []
+    return folha + documentos_entrega.de(linha["id"])  # planilha e .docx da resposta (Onda 3)
 
 
 def _link(linha) -> str | None:
