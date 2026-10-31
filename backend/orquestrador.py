@@ -16,6 +16,7 @@ from pathlib import Path
 import aprendizado
 import atividade
 import cerebro
+import cerebro_conferir
 import config
 import correcoes
 import corrida
@@ -59,6 +60,11 @@ async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str, anexos
     if ao_criar:
         ao_criar(tarefa_id)
     tarefas.registrar_evento(tarefa_id, "recebida", agente.id, detalhe=f"Dificuldade: {dificuldade.value}")
+    if agente.id == cerebro.ID and (tabela := await asyncio.to_thread(cerebro.imoveis.responder, texto, empresa)):
+        from agents.executor import Resultado  # lista/contagem de imóveis: a tabela responde, sem IA (cerebro-01)
+
+        await _concluir(tarefa_id, "tabela de imóveis", Resultado(texto=tabela))
+        return tarefa_id
     await atividade.ocupar(agente.id)
     execucao = _em_segundo_plano(_executar_imediata(tarefa_id, agente, dificuldade))
     _execucoes[tarefa_id] = execucao
@@ -263,6 +269,11 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
                 and _vai_produzir(linha["id"]):
             await _esperar_resposta(linha, pergunta)  # a produção só começa quando o usuário responder
             producao_a_seguir = True                  # o item do Monday não vai para Revisão ainda
+        elif _vai_produzir(linha["id"]) and (pergunta := await asyncio.to_thread(
+                cerebro_conferir.pergunta_do_plano, linha["texto"], resultado.texto, linha["empresa"])):
+            # Lodge, cidade/UF, suítes ou capacidade do plano não batem com a ficha: pergunta antes do Max.
+            await _esperar_resposta(linha, pergunta, opcoes=cerebro_conferir.OPCOES_GESTOR)
+            producao_a_seguir = True
         else:
             producao_a_seguir = await _produzir_pecas(linha, resultado.texto)
     monday.andamento(tarefa_id, "concluida", resultado.texto, producao_a_seguir)
@@ -303,7 +314,8 @@ def _pede_arquivo(texto: str) -> bool:
     return bool(encaminhamento.PECAS.search(pontas) or PEDE_ARQUIVO.search(pontas))
 
 
-async def _esperar_resposta(linha, pergunta: str | None, confirmar_arquivo: bool = False) -> None:
+async def _esperar_resposta(linha, pergunta: str | None, confirmar_arquivo: bool = False,
+                            opcoes: list | None = None) -> None:
     """Guarda a produção e pergunta no chat onde o pedido nasceu (o do Gestor, se foi pedido direto a ele).
     `confirmar_arquivo`: o pedido não falava em arquivo; a pergunta é se deve produzir."""
     andar, agente = encaminhamento.origem(linha["id"]) or (linha["andar"], linha["agente"])
@@ -321,8 +333,8 @@ async def _esperar_resposta(linha, pergunta: str | None, confirmar_arquivo: bool
         "tipo": "aviso", "andar": andar, "agente": agente, "titulo": "Produção em espera",
         "texto": f"Antes de produzir, o Gestor precisa da sua resposta: {pergunta}\n\nResponda aqui mesmo: a "
                  "produção no Max só começa depois disso.",
-        "opcoes": [{"rotulo": "Seguir como está", "texto": "Pode seguir com a produção como está."},
-                   {"rotulo": "Cancelar produção", "texto": "Cancelar a produção."}]})
+        "opcoes": opcoes or [{"rotulo": "Seguir como está", "texto": "Pode seguir com a produção como está."},
+                             {"rotulo": "Cancelar produção", "texto": "Cancelar a produção."}]})
 
 
 async def retomar_producao(pendente, resposta: str) -> str | None:

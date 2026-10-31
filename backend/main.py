@@ -32,6 +32,7 @@ import estudos
 import modelos_uso
 import monday
 import cerebro
+import cerebro_conferir
 import cerebro_mapa
 import comercial
 import consolidacao_semanal
@@ -532,6 +533,14 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         await comercial.iniciar(usuario["sub"], agente, texto)
         return
     if agente.id in AGENTES_PRODUCAO:  # só chega aqui o dono do plano Max (checado acima)
+        # Conferência dos dados do imóvel antes do Max (despachante-05): divergência com a ficha vira aviso com
+        # "Usar a ficha" / "Seguir mesmo assim" (o botão reenvia o pedido); com anexo, a nota vai no briefing.
+        if not anexos_ids and (conferencia := await asyncio.to_thread(cerebro_conferir.aviso_do_pedido, texto, empresa)):
+            return await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "liberar": True,
+                                                 "titulo": "Conferência de dados", "texto": conferencia["texto"],
+                                                 "opcoes": conferencia["opcoes"]})
+        if anexos_ids and (nota := await asyncio.to_thread(cerebro_conferir.nota_no_briefing, texto, empresa)):
+            contexto = f"{contexto}\n\n{nota}".strip()
         # "Ajuste na peça #20: ..." ou "troque o título...": nova versão da peça anterior, na mesma pasta.
         await producao.enfileirar(usuario["sub"], andar, agente, f"{texto}\n\n{contexto}".strip(), empresa=empresa,
                                   anexos=anexos.caminhos(anexos_ids, usuario["sub"]),

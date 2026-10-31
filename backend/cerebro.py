@@ -24,6 +24,8 @@ import cerebro_base as base
 import cerebro_conferencia as conferencia
 import cerebro_embed as embed
 import cerebro_estagiarios as estagiarios
+import cerebro_imoveis as imoveis
+import cerebro_lacunas as lacunas
 import config
 import empresas
 import tarefas
@@ -53,11 +55,18 @@ INTERVALO_REVISAO = 600           # o trabalhador de embeddings revisa os penden
 ROTULOS_FONTE = {"oficial": "documento oficial", "ensinado": "ensinado pela diretoria", "site": "site",
                  "drive": "Drive", "rede": "redes sociais (YouTube/Instagram)",
                  "dados": "dados do painel analítico",
-                 "tarefa": "trabalho anterior da equipe"}
+                 "tarefa": "trabalho anterior da equipe", "estudo": "estudo (estimativa)"}
 
 # Resposta de tarefa é referência de estilo, não fonte de dado (cerebro-13): "8 suítes" errado numa legenda antiga
 # voltava como conhecimento e contaminava as peças seguintes.
 AVISO_TAREFA = " (exemplo de trabalho anterior: não use como fonte de preço, capacidade ou data)"
+# Estudos do Estrategista e do Analista de Tendências (estrategista-27): hipótese não vira "verdade da empresa".
+AGENTES_ESTUDO = {"estrategista", "analista_tendencias"}
+AVISO_ESTUDO = " (ESTUDO: contém estimativas; não use como fato em peça pública e, ao citar, diga que é estimativa)"
+
+
+def _aviso(t: dict) -> str:
+    return AVISO_TAREFA if t["fonte_tipo"] == "tarefa" else AVISO_ESTUDO if t["fonte_tipo"] == "estudo" else ""
 
 _ENSINO = re.compile(r"^\s*(aprenda|anote|memorize|lembre(?:-se)?|ensinar|registre)\b\s*(?:-\s*se\b)?\s*:?\s*",
                      re.IGNORECASE)
@@ -99,7 +108,7 @@ def _formatar(trechos: list[dict], limite: int) -> str:
     blocos = []
     for n, t in enumerate(trechos, 1):
         ref = f" ({t['fonte_ref']})" if t["fonte_ref"] and t["fonte_tipo"] in ("oficial", "site", "drive", "rede", "dados") else ""
-        ref += AVISO_TAREFA if t["fonte_tipo"] == "tarefa" else ""
+        ref += _aviso(t)
         conteudo = t["conteudo"] if len(t["conteudo"]) <= por_trecho else t["conteudo"][:por_trecho].rstrip() + "…"
         blocos.append(f"[{n}] {t['titulo']} — fonte: {ROTULOS_FONTE.get(t['fonte_tipo'], t['fonte_tipo'])}{ref}, "
                       f"{t['data']}\n{conteudo}")
@@ -122,7 +131,7 @@ def _formatar_em_camadas(trechos: list[dict], limite: int, completos: int = COMP
     for n, t in enumerate(trechos[completos:], completos + 1):
         texto = " ".join(t["conteudo"].split())
         frase = (achou.group(1) if (achou := PRIMEIRA_FRASE.match(texto)) else texto[:140].rstrip() + "…")
-        aviso = AVISO_TAREFA if t["fonte_tipo"] == "tarefa" else ""
+        aviso = _aviso(t)
         linha = f"\n[{n}] {t['titulo']} — {ROTULOS_FONTE.get(t['fonte_tipo'], t['fonte_tipo'])}{aviso}, {t['data']}: {frase}"
         if len(resumo) + len(linha) > orcamento:
             break  # só linhas inteiras
@@ -185,9 +194,15 @@ def consultar(pergunta: str, agente: str, tarefa_id: int = 0) -> str:
     try:
         if tarefa_id:
             atividade.evento_em_thread(tarefa_id, "consulta_cerebro", agente, detalhe=pergunta)
+        # Lista, contagem ou filtro de imóveis ("todos os Lodges de praia para 12+ pessoas"): a tabela responde
+        # inteira e exata (cerebro-01), sem os 9 pedaços de texto que cortavam a lista.
+        if (tabela := imoveis.responder(pergunta, empresa_da_tarefa(tarefa_id), imoveis.MAX_CARACTERES_FERRAMENTA)):
+            base.registrar_consulta(tarefa_id, agente, pergunta, [], [])
+            return f"Tabela de imóveis do Cérebro (lista completa e conferida; cite a fonte e a data):\n\n{tabela}"
         trechos = base.buscar(pergunta, k=K_CAMADAS, empresa=empresa_da_tarefa(tarefa_id),
                               financeiro=_ve_financeiro(tarefa_id))
         base.registrar_consulta(tarefa_id, agente, pergunta, [t["id"] for t in trechos], [t["sinais"] for t in trechos])
+        lacunas.da_busca(pergunta, trechos, empresa_da_tarefa(tarefa_id), agente)  # "não sei" vira pergunta (cerebro-02)
     except Exception:
         log.exception("Cérebro: falha na consulta.")
         return "O Cérebro está indisponível agora. Não invente fatos sobre a empresa; avise o usuário se faltar algo."
@@ -210,6 +225,7 @@ def descricao_tarefa(texto: str, historico: list = (), tarefa_id: int = 0) -> st
     try:
         trechos = base.buscar(texto, k=6, empresa=empresa_da_tarefa(tarefa_id), financeiro=_ve_financeiro(tarefa_id))
         base.registrar_consulta(tarefa_id, ID, texto, [t["id"] for t in trechos], [t["sinais"] for t in trechos])
+        lacunas.da_busca(texto, trechos, empresa_da_tarefa(tarefa_id), ID)
     except Exception:
         log.exception("Cérebro: falha ao recuperar trechos.")
         trechos = []
@@ -239,6 +255,8 @@ def aprender_tarefa(tarefa_id: int) -> int | None:
     """Tarefa concluída vira um trecho "tarefa" (pedido + resposta resumida). O embedding vem em segundo plano."""
     try:
         linha = tarefas.obter(tarefa_id)
+        if linha and linha["status"] == "concluida":
+            lacunas.da_resposta(linha)  # PENDENTE, "não registrado", "só enxergo": vira pergunta da semana
         # As tarefas de TODOS os usuários viram conhecimento (Thomas, 29/10/2026: o papel do Cérebro é ser rico com o
         # histórico de todos; o histórico por usuário é só visual). Revisão de 22/10/2026: tarefa de outro usuário
         # poderia plantar um "fato"; por isso ela entra com o autor e peso menor que a do Thomas, e o ensinado, o
@@ -263,9 +281,15 @@ def aprender_tarefa(tarefa_id: int) -> int | None:
             linha["agente"] in AGENTES_FINANCEIROS or bool(TERMOS_FINANCEIROS.search(resposta))
             or _consultou_financeiro(tarefa_id))
         referencia = f"tarefa:{tarefa_id}{':financeiro' if financeira else ''}"
-        trecho_id = base._inserir("tarefa", referencia, f"{nome}: {sem_contatos(linha['texto'].strip())[:70]}", conteudo,
-                                  linha["empresa"] or empresas.PADRAO,
-                                  peso=None if do_dono else base.PESOS_FONTE["tarefa"] * PESO_OUTROS_USUARIOS)
+        titulo = f"{nome}: {sem_contatos(linha['texto'].strip())[:70]}"
+        fonte = "estudo" if linha["agente"] in AGENTES_ESTUDO else "tarefa"
+        if fonte == "estudo":  # selo com a data, peso menor e validade de 90 dias (cerebro_base.VALIDADE_ESTUDO)
+            data = datetime.now(FUSO).strftime("%d/%m/%Y")
+            titulo = f"ESTUDO de {data} — {titulo}"
+            conteudo = (f"ESTUDO DE {data}: contém estimativas; não usar como fato em peça pública. Vale até "
+                        f"{(datetime.now(FUSO) + base.VALIDADE_ESTUDO).strftime('%d/%m/%Y')}.\n\n{conteudo}")
+        trecho_id = base._inserir(fonte, referencia, titulo, conteudo, linha["empresa"] or empresas.PADRAO,
+                                  peso=None if do_dono else base.PESOS_FONTE[fonte] * PESO_OUTROS_USUARIOS)
         if (erradas := _contra_a_ficha(resposta, linha["empresa"] or empresas.PADRAO)):
             base.ativar_trecho_da_tarefa(tarefa_id, False)  # entra inativo: o dado errado não volta em outra peça
             tarefas.registrar_evento(tarefa_id, "cerebro_nao_aprendeu", ID,
@@ -475,3 +499,8 @@ async def ingerir(ingestao: Ingestao, authorization: str = Header("")):
     trechos, removidos = await asyncio.to_thread(_ingerir, ingestao)
     _acordar.set()
     return {"trechos": trechos, "removidos": removidos}
+
+
+# Catálogo de imóveis em tabela (GET /api/cerebro/imoveis) e respostas às perguntas da semana.
+rotas.include_router(imoveis.rotas)
+rotas.include_router(lacunas.rotas)

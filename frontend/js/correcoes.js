@@ -21,7 +21,25 @@ async function carregarCorrecoes(andar, agente) {
 }
 
 // Tipos de observação (backend/correcoes.py, avaliacoes.py e consolidacao_semanal.py).
-const rotuloObservacao = (tipo) => ({ elogio: '👍 Elogio', aprendizado: '🧠 Aprendizado da semana' }[tipo] || '✏️ Correção');
+const rotuloObservacao = (tipo) => ({ elogio: '👍 Elogio', aprendizado: '🧠 Aprendizado da semana',
+  pergunta: '❓ Pergunta da semana' }[tipo] || '✏️ Correção');
+
+// Pergunta da semana (backend/cerebro_lacunas.py): a resposta do Thomas vira conhecimento ensinado na empresa da
+// pergunta; "Fora do alcance" tira da lista sem ensinar nada.
+async function responderPergunta(o, corpoPedido) {
+  const { andar, agente } = chatAberto || {};
+  try {
+    const resposta = await fetch(`/api/cerebro/lacunas/${o.id}/responder`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${sessao.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpoPedido),
+    });
+    if (!resposta.ok) throw new Error((await resposta.json().catch(() => ({}))).detail || resposta.status);
+  } catch (erro) {
+    correcoes.erro = `Não foi possível salvar: ${erro.message}`;
+  }
+  if (andar) carregarCorrecoes(andar, agente);
+}
 
 async function decidirCorrecao(caminho, corpo) {
   const { andar, agente } = chatAberto || {};
@@ -115,10 +133,11 @@ function abrirCorrecao(o) {
   corpo.append(mensagem);
   if (o.resposta_anterior) {
     const resposta = novoEl('div', 'reg-mensagem reg-resposta');
-    resposta.append(novoEl('strong', null, o.tipo === 'aprendizado' ? 'Evidência da semana'
+    resposta.append(novoEl('strong', null, ['aprendizado', 'pergunta'].includes(o.tipo) ? 'Evidência da semana'
       : `Resposta do ${o.agente_nome} que motivou`), novoEl('p', null, o.resposta_anterior));
     corpo.append(resposta);
   }
+  if (o.tipo === 'pergunta') return abrirPergunta(o, fundo, janela, barra, corpo);
   const rotulo = novoEl('label', 'form-rotulo', 'Regra que vai valer (edite antes de aprovar)');
   const regra = novoEl('textarea', 'form-entrada');
   regra.id = `correcao-regra-${o.id}`;
@@ -159,6 +178,39 @@ function abrirCorrecao(o) {
   document.body.append(fundo);
   popupFormulario = fundo;
   regra.focus();
+}
+
+function abrirPergunta(o, fundo, janela, barra, corpo) {
+  corpo.firstChild.firstChild.textContent = 'Pergunta que o Cérebro não soube responder';
+  const rotulo = novoEl('label', 'form-rotulo', 'Resposta (vira conhecimento ensinado; só o Thomas ensina)');
+  const campo = novoEl('textarea', 'form-entrada');
+  campo.id = `pergunta-resposta-${o.id}`;
+  rotulo.htmlFor = campo.id;
+  campo.rows = 4;
+  const acoes = novoEl('div', 'usuario-acoes');
+  const botao = (texto, classe, acao) => {
+    const b = novoEl('button', classe, texto);
+    b.type = 'button';
+    b.addEventListener('click', async () => {
+      acoes.querySelectorAll('button').forEach((x) => { x.disabled = true; });
+      await acao();
+      fecharFormularioPopup();
+    });
+    return b;
+  };
+  acoes.append(
+    botao('Ensinar ao Cérebro', 'botao-primario', () => responderPergunta(o, { resposta: campo.value })),
+    botao('Fora do alcance', 'botao-secundario', () => responderPergunta(o, { fora_do_alcance: true })),
+    botao('Descartar', 'botao-secundario botao-perigo', () => decidirCorrecao(`${o.id}/descartar`)),
+  );
+  corpo.append(rotulo, campo, acoes);
+  janela.append(barra, corpo);
+  fundo.append(janela);
+  fundo.addEventListener('click', (e) => { if (e.target === fundo) fecharFormularioPopup(); });
+  fundo.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); fecharFormularioPopup(); } });
+  document.body.append(fundo);
+  popupFormulario = fundo;
+  campo.focus();
 }
 
 // Consolidação semanal (toda segunda, 07:00): o master pode rodar agora. O Max lê a semana e os itens chegam aqui.

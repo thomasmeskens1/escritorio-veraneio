@@ -284,6 +284,9 @@ def iniciar() -> None:
         import consolidacao_semanal  # consolidação semanal do Cérebro (segunda, 07:00)
 
         consolidacao_semanal.agendar(_agendador)
+        import cerebro_lacunas  # perguntas da semana do Cérebro (segunda, 10:00, sem Max)
+
+        cerebro_lacunas.agendar(_agendador)
     agora = datetime.now(FUSO)
     for linha in _db().execute("SELECT * FROM agendamentos WHERE ativo = 1").fetchall():
         regra = json.loads(linha["regra"])
