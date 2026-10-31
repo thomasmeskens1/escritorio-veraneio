@@ -91,8 +91,8 @@ def _prompt(dados: dict) -> str:
 def consolidar(forcar: bool = False) -> dict:
     """Roda a consolidação (em thread: espera o Max). Uma vez por semana, a não ser que `forcar`."""
     global _rodando
+    import cerebro_prova
     import comercial
-    import reranker
 
     if _rodando:
         return {"ok": False, "mensagem": "A consolidação já está rodando."}
@@ -103,7 +103,8 @@ def consolidar(forcar: bool = False) -> dict:
         return {"ok": False, "mensagem": "Esta semana já foi consolidada."}
     _rodando = True
     try:
-        rede = reranker.treinar()
+        # Retreino da rede com a prova do Cérebro antes e depois (cerebro-06): se a nota cair, o retreino é descartado.
+        rede = cerebro_prova.treinar_com_prova("consolidação semanal")
         dados = coletar()
         if not dados["grupos"]:
             return {"ok": True, "itens": 0, "rede": rede, "mensagem": "Nenhuma tarefa na semana."}

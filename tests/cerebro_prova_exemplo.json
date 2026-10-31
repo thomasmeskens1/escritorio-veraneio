@@ -1,0 +1,26 @@
+{
+ "versao": 1,
+ "gerado_em": "2026-10-31T00:00:00Z",
+ "observacao": "EXEMPLO FICTÍCIO para os testes (formato do backend/dados/cerebro_prova.json, que fica fora do git).",
+ "empresas": {
+  "casa_veraneio": [
+   {"id": "cv-901-cidade", "pergunta": "Em que cidade fica o Lodge 901?", "ref": "site/lodges/lodge-901",
+    "contem": ["Cidade Exemplo"], "nao_contem": [], "proibido_ref": ["corporativo/", "vero/"]},
+   {"id": "cv-901-pessoas", "pergunta": "Para quantas pessoas é o Lodge 901?", "ref": "site/lodges/lodge-901",
+    "contem": ["até 12 pessoas"], "nao_contem": [], "proibido_ref": ["corporativo/", "vero/"]},
+   {"id": "cv-sem-orlando", "pergunta": "Sugira casas de veraneio com piscina", "ref": null, "contem": [],
+    "nao_contem": ["Orlando"], "proibido_ref": ["corporativo/", "vero/", "site/lodges-orlando"]},
+   {"id": "cv-999-cidade", "pergunta": "Em que cidade fica o Lodge 999?", "ref": "site/lodges/lodge-999",
+    "contem": ["Lugar Nenhum"], "nao_contem": [], "proibido_ref": []}
+  ],
+  "cv_corporativo": [
+   {"id": "corp-901-local", "pergunta": "Onde fica o espaço de eventos Lodge 901 do Corporativo?",
+    "ref": "corporativo/espacos/lodge-901", "contem": ["Vila Fictícia"], "nao_contem": [],
+    "proibido_ref": ["site/", "vero/"]}
+  ],
+  "casa_vero": [
+   {"id": "vero-901-dormitorios", "pergunta": "Quantos dormitórios tem o Vero 901?", "ref": "vero/imoveis/vero-901",
+    "contem": ["5 dormitórios"], "nao_contem": ["diária"], "proibido_ref": ["site/", "corporativo/"]}
+  ]
+ }
+}

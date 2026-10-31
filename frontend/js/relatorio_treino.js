@@ -104,6 +104,8 @@ function abrirRelatorioTreino(r = ultimoRelatorioTreino) {
     });
     rede.append(nums);
     if (rd.observacao) rede.append(novoEl('p', 'treino-porque', rd.observacao));
+    // Prova do Cérebro (backend/cerebro_prova.py): perguntas de gabarito conferidas na busca, antes e depois do treino
+    if (rd.prova?.observacao) rede.append(novoEl('p', 'treino-porque', rd.prova.observacao));
     corpo.append(rede);
   }
 

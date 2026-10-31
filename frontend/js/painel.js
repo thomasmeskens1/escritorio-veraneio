@@ -134,9 +134,22 @@ async function carregarTarefas() {
 function renderizarPainel({ resumo = {}, tarefas = [] }) {
   const blocos = [
     criarAvisos(resumo.avisos), criarResumo(resumo), criarCredito(resumo.anthropic), criarModelosFora(resumo.modelos_fora),
-    criarSaudeModelos(resumo.modelos_7d), criarAprendizado(resumo.aprendizado), criarListaTarefas(tarefas),
+    criarSaudeModelos(resumo.modelos_7d), criarAprendizado(resumo.aprendizado), criarProvaCerebro(resumo.prova_cerebro),
+    criarListaTarefas(tarefas),
   ];
   painelConteudo.replaceChildren(...blocos.filter(Boolean));
+}
+
+// Prova semanal do Cérebro (backend/cerebro_prova.py, só Diretoria): perguntas de gabarito conferidas na busca.
+function criarProvaCerebro(prova) {
+  if (!prova) return null;
+  const caixa = novoEl('section', 'credito');
+  const quando = new Date(prova.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  caixa.append(novoEl('h3', null, `Prova do Cérebro: ${prova.acertos}/${prova.total}`));
+  const empresas = Object.entries(prova.por_empresa || {}).map(([nome, p]) => `${nome} ${p.acertos}/${p.total}`);
+  caixa.append(novoEl('p', 'credito-legenda', `${empresas.join(' · ')} · em ${quando}`));
+  (prova.falhas || []).slice(0, 5).forEach((f) => caixa.append(novoEl('p', 'credito-legenda', `✗ ${f.pergunta}: ${f.motivo}`)));
+  return caixa;
 }
 
 // Modelos fora da rota: pausa curta (cota, limite, lentidão) ou AFASTADOS por falha recorrente (7 dias).
