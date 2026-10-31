@@ -23,7 +23,11 @@ from cerebro_texto import BM25, dividir, mesmo_assunto, termos
 
 log = logging.getLogger(__name__)
 
-PESOS_FONTE = {"ensinado": 1.3, "oficial": 1.2, "site": 1.1, "drive": 1.0, "dados": 1.0, "rede": 0.85, "tarefa": 0.6}  # rede: YouTube/Instagram (fala e legenda valem menos que a ficha)
+PESOS_FONTE = {"ensinado": 1.3, "oficial": 1.2, "site": 1.1, "drive": 1.0, "dados": 1.0, "rede": 0.85, "tarefa": 0.6,
+               "estudo": 0.5}  # rede: YouTube/Instagram (fala e legenda valem menos que a ficha)
+# Estudo do Estrategista e do Analista de Tendências (estrategista-27): estimativa, peso menor e validade de 90 dias
+# (refazer o estudo renova: o novo substitui o antigo do mesmo assunto).
+VALIDADE_ESTUDO = timedelta(days=90)
 LIMIAR_VERSAO = 0.90       # novo trecho parecido com um antigo do mesmo assunto: o novo vence
 LIMIAR_DUPLICADO = 0.97    # consolidação: quase idênticos
 COS_MINIMO = 0.40          # sem termo em comum, só entra se o significado for bem próximo
@@ -267,6 +271,9 @@ class Indice:
         # Dados financeiros do painel (CRM: vendas e receita; Google/Meta Ads: investimento): só para a Diretoria.
         self.financeiro = np.array([bool(FINANCEIRO_REF.search(l["fonte_ref"] or "")) for l in linhas], dtype=bool)
         self.datas = [l["atualizado_em"] for l in linhas]
+        vence = agora(-VALIDADE_ESTUDO)
+        self.vencido = np.array([l["fonte_tipo"] == "estudo" and (l["atualizado_em"] or "") < vence for l in linhas],
+                                dtype=bool)
         self.pesos = np.array([l["peso_fonte"] for l in linhas], dtype=np.float32)
         self._bm25 = None
         vetores = [embed.de_blob(l["embedding"]) if l["modelo_embedding"] == config.MODELO_EMBEDDING else None
@@ -349,6 +356,7 @@ def buscar(pergunta: str, k: int = 5, empresa: str = PADRAO, financeiro: bool = 
         permitido &= ~indice.financeiro
     if ORLANDO not in pergunta.lower():
         permitido &= ~indice.orlando
+    permitido &= ~indice.vencido  # estudo com mais de 90 dias não volta (a consolidação diária o desativa)
     termos_pergunta = termos(pergunta)
     bm25 = np.array(indice.bm25.pontuar(termos_pergunta), dtype=np.float32)
     cosseno = np.zeros(len(indice.ids), dtype=np.float32)
@@ -435,7 +443,8 @@ def ajustar_pontuacao(ids: list[int], passo: float) -> None:
 def ativar_trecho_da_tarefa(tarefa_id: int, ativo: bool) -> int:
     """👎 numa resposta: o trecho que ela virou sai das buscas (e volta se o voto for retirado ou trocado)."""
     with _trava, db() as conexao:
-        mudou = conexao.execute("UPDATE conhecimento SET ativo = ? WHERE fonte_tipo = 'tarefa' AND fonte_ref IN (?, ?)",
+        mudou = conexao.execute("UPDATE conhecimento SET ativo = ? WHERE fonte_tipo IN ('tarefa', 'estudo') "
+                                "AND fonte_ref IN (?, ?)",
                                 (int(ativo), f"tarefa:{tarefa_id}", f"tarefa:{tarefa_id}:financeiro")).rowcount
     if mudou:
         _mudou()
@@ -506,8 +515,11 @@ def consolidar() -> dict:
         _desativar([sai], fica)
     with _trava, db() as conexao:
         decaidos = conexao.execute(
-            "UPDATE conhecimento SET pontuacao = pontuacao * 0.9 WHERE fonte_tipo = 'tarefa' AND ativo = 1 "
+            "UPDATE conhecimento SET pontuacao = pontuacao * 0.9 WHERE fonte_tipo IN ('tarefa', 'estudo') AND ativo = 1 "
             "AND pontuacao != 0 AND criado_em < ?", (agora(-timedelta(days=30)),)).rowcount
+        vencidos = conexao.execute(
+            "UPDATE conhecimento SET ativo = 0, atualizado_em = ? WHERE fonte_tipo = 'estudo' AND ativo = 1 "
+            "AND atualizado_em < ?", (agora(), agora(-VALIDADE_ESTUDO))).rowcount
         # Versões antigas (inativas há 3+ dias) guardam o texto como histórico, mas não o vetor: era mais da metade
         # do banco (30/10/2026: 49 MB de 85 MB com o prazo de 30 dias). Se um trecho for reativado, o vetor é
         # recalculado (pendentes() pega ativo sem vetor).
@@ -517,7 +529,10 @@ def consolidar() -> dict:
     if liberados >= 100:
         with _trava:
             db().execute("VACUUM")  # devolve o espaço ao disco (fora de transação)
-    resultado = {"duplicados": len(removidos), "decaidos": decaidos, "vetores_liberados": liberados,
+    if vencidos:
+        _mudou()
+    resultado = {"duplicados": len(removidos), "decaidos": decaidos, "estudos_vencidos": vencidos,
+                 "vetores_liberados": liberados,
                  "pendentes": len(pendentes())}
     log.info("Cérebro: consolidação %s", resultado)
     return resultado

@@ -19,6 +19,7 @@ import config
 import empresas
 import encaminhamento
 import cerebro
+import cerebro_conferir
 import max_texto
 import saude
 import tarefas
@@ -390,6 +391,7 @@ def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa,
             total.texto = cerebro.conferir_citacoes(tarefa_id, total.texto)
     total.texto = _garantir_formulario(total.texto)
     total.texto = empresas.sem_precos(total.texto, cerebro.empresa_da_tarefa(tarefa_id), texto)  # Casa Vero
+    total.texto = cerebro_conferir.formulario_seguro(total.texto, cerebro.empresa_da_tarefa(tarefa_id), texto)
     total.texto = sem_espanhol(total.texto)
     return total
 
