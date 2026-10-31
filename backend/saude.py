@@ -266,7 +266,9 @@ def avisos_da_operacao() -> list[str]:
     if len(no_ar) < ROTA_MINIMA:
         avisos.append(f"Só {len(no_ar)} modelo(s) gratuito(s) no ar agora: as tarefas podem cair no modelo local "
                       "(lento). Veja \"Modelos fora da rota\" abaixo.")
-    return avisos + avisos_da_caixa_de_areia()
+    import cerebro_prova  # prova semanal do Cérebro (cerebro-06): retreino descartado, nota em queda, gabarito velho
+
+    return avisos + avisos_da_caixa_de_areia() + cerebro_prova.avisos()
 
 
 def avisos_da_caixa_de_areia() -> list[str]:

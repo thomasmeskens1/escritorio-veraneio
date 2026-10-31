@@ -9,7 +9,7 @@ from fastapi import APIRouter, Header, HTTPException
 import acesso
 import aprendizado
 import config
-import reranker
+import cerebro_prova
 import saude
 import tarefas
 from auth import validar_token
@@ -55,6 +55,8 @@ def listar_tarefas(authorization: str = Header("")):
             "avisos": saude.avisos_da_operacao() if _usuario(authorization)["role"] == "diretoria" else [],
             "modelos_7d": saude.estatisticas(7),  # saúde de cada modelo: tentativas, falhas, tempo médio
             "aprendizado": aprendizado.resumo(_nome_do_agente),
+            # Nota da prova semanal do Cérebro (cerebro_prova.py), só para a Diretoria.
+            "prova_cerebro": cerebro_prova.resumo() if _usuario(authorization)["role"] == "diretoria" else None,
         },
         "tarefas": [_tarefa_publica(linha) for linha in tarefas.listar(filtro)],
     }
@@ -118,7 +120,8 @@ async def treinar_agora(authorization: str = Header("")):
     if not meta:
         return {"ok": False, "modelo": None, "mensagem": "Ainda não há tarefas finalizadas para treinar."}
     relatorio = await asyncio.to_thread(relatorio_aprendizado.montar, meta, anterior, _nome_do_agente)
-    relatorio["rede"] = await asyncio.to_thread(reranker.treinar)  # rede neural do Cérebro (👍/👎, elogios, correções)
+    # Rede neural do Cérebro (👍/👎, elogios, correções), com a prova do Cérebro antes e depois (cerebro-06).
+    relatorio["rede"] = await asyncio.to_thread(cerebro_prova.treinar_com_prova, "Treinar agora")
     import corrida
 
     relatorio["modelos"] = await asyncio.to_thread(corrida.resumo)  # ordem e tempos aprendidos de cada modelo
