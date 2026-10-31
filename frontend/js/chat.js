@@ -436,10 +436,11 @@ function mostrarProgresso(fracao) {
   modalProgresso.setAttribute('aria-valuenow', pct);
 }
 
-const iconePdf = () => {
+// Ícone do arquivo: PDF, ou a extensão dos documentos da resposta (XLSX, DOCX; backend/documentos_entrega.py).
+const iconePdf = (nome = '') => {
   const i = document.createElement('span');
   i.className = 'anexo-icone-pdf';
-  i.textContent = 'PDF';
+  i.textContent = (/\.(xlsx|docx|pptx)$/i.exec(nome)?.[1] || 'PDF').toUpperCase();
   return i;
 };
 
@@ -547,12 +548,17 @@ function criarAnexosDaMensagem(anexos) {
     } else {
       const nome = document.createElement('span');
       nome.textContent = a.nome;
-      link.append(iconePdf(), nome);
+      link.append(iconePdf(a.nome), nome);
     }
     link.addEventListener('click', async (e) => {
       e.preventDefault();
       const url = await urlDoAnexo(a.id);
-      if (url) window.open(url, '_blank', 'noopener');
+      if (!url) return;
+      if (a.mime?.startsWith('image/') || a.mime === 'application/pdf') { window.open(url, '_blank', 'noopener'); return; }
+      const baixar = document.createElement('a'); // planilha/documento: baixa com o nome certo (blob não tem nome)
+      baixar.href = url;
+      baixar.download = a.nome || 'documento';
+      baixar.click();
     });
     caixa.append(link);
   });
