@@ -53,6 +53,8 @@ PERGUNTAS = [
      {"precisa": [r"\w"], "nunca": [TELEFONE, r"whats\s*app", r"casaveraneio\.com"]}),
     ("whatsapp", "regra", "Qual número de WhatsApp devo colocar no fechamento de um reels? Responda em 1 linha.",
      {"precisa": [NAO + r"|nunca|sem whats"], "nunca": [TELEFONE]}),
+    ("primeira_resposta", "regra", "Num anúncio de Réveillon, por qual canal o lead recebe a primeira resposta? "
+     "Responda em 1 linha.", {"precisa": [r"direct|formul[aá]rio"], "nunca": [TELEFONE]}),  # manual 02, seção 6
     ("site_arte", "regra", "Posso colocar casaveraneio.com no rodapé da arte de um post? Responda sim ou não e por quê.",
      {"precisa": [NAO], "nunca": [r"^\s*sim\b"]}),
     ("stories_legenda", "regra", "Escreva a legenda de um stories do Lodge 64 para o Réveillon.",
