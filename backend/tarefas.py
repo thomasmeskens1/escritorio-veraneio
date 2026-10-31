@@ -66,8 +66,7 @@ _COLUNAS_NOVAS = {"tentativas_fila": "INTEGER NOT NULL DEFAULT 0", "proxima_tent
                   "anexos": "TEXT", "contexto_anexos": "TEXT",  # anexos: JSON com os ids
                   "empresa": "TEXT NOT NULL DEFAULT 'casa_veraneio'"}  # empresas.py: nunca misturar
 
-MAX_TENTATIVAS_FILA = 6
-INTERVALO_REAGENDAMENTO = timedelta(minutes=30)
+MAX_TENTATIVAS_FILA = 6  # mínimo de tentativas reais antes de desistir (e só depois de PRAZO_FILA)
 
 _conexao: sqlite3.Connection | None = None
 
@@ -303,14 +302,33 @@ def proximas_adiadas() -> list[sqlite3.Row]:
     ).fetchall()
 
 
-def reagendar(tarefa_id: int) -> bool:
-    """Devolve a tarefa à fila para daqui a pouco; False se já esgotou as tentativas."""
+# Brainstorm de 31/10/2026 (despachante-18): espera crescente e prazo de 24 h no lugar das 6 tentativas de 30 em 30 min.
+ESPERAS_FILA = (timedelta(minutes=15), timedelta(minutes=30), timedelta(minutes=60))
+ESPERA_SEM_MODELO = timedelta(minutes=5)  # nenhum modelo chegou a rodar (Max ou local ocupados): não conta tentativa
+PRAZO_FILA = timedelta(hours=24)
+
+
+def reagendar(tarefa_id: int, rodou_modelo: bool = True) -> bool:
+    """Devolve a tarefa à fila para daqui a pouco; False se passou do prazo (24 h) depois de MAX_TENTATIVAS_FILA."""
     linha = obter(tarefa_id)
-    if linha["tentativas_fila"] + 1 >= MAX_TENTATIVAS_FILA:
+    vencida = (linha["criada_em"] or "") < _agora(-PRAZO_FILA)
+    if not rodou_modelo:
+        if vencida:
+            return False
+        atualizar(tarefa_id, status="adiada", proxima_tentativa=_agora(ESPERA_SEM_MODELO))
+        return True
+    tentativas = linha["tentativas_fila"] + 1
+    if tentativas >= MAX_TENTATIVAS_FILA and vencida:
         return False
-    atualizar(tarefa_id, status="adiada", tentativas_fila=linha["tentativas_fila"] + 1,
-              proxima_tentativa=_agora(INTERVALO_REAGENDAMENTO))
+    atualizar(tarefa_id, status="adiada", tentativas_fila=tentativas,
+              proxima_tentativa=_agora(ESPERAS_FILA[min(tentativas, len(ESPERAS_FILA)) - 1]))
     return True
+
+
+def falhas_de_modelo_desde(tarefa_id: int, desde: str) -> int:
+    """Falhas de modelos que de fato rodaram (sem "Max ocupado") desde `desde` (ISO UTC)."""
+    return _db().execute("SELECT COUNT(*) FROM eventos WHERE tarefa_id = ? AND tipo = 'falha_modelo' AND em >= ? "
+                         "AND COALESCE(detalhe, '') NOT LIKE 'Max ocupado%'", (tarefa_id, desde)).fetchone()[0]
 
 
 def historico(usuario: str, andar: str, agente: str, antes_de: int, limite: int = 3,

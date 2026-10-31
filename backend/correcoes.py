@@ -130,8 +130,22 @@ def regras_para(agente_id: str, empresa: str = "*") -> str:
         f"- {l['regra']}" for l in reversed(linhas))
 
 
-def pendentes() -> int:
-    return _db().execute("SELECT COUNT(*) FROM observacoes WHERE status = 'nova'").fetchone()[0]
+# Produção no Max (brainstorm de 31/10/2026, editor_video-09 e moviemaker-14): quem monta o arquivo também segue o
+# que a equipe aprovou para quem planeja aquele formato (vídeo: Editor + Moviemaker; arte: Criador + Designer).
+AFINS_NA_PRODUCAO = {"editor_video": ("editor_video", "moviemaker"), "criador_imagens": ("criador_imagens", "designer")}
+
+
+def regras_da_producao(agente_id: str, empresa: str = "*") -> str:
+    """Regras aprovadas que valem para a peça produzida no Max por `agente_id` ("" se não há)."""
+    agentes = AFINS_NA_PRODUCAO.get(agente_id, (agente_id,))
+    marcadores = ",".join("?" * len(agentes))
+    linhas = _db().execute(
+        f"SELECT regra FROM regras_aprendidas WHERE ativa = 1 AND agente IN ({marcadores}, '*') AND empresa IN (?, '*') "
+        "ORDER BY id DESC LIMIT ?", (*agentes, empresa, MAX_REGRAS_NO_CONTEXTO)).fetchall()
+    if not linhas:
+        return ""
+    return ("REGRAS APROVADAS PELA EQUIPE a partir de correções (valem sobre os manuais; o pedido desta peça vale "
+            "sobre elas):\n" + "\n".join(f"- {l['regra']}" for l in reversed(linhas)))
 
 
 def lembrete_semanal() -> str | None:

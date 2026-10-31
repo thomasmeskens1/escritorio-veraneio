@@ -261,4 +261,20 @@ def avisos_da_operacao() -> list[str]:
     if len(no_ar) < ROTA_MINIMA:
         avisos.append(f"Só {len(no_ar)} modelo(s) gratuito(s) no ar agora: as tarefas podem cair no modelo local "
                       "(lento). Veja \"Modelos fora da rota\" abaixo.")
-    return avisos
+    return avisos + avisos_da_caixa_de_areia()
+
+
+def avisos_da_caixa_de_areia() -> list[str]:
+    """Peças em que a caixa de areia barrou leitura de segredo, rede ou programa nas últimas 24 h (brainstorm de
+    31/10/2026, despachante-27): pode ser instrução escondida num pedido, PDF ou item do Monday."""
+    import producao  # import tardio: a produção importa este módulo
+
+    try:
+        bloqueios = producao.bloqueios_recentes()
+    except Exception:  # aviso nunca derruba o painel
+        log.exception("Não foi possível ler os bloqueios da caixa de areia.")
+        return []
+    return [f"Caixa de areia: a peça da tarefa {b['tarefa_id']} (usuário {b['usuario']}"
+            + (f", item do Monday {b['monday']}" if b["monday"] else "")
+            + f") teve {b['total']} tentativa(s) barrada(s), ex.: {b['exemplo'][:140]}. Confira o pedido, os anexos e "
+              "as referências: pode ser uma instrução escondida." for b in bloqueios]

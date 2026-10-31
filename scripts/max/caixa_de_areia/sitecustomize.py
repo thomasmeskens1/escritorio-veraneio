@@ -11,12 +11,18 @@ instala um gancho de auditoria (sys.addaudithook, que não pode ser removido dep
 - iniciar programas que não sejam ffmpeg, ffprobe, o Chrome/Edge do renderizador ou outro python com esta mesma
   caixa (sem -I/-S/-E), e argumentos de ffmpeg/Chrome que apontem para pastas bloqueadas ou endereços externos;
 - chamadas ao Windows por ctypes (abririam arquivos e rede por fora do gancho).
-Configuração por variáveis de ambiente (comum.ambiente_da_producao).
+Configuração por variáveis de ambiente (comum.caixa_de_areia).
+
+Cada bloqueio vira uma linha em VERANEIO_AREIA_REGISTRO (tipo e alvo resumido, nunca conteúdo; brainstorm de
+31/10/2026, despachante-27): antes a caixa barrava calada e ninguém sabia que um pedido tentou ler um segredo. O
+trabalhador lê o arquivo no fim da peça e manda ao backend, que mostra o aviso no painel da Diretoria.
 """
 
 import os
 import re
 import sys
+import threading
+import time
 
 
 def _lista(nome):
@@ -34,8 +40,29 @@ _LOCAL = re.compile(r"^https?://(127\.0\.0\.1|localhost)(:\d+)?(/|$)", re.IGNORE
 _ESCRITA_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC
 
 
+_REGISTRO = os.environ.get("VERANEIO_AREIA_REGISTRO", "")
+_gravando = threading.local()  # o open do registro também passa pelo gancho (e é conferido): sem laço de registro
+
+
+def _registrar(motivo):
+    """Uma linha por bloqueio no arquivo de registro (na pasta da peça); falhar aqui nunca libera nem derruba nada.
+    A trava só evita registrar dentro do registro: o gancho continua conferindo tudo."""
+    if not _REGISTRO or getattr(_gravando, "ativo", False):
+        return
+    _gravando.ativo = True
+    try:
+        with open(_REGISTRO, "a", encoding="utf-8") as arquivo:
+            arquivo.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} | {motivo[:200]}\n")
+    except Exception:
+        pass
+    finally:
+        _gravando.ativo = False
+
+
 class Bloqueado(PermissionError):
-    pass
+    def __init__(self, motivo):
+        super().__init__(motivo)
+        _registrar(motivo.removeprefix("caixa de areia: "))
 
 
 def _caminho(valor):

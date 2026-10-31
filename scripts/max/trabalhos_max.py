@@ -24,6 +24,13 @@ def arquivo_do_anexo(payload: dict) -> Path:
     return arquivo
 
 
+def comando_anexo() -> list[str]:
+    """Só a ferramenta Read, liberada só dentro da pasta temporária do anexo (brainstorm de 31/10/2026,
+    despachante-25): antes "Read" sem caminho deixava um PDF com instrução escondida levar a leitura ao .env do PC."""
+    return [comum.claude_exe(), "-p", "--output-format", "json", "--max-turns", "4", "--tools", "Read",
+            "--allowedTools", "Read(./**)"]
+
+
 def montar_anexo(payload: dict) -> tuple[list[str], str, Path]:
     """(comando, prompt, pasta de trabalho) para o Claude Code ler o anexo. Revisão de 30/10/2026: a pasta de trabalho
     era a dos anexos de TODOS os usuários; agora é uma pasta temporária só com este arquivo (apagada no fim)."""
@@ -31,9 +38,8 @@ def montar_anexo(payload: dict) -> tuple[list[str], str, Path]:
     pasta = Path(tempfile.mkdtemp(prefix="anexo-", dir=comum.TRABALHO))
     arquivo = pasta / original.name
     shutil.copy2(original, arquivo)
-    comando = [comum.claude_exe(), "-p", "--output-format", "json", "--max-turns", "4", "--tools", "Read",
-               "--allowedTools", "Read"]
-    tipo = "PDF" if payload.get("mime") == "application/pdf" else "imagem"
+    comando = comando_anexo()
+    tipo ="PDF" if payload.get("mime") == "application/pdf" else "imagem"
     prompt = (f"{payload.get('prompt') or 'Descreva o anexo em português do Brasil, de forma objetiva.'}\n\n"
               f"Arquivo ({tipo}): ./{arquivo.name} (nome original: {payload.get('nome', arquivo.name)}). "
               "Abra-o com a ferramenta Read e responda apenas com a descrição.")
