@@ -372,6 +372,17 @@
   cursor: not-allowed;
 }
 
+/* Modelos de pedido do Gestor (js/modelos_pedido.js): mesmo visual do clipe, com texto */
+.botao-modelos-pedido {
+  width: auto;
+  padding: 0 10px;
+  font-size: 0.8rem;
+}
+
+.botao-modelos-pedido[hidden] {
+  display: none;
+}
+
 .msg-anexos {
   display: flex;
   flex-wrap: wrap;
