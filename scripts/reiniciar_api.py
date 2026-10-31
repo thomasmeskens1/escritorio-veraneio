@@ -1,6 +1,6 @@
 """Reinicia a API sem derrubar trabalho em andamento (revisão de 30/10/2026, item 2.11).
 
-Uso (no PC, na pasta do projeto):  python scripts/reiniciar_api.py [--esperar-min 20]
+Uso (no PC, na pasta do projeto):  python scripts/reiniciar_api.py [--esperar-min 20] [--recriar]
 
 1. Liga o modo manutenção (backend/dados/manutencao): mensagens novas no chat recebem "o escritório vai reiniciar
    em instantes, envie de novo em 2 ou 3 minutos" e nenhuma tarefa nova começa.
@@ -33,7 +33,10 @@ def em_andamento() -> int:
 def main() -> None:
     argumentos = argparse.ArgumentParser()
     argumentos.add_argument("--esperar-min", type=int, default=20)
-    limite = time.monotonic() + argumentos.parse_args().esperar_min * 60
+    # --recriar: `docker compose up -d` em vez de restart, para valer mudança no .env ou no docker-compose.yml
+    argumentos.add_argument("--recriar", action="store_true")
+    opcoes = argumentos.parse_args()
+    limite = time.monotonic() + opcoes.esperar_min * 60
     MANUTENCAO.write_text("reinício em andamento", encoding="utf-8")
     print("Modo manutenção ligado: tarefas novas são recusadas com aviso.")
     try:
@@ -46,7 +49,8 @@ def main() -> None:
     except Exception:
         MANUTENCAO.unlink(missing_ok=True)
         raise
-    subprocess.run(["docker", "compose", "restart", "api"], cwd=RAIZ, check=True, creationflags=SEM_JANELA)
+    comando = ["docker", "compose", "up", "-d", "api"] if opcoes.recriar else ["docker", "compose", "restart", "api"]
+    subprocess.run(comando, cwd=RAIZ, check=True, creationflags=SEM_JANELA)
     print("API reiniciada (a manutenção se desliga sozinha na subida).")
 
 
