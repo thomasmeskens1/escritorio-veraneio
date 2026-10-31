@@ -65,13 +65,22 @@ def avaliar(linha, usuario: str, valor: int, comentario: str = "") -> int:
     ids = _trechos_usados(linha["id"])
     if ids and valor != anterior:
         base.ajustar_pontuacao(ids, _passo(valor) - _passo(anterior))
-    if valor and comentario:
+    # 👍 sem comentário no E-mail Marketing (Onda 2, email_marketing-05) também guarda a linha aprovada (assunto,
+    # pré-header, botões), uma vez por tarefa; como todo elogio, só vale depois da aprovação do Thomas.
+    if valor > 0 and not comentario and valor != anterior and linha["agente"] in correcoes.AGENTES_COM_GANCHOS \
+            and correcoes.ganchos_aprovados(linha["resposta"] or "") and not correcoes._db().execute(
+                "SELECT 1 FROM observacoes WHERE tarefa_anterior = ? AND tipo = 'elogio'", (linha["id"],)).fetchone():
+        comentario_obs = "👍 neste e-mail: guardar assunto, pré-header e botões como referência aprovada."
+    else:
+        comentario_obs = comentario
+    if valor and comentario_obs:
+        tipo = "elogio" if valor > 0 else "correcao"
         with correcoes._db() as db:
             db.execute("INSERT INTO observacoes (em, usuario, andar, agente, tarefa_anterior, correcao, "
                        "resposta_anterior, tipo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                       (tarefas._agora(), usuario, linha["andar"], linha["agente"], linha["id"], comentario[:1000],
-                        (linha["resposta"] or "")[:400], "elogio" if valor > 0 else "correcao"))
-        atividade._no_loop(correcoes.avisar_diretoria("elogio" if valor > 0 else "correcao"))
+                       (tarefas._agora(), usuario, linha["andar"], linha["agente"], linha["id"], comentario_obs[:1000],
+                        correcoes.resposta_da_observacao(linha["agente"], tipo, linha["resposta"]), tipo))
+        atividade._no_loop(correcoes.avisar_diretoria(tipo))
     return len(ids) if valor != anterior else 0
 
 

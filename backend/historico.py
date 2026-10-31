@@ -9,6 +9,7 @@ import acesso
 import auth
 import avaliacoes
 import encaminhamento
+import folha_aprovacao
 import parar
 import producao
 import relatorios
@@ -53,6 +54,7 @@ def _mensagens_da_tarefa(linha, encaminhada: bool | None = None) -> list[dict]:
         quem = buscar_agente(linha["andar"], linha["agente"]) if encaminhada is not None else None
         mensagens.append({
             "autor": "agente", "texto": linha["resposta"] or "", "em": linha["concluida_em"], "tarefa_id": tarefa_id,
+            **({"anexos": f} if (f := folha_aprovacao.de(tarefa_id)) else {}),  # folha de aprovação da peça
             "meta": {"modelo": linha["modelo"], "dificuldade": linha["dificuldade"],
                      "tempo_segundos": round(linha["tempo_segundos"], 1), "adiada": linha["motivo"] is not None,
                      **({"por": quem.nome} if quem else {}),

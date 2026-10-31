@@ -66,7 +66,7 @@ function criarItemInsatisfacao(item) {
   const topo = novoEl('div', 'insatisfacao-topo');
   const origem = item.origem === 'mensagem' ? 'mensagem no chat' : '👎';
   topo.append(novoEl('strong', null, `${item.usuario_nome} → ${item.agente_nome} · pedido #${item.tarefa_id}`),
-    novoEl('span', null, `${item.categoria_nome} · ${origem} · ${quandoInsatisfacao(item.em)}`));
+    novoEl('span', null, `${item.categoria_nome}${item.etapa_nome ? ` (etapa: ${item.etapa_nome})` : ''} · ${origem} · ${quandoInsatisfacao(item.em)}`));
   li.append(topo);
   if (item.motivo) li.append(novoEl('p', 'insatisfacao-motivo', item.motivo));
   if (item.mensagem && item.mensagem !== item.motivo) li.append(detalhesInsatisfacao('Mensagem que a pessoa escreveu', item.mensagem));

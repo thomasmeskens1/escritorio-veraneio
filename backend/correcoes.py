@@ -27,23 +27,62 @@ CORRECAO = re.compile(
     r"o\s+certo\s+[ée]|o\s+correto\s+[ée]|lembre(-se)?\s+que)", re.IGNORECASE)
 # Elogio com intenção de repetir (teste real, 29/10/2026, Francielle: "adorei, podemos seguir assim nas próximas,
 # exatamente o que eu quero"): vira observação "elogio" para a Diretoria aprovar como padrão a seguir.
+# Onda 2 (email_marketing-05, 31/10/2026): "ficou ótimo, salva", "pode salvar para os próximos e-mails", "guarda como
+# referência", "aprovei", "pode disparar" também contam (tarefa 129: o pedido de guardar se perdia no histórico).
 ELOGIO = re.compile(
-    r"\b(adorei|amei|ficou (ótim|otim|lind|show|incr[ií]vel)|gostei muito|"
+    r"\b(adorei|amei|ficou (muito )?(ótim|otim|lind|show|incr[ií]vel|perfeit|excelente|sensacional|top|"
+    r"maravilh|bom|boa|legal)\w*\b(?!\s*\?)|gostei (muito|demais|bastante)|curti (muito|demais)|"
     r"exatamente (o que|isso)|(podemos|pode|vamos) seguir (assim|nesse|neste|desse|deste)|"
-    r"(é|e) (isso|esse) (mesmo|a[ií])|mandou bem)", re.IGNORECASE)
+    r"(é|e) (isso|esse) (mesmo|a[ií])|mandou bem|arrasou|sensacional|maravilhos[oa]|nota 10|parab[ée]ns|"
+    r"(salv|guard)(a|e|ar|em)\s+(isso|essa|esse|est[ae]s?|para|pra|nos|nas|de\s+refer|como\s+(refer|modelo|padr))|"
+    r"(use|usar|usem|fica|vale)\s+(isso|esse|essa|este|esta)?\s*como\s+(refer[eê]ncia|modelo|padr[aã]o)|"
+    r"aprovei|aprovad[oa]s?\s+(pela|por|pra|para)|pode\s+(publicar|disparar))", re.IGNORECASE)
 # Adjetivo solto ("perfeito", "excelente") só é elogio em mensagem curta: num texto colado como exemplo ele é
 # conteúdo ("...área gourmet, perfeita para reunir a família", Francielle, 29/10/2026, falso elogio).
-ELOGIO_CURTO = re.compile(r"\b(perfeit[oa]|excelente|aprovad[oa]|ótimo|otimo|show)\b", re.IGNORECASE)
+ELOGIO_CURTO = re.compile(r"\b(perfeit[oa]|excelente|aprovad[oa]|ótimo|otimo|show|top|lindo|linda)\b", re.IGNORECASE)
+# "não ficou bom", "não precisa salvar"; "ficou bom, mas troca o título" é ajuste, não elogio.
+NEGA_ELOGIO = re.compile(r"\bn[aã]o\s+(\w+\s+){0,2}(ficou|gostei|curti|salv|guard)", re.IGNORECASE)
+ELOGIO_COM_AJUSTE = re.compile(r"\b(mas|por[ée]m|s[oó] que)\b.{0,60}?\b(troc|mud|ajust|tir|coloc|corrij|corrig|"
+                               r"faltou|refa[cç]|diminu|aument)", re.IGNORECASE)
 TAMANHO_CURTO = 150
 BORDA_COMENTARIO = 250  # o comentário da pessoa fica no começo ou no fim; o meio é o texto colado
 
 
 def e_elogio(texto: str) -> bool:
+    import insatisfacoes  # "não ficou bom", "não gostei muito" nunca são elogio
+
     texto = (texto or "").strip()
+    inicio = texto[:BORDA_COMENTARIO]
+    if insatisfacoes.e_negativa(texto) or NEGA_ELOGIO.search(inicio) or ELOGIO_COM_AJUSTE.search(inicio):
+        return False
     if len(texto) <= TAMANHO_CURTO:
         return bool(ELOGIO.search(texto) or ELOGIO_CURTO.search(texto))
     bordas = f"{texto[:BORDA_COMENTARIO]}\n{texto[-BORDA_COMENTARIO:]}"
     return bool(ELOGIO.search(bordas))
+
+
+# Linha aprovada do e-mail (email_marketing-05): o elogio guarda assunto, pré-header, título e botões da resposta
+# elogiada, onde quer que estejam nela (antes só os 400 primeiros caracteres iam para a Diretoria).
+GANCHO = re.compile(r"^[\W_]*(assunto|pr[ée]-?header|t[ií]tulo|bot[aã]o(?:\s+principal)?|cta|chamada)\b[^:\n]{0,30}:"
+                    r"[\s*_]*(.+)$", re.IGNORECASE | re.MULTILINE)
+AGENTES_COM_GANCHOS = {"email_marketing"}
+
+
+def ganchos_aprovados(resposta: str) -> str:
+    """"Assunto: ... | Pré-header: ..." tirado da resposta (até 6 linhas), ou ""."""
+    vistos = []
+    for rotulo, valor in GANCHO.findall(resposta or ""):
+        linha = f"{rotulo.strip().capitalize()}: {valor.strip(' *_')[:150]}"
+        if linha not in vistos:
+            vistos.append(linha)
+    return " | ".join(vistos[:6])
+
+
+def resposta_da_observacao(agente_id: str, tipo: str, resposta: str) -> str:
+    """Trecho da resposta guardado com a observação; no elogio do E-mail Marketing, a linha aprovada vem primeiro."""
+    if tipo == "elogio" and agente_id in AGENTES_COM_GANCHOS and (ganchos := ganchos_aprovados(resposta)):
+        return f"Linha aprovada: {ganchos}\n\n{(resposta or '')[:400]}"[:1200]
+    return (resposta or "")[:400]
 JANELA_H = 24             # a correção precisa vir até 24 h depois da resposta do agente
 MAX_REGRAS_NO_CONTEXTO = 15
 LEMBRETE_DIAS = 7
@@ -95,7 +134,7 @@ def registrar_se_correcao(usuario: str, andar: str, agente_id: str, texto: str) 
         db.execute("INSERT INTO observacoes (em, usuario, andar, agente, tarefa_anterior, correcao, resposta_anterior, "
                    "tipo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                    (tarefas._agora(), usuario, andar, agente_id, anterior["id"], texto.strip()[:1000],
-                    (anterior["resposta"] or "")[:400], tipo))
+                    resposta_da_observacao(agente_id, tipo, anterior["resposta"]), tipo))
     import atividade  # import tardio: roda em thread; o aviso vai pelo loop do servidor
 
     atividade._no_loop(avisar_diretoria(tipo))

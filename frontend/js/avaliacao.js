@@ -12,6 +12,14 @@ const CATEGORIAS_INSATISFACAO = [
   ['demora', 'Demorou demais ou travou'],
   ['outro', 'Outro motivo'],
 ];
+// Mesma lista de insatisfacoes.ETAPAS no servidor.
+const ETAPAS_INSATISFACAO = [
+  ['plano', 'Plano/briefing'],
+  ['texto', 'Texto'],
+  ['imagem', 'Imagem/vídeo'],
+  ['dados', 'Dados do Lodge'],
+  ['nao_sei', 'Não sei'],
+];
 // Mesma ideia de insatisfacoes.NEGATIVA no servidor: frases claras de insatisfação com a resposta.
 const REACAO_NEGATIVA = /\b(n[aã]o\s+(gostei|curti|era\s+(isso|o\s+que)|foi\s+(isso|o\s+que)|ficou\s+(bom|legal)|[ée]\s+(isso|o\s+que))|(est[aá]|ficou)\s+(errad|ruim|horr[ií]vel|p[ée]ssim|feio)|p[ée]ssim|horr[ií]vel|decepcion|insatisfeit|pedi\s+.{1,80}\s+e\s+(veio|voc[eê]\s+(fez|mandou|entregou))|errou|errad[oa])/i;
 
@@ -72,6 +80,19 @@ function perguntarInsatisfacao(tarefaId, origem = 'voto', mensagem = '') {
     item.append(radio, novoEl('span', null, rotulo));
     opcoes.append(item);
   });
+  // Onde errou (Onda 2, cerebro-20): opcional, padrão "Não sei"; leva o aprendizado ao agente da etapa certa.
+  const etapas = novoEl('fieldset', 'insatisfacao-opcoes insatisfacao-etapas');
+  etapas.append(novoEl('legend', 'form-rotulo', 'Onde errou? Plano, Texto, Imagem ou Dados? (opcional)'));
+  ETAPAS_INSATISFACAO.forEach(([valor, rotulo]) => {
+    const item = novoEl('label', 'insatisfacao-opcao');
+    const radio = novoEl('input');
+    radio.type = 'radio';
+    radio.name = 'etapa';
+    radio.value = valor;
+    radio.checked = valor === 'nao_sei';
+    item.append(radio, novoEl('span', null, rotulo));
+    etapas.append(item);
+  });
   const campo = novoEl('textarea', 'insatisfacao-texto');
   campo.rows = 3;
   campo.maxLength = 1000;
@@ -86,7 +107,7 @@ function perguntarInsatisfacao(tarefaId, origem = 'voto', mensagem = '') {
   const enviar = novoEl('button', 'botao-primario', 'Registrar');
   enviar.type = 'submit';
   acoes.append(pular, enviar);
-  form.append(opcoes, novoEl('label', 'form-rotulo', 'Detalhes'), campo, aviso, acoes);
+  form.append(opcoes, etapas, novoEl('label', 'form-rotulo', 'Detalhes'), campo, aviso, acoes);
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -98,8 +119,9 @@ function perguntarInsatisfacao(tarefaId, origem = 'voto', mensagem = '') {
       return;
     }
     enviar.disabled = true;
+    const etapa = form.querySelector('input[name="etapa"]:checked')?.value || 'nao_sei';
     const ok = await enviarInsatisfacao({ tarefa_id: tarefaId, categoria: categoria || 'outro', motivo, origem,
-      mensagem: origem === 'mensagem' ? mensagem : '' });
+      mensagem: origem === 'mensagem' ? mensagem : '', etapa });
     if (!ok) {
       aviso.textContent = 'Não consegui registrar agora. Tente de novo.';
       aviso.hidden = false;

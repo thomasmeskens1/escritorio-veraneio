@@ -57,6 +57,11 @@ def _rotulos() -> dict[int, int]:
             rotulos[l["tarefa_id"]] = 1 if l["valor"] > 0 else 0
     except Exception:
         pass
+    # 👎 só por demora (Onda 2, cerebro-08) não diz se os trechos ajudaram: fica fora do treino.
+    import insatisfacoes
+
+    for tarefa_id in insatisfacoes.so_demora([t for t, r in rotulos.items() if r == 0]):
+        del rotulos[tarefa_id]
     return rotulos
 
 
