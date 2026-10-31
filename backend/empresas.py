@@ -94,6 +94,7 @@ PEDE_PRECO = re.compile(r"\b(pre[çc]os?|valor(?:es)?|quanto custa|quanto vale)\
 
 
 def sem_precos(texto: str, empresa: str, pedido: str = "") -> str:
-    if empresa != "casa_vero" or not texto or PEDE_PRECO.search(pedido or ""):
+    # Neutra (COMUM, ex.: escola do Térreo): pode ter trechos da Vero, então também filtra (31/10/2026).
+    if empresa not in ("casa_vero", COMUM) or not texto or PEDE_PRECO.search(pedido or ""):
         return texto
     return PRECO.sub("valor sob consulta", texto)
