@@ -14,6 +14,7 @@ import re
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 
+import conferente
 import monday
 import monday_datas
 import tarefas
@@ -173,6 +174,7 @@ def _criar(contador: _Contador, tarefa_id: int, nome: str, grupo: str = "", data
                        legenda, nome)
     if isinstance(valores, str):
         return valores
+    avisos = _conferir(tarefa, conta, nome, legenda, roteiro, data_postagem)
     valores[monday.COL_STATUS] = {"label": monday.AGUARDANDO}
     valores.setdefault(monday.COL_CONTA, {"label": "Casa Veraneio"})
     # Grupo pela data (o mês da postagem); sem data, "Definir Data" — nunca um mês escolhido sem data.
@@ -191,7 +193,24 @@ def _criar(contador: _Contador, tarefa_id: int, nome: str, grupo: str = "", data
         pass  # o item já existe; o roteiro pode ir depois por atualizar_item_monday
     if tarefa_id:
         tarefas.registrar_evento(tarefa_id, "item_monday", "social_media", detalhe=f"{alvo['title']}: {item['name']}")
-    return f"Criado em {alvo['title']}: {item['name']} ({item['url']})"
+    conferente.registrar(tarefa_id, item["name"], avisos)
+    return f"Criado em {alvo['title']}: {item['name']} ({item['url']})" + _linha_avisos(avisos)
+
+
+def _conferir(tarefa: dict | None, conta: str, nome: str, legenda: str, roteiro: str, data_postagem: str) -> list[str]:
+    """Regras duras na legenda e no roteiro antes de gravar (conferente.py): só avisa, nunca bloqueia."""
+    import empresas
+
+    empresa = tarefa["empresa"] if tarefa and tarefa["empresa"] else (empresas.da_conta_monday(conta) or empresas.PADRAO)
+    pedido = tarefa["texto"] if tarefa else ""
+    data = data_postagem if DATA.match(data_postagem or "") else ""
+    return (conferente.conferir(legenda, empresa, "legenda", pedido, data, monday.tipo_do_item(nome) or "")
+            + conferente.conferir(roteiro, empresa, "roteiro", pedido, data))
+
+
+def _linha_avisos(avisos: list[str]) -> str:
+    """Vai junto do resultado da ferramenta: o agente corrige com atualizar_item_monday ou avisa na resposta."""
+    return f" | CONFERÊNCIA (só aviso; corrija ou explique): {'; '.join(avisos)}" if avisos else ""
 
 
 class CriarItensMonday(BaseTool):
@@ -244,6 +263,9 @@ class AtualizarItemMonday(BaseTool):
         valores = _valores(nome=achado["name"], **campos)
         if isinstance(valores, str):
             return valores
+        tarefa = tarefas.obter(self.tarefa_id) if self.tarefa_id else None
+        avisos = _conferir(tarefa, campos.get("conta", ""), achado["name"], campos.get("legenda", ""), roteiro,
+                           campos.get("data_postagem", ""))
         try:
             if valores:
                 monday._api("mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, "
@@ -257,7 +279,8 @@ class AtualizarItemMonday(BaseTool):
         if self.tarefa_id:
             tarefas.registrar_evento(self.tarefa_id, "item_monday", "social_media", detalhe=f"atualizado: {achado['name']}")
         mudou = ", ".join(campo for campo, valor in campos.items() if valor) + (", roteiro" if roteiro.strip() else "")
-        return f"Atualizado: {achado['name']} ({mudou or 'nada a mudar'})"
+        conferente.registrar(self.tarefa_id, achado["name"], avisos)
+        return f"Atualizado: {achado['name']} ({mudou or 'nada a mudar'})" + _linha_avisos(avisos)
 
 
 def para(agente_id: str, tarefa_id: int = 0) -> list[BaseTool]:

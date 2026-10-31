@@ -319,6 +319,7 @@ function abrirChat(andar, agente) {
   renderizarSelecao();
   carregarHistorico(andar, agente);
   document.getElementById('modal-onboarding').hidden = agente !== 'recepcionista';
+  if (typeof mostrarModelosPedido === 'function') mostrarModelosPedido(agente); // js/modelos_pedido.js
   modal.classList.add('aberto');
   ajustarAlturaInput();
   renderizarHistorico(andar, agente); // abre na última interação (rolada até o fim)
