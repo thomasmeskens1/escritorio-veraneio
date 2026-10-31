@@ -16,6 +16,7 @@ import pytest
 import anexos
 import auth
 import cerebro_base as base
+import cerebro_imoveis as imoveis
 import documentos
 import documentos_entrega as entrega
 import historico
@@ -29,6 +30,21 @@ tarefas.iniciar()
 def _documento(ref: str, conteudo: str, empresa: str = "casa_veraneio", fonte: str = "site") -> None:
     for t, c in dividir(conteudo.splitlines()[0].lstrip("# "), conteudo):
         base._inserir(fonte, ref, t, c, empresa)
+
+
+def _apagar_lodges_de_teste() -> None:
+    with base._trava, base.db() as conexao:
+        conexao.execute("DELETE FROM conhecimento WHERE fonte_ref IN ('site/lodges/lodge-801', 'site/lodges/lodge-802')")
+    base._indice = None
+    imoveis.atualizar("casa_veraneio", forcar=True)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _lodges_de_teste_saem_no_fim():
+    """O banco de teste é um só: os Lodges fictícios deste arquivo não podem vazar para o catálogo dos outros."""
+    _apagar_lodges_de_teste()
+    yield
+    _apagar_lodges_de_teste()
 
 
 def _lodges() -> None:

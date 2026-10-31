@@ -37,6 +37,21 @@ def _sem_modelos_depois():
     base._indice = None  # o índice em cache (até 15 s) não pode esconder os trechos dos próximos testes
 
 
+def _apagar_lodges_de_teste() -> None:
+    with base._trava, base.db() as conexao:
+        conexao.execute("DELETE FROM conhecimento WHERE fonte_ref IN ('site/lodges/lodge-801', 'site/lodges/lodge-802', 'site/lodges/lodge-803')")
+    base._indice = None
+    imoveis.atualizar("casa_veraneio", forcar=True)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _lodges_de_teste_saem_no_fim():
+    """O banco de teste é um só: os Lodges fictícios deste arquivo não podem vazar para o catálogo dos outros."""
+    _apagar_lodges_de_teste()
+    yield
+    _apagar_lodges_de_teste()
+
+
 def _documento(ref: str, conteudo: str) -> None:
     titulo = conteudo.splitlines()[0].lstrip("# ")
     for t, c in dividir(titulo, conteudo):
