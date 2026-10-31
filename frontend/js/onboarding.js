@@ -9,6 +9,8 @@ const PASSOS_ONBOARDING = [
     texto: 'Olá! Eu sou a Recepcionista. Vou te mostrar rapidinho como o Escritório Veraneio funciona. Vem comigo!' },
   { ui: '#elevador', titulo: 'O elevador',
     texto: 'Cada andar é um time. Use o elevador para trocar de andar. Andares com cadeado são restritos à diretoria.' },
+  { ui: '#abrir-triagem', titulo: 'Não sabe com quem falar?',
+    texto: 'Não sabe qual agente procurar? Clique em “Não sei com quem falar”, escreva o que precisa e eu levo o pedido ao agente certo. Atalho: barra de espaço duas vezes dentro de um andar.' },
   { ui: '.contadores', titulo: 'Quem está fazendo o quê',
     texto: 'Aqui em cima você acompanha quantos agentes estão disponíveis, trabalhando, em construção ou pausados.' },
   { andar: 'terreo', agente: 'professor', titulo: 'Térreo: a escola',

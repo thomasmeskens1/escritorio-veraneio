@@ -45,6 +45,7 @@ import saude
 import tarefas
 import triagem
 import usuarios_admin
+from agents.perfis import empresa_da_escola
 from api_painel import rotas as rotas_painel
 from auth import autenticar, criar_token, e_master, encerrar_sessoes, validar_token
 from conexoes import gerenciador
@@ -410,6 +411,8 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
                               "seletor do topo do chat antes de enviar.", **alvo)
     elif agente.id in EMPRESA_DO_AGENTE:  # Comercial: o setor já diz a empresa (sem seletor)
         empresa = EMPRESA_DO_AGENTE[agente.id]
+    elif andar == "terreo":  # escola, sem seletor: a do pedido ou da conversa; sem ela, neutra (era sempre a Casa Veraneio)
+        empresa = await asyncio.to_thread(empresa_da_escola, usuario["sub"], agente.id, texto)
     else:
         empresa = empresas.PADRAO
     if ensino:  # "Aprenda: ..." (só o dono)

@@ -143,6 +143,30 @@
   outline: none;
 }
 
+/* "Não sei com quem falar": abre a triagem (js/triagem.js). Em tela menor, só o ícone. */
+.topo-triagem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  background: #3a3026;
+  border: 1px solid #f4a261;
+  border-radius: 8px;
+  color: #f4a261;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.topo-triagem:hover,
+.topo-triagem:focus-visible {
+  background: #4a3a2a;
+  outline: none;
+}
+
 .topo-sessao {
   display: flex;
   align-items: center;
@@ -230,6 +254,16 @@
   #usuario-logado {
     max-width: 120px;
   }
+
+  .topo-triagem span {
+    display: none;
+  }
+
+  .topo-triagem {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
+  }
 }
 
 @media (max-width: 960px) {
@@ -289,7 +323,8 @@
     gap: 6px;
   }
 
-  .topo-icone {
+  .topo-icone,
+  .topo-triagem {
     width: 30px;
     height: 30px;
   }

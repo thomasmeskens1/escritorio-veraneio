@@ -23,13 +23,27 @@ PERFIS = {
     "recepcionista": {
         "role": "Recepcionista, especialista em onboarding",
         "goal": "Tirar dúvidas sobre o uso do escritório: andares, agentes, como pedir tarefas, anexos, rotinas, "
-                "fila e status. Para uma visão geral, indicar o tour guiado (botão “Iniciar Onboarding” na ficha dela).",
+                "fila e status. Para uma visão geral, indicar o tour guiado (botão “Iniciar Onboarding” na ficha dela); "
+                "para quem não sabe com qual agente falar, o botão “Não sei com quem falar” no topo (a triagem).",
         "backstory": "Primeira pessoa que todo usuário encontra; simpática, clara e direta. Conduz o onboarding de quem chega.",
     },
+    # Resposta curta (professor-06, 31/10/2026): a tarefa 94 voltou como aula longa, cortada, com Lodge e datas
+    # inventados. Quem procura o Professor quase sempre já tem um pedido: ele devolve o pedido pronto.
     "professor": {
         "role": "Professor",
-        "goal": "Ensinar a pedir tarefas aos agentes e a escrever bons briefings, com exemplos práticos.",
-        "backstory": "Professor paciente que transforma pedidos vagos em briefings claros. Ao dar exemplos de "
+        "goal": "Transformar o pedido da pessoa num pedido pronto para enviar ao agente certo e, quando ela quiser "
+                "aprender mais, ensinar a escrever bons briefings.",
+        "backstory": "Professor paciente que transforma pedidos vagos em briefings claros. FORMATO PADRÃO, curto (até "
+                     "cerca de 12 linhas), em passos: (1) \"Seu pedido, pronto para enviar\": o pedido da pessoa "
+                     "reescrito com objetivo, empresa, canal, formato e as regras de ouro aplicadas; o que você não "
+                     "sabe fica como [PENDENTE: o que falta], nunca inventado (nada de número de Lodge, datas ou "
+                     "valores de exemplo); (2) \"O que faltava\": no máximo 3 itens; (3) \"Mande para\": o agente certo "
+                     "e o porquê em uma linha. Feche oferecendo aprofundar (\"Quer que eu explique mais?\"): a aula "
+                     "completa só vem quando a pessoa pede (\"me explica mais\"). Sem um pedido concreto na mensagem, "
+                     "pergunte qual é o pedido em vez de inventar um. Pedido de trabalho que caiu aqui (pela triagem ou "
+                     "por engano) recebe o mesmo formato. Dúvida sobre o uso do escritório: resposta direta, curta. "
+                     "Nunca descreva serviço como \"incluído\" (na Casa Veraneio os serviços do Hotel Privativo são "
+                     "cobrados à parte; nas outras, o que não estiver no Cérebro fica PENDENTE). Ao dar exemplos de "
                      "pedido, legenda ou briefing, segue as regras de ouro das empresas: nunca WhatsApp como CTA nem "
                      "o site na arte; nunca prometer disponibilidade; não inventa dados de Lodge ou imóvel. Cada "
                      "empresa tem as suas regras: Casa Veraneio = grupos e famílias (nunca casal), Lodge pelo número; "
@@ -413,12 +427,67 @@ def _empresa_citada(pedido: str, historico) -> str | None:
     return None
 
 
-def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: str | None = "casa_veraneio") -> str:
-    """Contexto fixo do agente: empresa do trabalho, conversa recente, instruções e conhecimento específico."""
+JANELA_ESCOLA_H = 24  # como orquestrador._recentes: trocas das últimas 24 h, mais a mais recente sempre
+
+
+def historico_da_escola(usuario: str, agente_id: str, antes_de: int = 2 ** 62) -> list:
+    """Conversa recente da escola SEM filtrar por empresa: o Térreo não tem seletor, e a resposta ao formulário
+    "Para qual empresa?" mudava a empresa da tarefa e escondia o pedido original da troca anterior."""
+    from datetime import timedelta
+
+    import tarefas  # import tardio: usa o banco
+
+    trocas = tarefas.historico(usuario, "terreo", agente_id, antes_de, limite=4)
+    limite = tarefas._agora(-timedelta(hours=JANELA_ESCOLA_H))
+    return [h for n, h in enumerate(trocas) if n == len(trocas) - 1 or (h["criada_em"] or "") >= limite]
+
+
+def empresa_da_escola(usuario: str, agente_id: str, texto: str) -> str:
+    """Empresa da tarefa do Térreo: a citada no pedido ou na conversa recente; sem ela, neutra (COMUM). Antes era sempre
+    a Casa Veraneio, e a consulta ao Cérebro e as regras vinham dela mesmo com o pedido de outra empresa."""
+    import empresas
+
+    return _empresa_citada(texto, historico_da_escola(usuario, agente_id)) or empresas.COMUM
+
+
+NOMES_ANDARES = {"porao": "Porão", "terreo": "Térreo", "marketing": "1º Andar – Marketing",
+                 "comercial": "2º Andar – Comercial", "cobertura": "Cobertura"}
+
+
+def _o_que_a_pessoa_abre(login: str) -> str:
+    """Andares e agentes que ESTA pessoa abre (recepcionista-09): a escola só indica caminhos que ela consegue seguir.
+    Teste real: a Recepcionista mandou "clicar no Despachante, no Porão" quem não tem o Porão."""
+    import acesso  # import tardio: lê os usuários
+    from auth import carregar_usuarios
+
+    usuario = {"sub": login}
+    abertos, fechados = [], []
+    for andar, agentes in ANDARES.items():
+        nomes = [a.nome for a in agentes.values() if a.tipo != "estagiario" and acesso.pode_usar(usuario, andar, a.id)]
+        if nomes:
+            abertos.append(f"- {NOMES_ANDARES.get(andar, andar)}: {', '.join(nomes)}")
+        else:
+            fechados.append(NOMES_ANDARES.get(andar, andar))
+    nome = str(carregar_usuarios().get(login, {}).get("nome") or "").split(" ")[0]
+    texto = (f"QUEM ESTÁ PERGUNTANDO{f': {nome}' if nome else ''}. Andares e agentes que esta pessoa abre:\n"
+             + "\n".join(abertos))
+    if fechados:
+        texto += f"\nAndares fechados para ela: {', '.join(fechados)}."
+    return (texto + "\nEmpresas: ela pode pedir para as três (Casa Veraneio, Casa Veraneio Corporativo e Casa Vero), "
+            "uma por pedido.\nSó indique andares, agentes e painéis desta lista: nunca mande a pessoa a um andar ou "
+            "agente que ela não abre. Sem o Porão, não cite o Despachante: a resposta chega no mesmo chat do pedido, e "
+            "o painel Andamento e a Caixa de entrada mostram o status. Se o que ela precisa é de um agente fechado "
+            "para ela, diga qual é e que o Thomas libera o acesso no painel de usuários.")
+
+
+def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: str | None = "casa_veraneio",
+             login: str = "") -> str:
+    """Contexto fixo do agente: empresa do trabalho, conversa recente, instruções e conhecimento específico.
+    `login` (escola): os andares e agentes que a pessoa abre entram no contexto."""
     import empresas  # import tardio: evita ciclo com o estado
 
     historico = _historico_relevante(historico, pedido)
-    if agente_id == "professor":  # o Térreo não tem seletor: a empresa vem do texto ou é perguntada (decisão 17a)
+    if agente_id in AGENTES_ESCOLA:  # o Térreo não tem seletor: a empresa vem do texto ou é perguntada (decisão 17a)
         empresa = _empresa_citada(pedido, historico)
     partes = [empresas.contexto(empresa) if empresa else EMPRESA_A_PERGUNTAR]  # nunca misturar dados entre as três
     if historico:
@@ -441,6 +510,8 @@ def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: st
         partes.append(regras)
     if agente_id in AGENTES_ESCOLA:
         partes.append(f"Baseie-se apenas neste manual da ferramenta:\n{MANUAL_ESCOLA}\n\n{_quem_faz_o_que()}")
+        if login:
+            partes.append(_o_que_a_pessoa_abre(login))
     if agente_id == "construtor":
         partes.append(_contexto_construtor())
     if agente_id == "analista_tendencias":  # datas calculadas: o modelo não inventa a data do Carnaval
@@ -458,4 +529,12 @@ def descricao_tarefa(agente_id: str, texto: str, historico: list = (), tarefa_id
         return cerebro.descricao_tarefa(texto, historico, tarefa_id)
     import cerebro
 
-    return f"Pedido do usuário: {texto}\n\n{contexto(agente_id, historico, texto, cerebro.empresa_da_tarefa(tarefa_id))}"
+    login = ""
+    if agente_id in AGENTES_ESCOLA and tarefa_id:  # escola: conversa sem filtro de empresa e o acesso de quem pede
+        import tarefas
+
+        if (linha := tarefas.obter(tarefa_id)):
+            login = linha["usuario"]
+            historico = historico_da_escola(login, agente_id, tarefa_id)
+    empresa = cerebro.empresa_da_tarefa(tarefa_id)
+    return f"Pedido do usuário: {texto}\n\n{contexto(agente_id, historico, texto, empresa, login)}"
