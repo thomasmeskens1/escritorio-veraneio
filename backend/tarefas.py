@@ -221,11 +221,16 @@ def copiar_para_backup() -> None:
     if config.ARQUIVO_BANCO.parent == config.DADOS_DIR:
         return
     temporario = config.ARQUIVO_COPIA_BANCO.with_suffix(".tmp")
-    destino = sqlite3.connect(temporario)
+    # Conexão própria só para a cópia: na conexão do servidor, a cópia segurava o banco e congelava os chats por
+    # alguns segundos (revisão de 30/10/2026). No WAL, essa leitura não trava quem escreve; num passo só, a cópia
+    # não recomeça quando o servidor grava no meio.
+    origem, destino = sqlite3.connect(config.ARQUIVO_BANCO, timeout=30), sqlite3.connect(temporario)
     try:
-        _db().backup(destino)
+        origem.backup(destino)
+        destino.execute("PRAGMA journal_mode=DELETE")  # a cópia herdava o WAL e deixava -wal/-shm em dados/
         novas = _total_de_tarefas(destino)
     finally:
+        origem.close()
         destino.close()
     if not _integro(temporario):
         temporario.unlink(missing_ok=True)

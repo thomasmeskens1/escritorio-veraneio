@@ -23,10 +23,16 @@ services:
       - ./backend:/app
       - ./frontend:/frontend:ro
       - banco:/var/lib/escritorio
-      # painel analítico (Sistema Casa Veraneio), só leitura: chave do Brevo para os rascunhos do E-mail Marketing
-      - ${LOCALAPPDATA:-./backend/dados}/SocialAnalytics:/painel:ro
-      # código do painel (só leitura): o Analista de Métricas usa as mesmas análises dele (db_manager.ler_*)
-      - ${SOCIAL_ANALYTICS_DIR:-../social-analytics}:/sistema:ro
+      # Painel analítico (Sistema Casa Veraneio), só leitura e só o necessário (revisão de 30/10/2026: antes a pasta
+      # inteira entrava, com os logins do Google, cópias antigas do .env e a sessão do WhatsApp):
+      # banco das métricas e o .env (chave do Brevo e as contas de anúncio que o coleta/config.py lê).
+      - ${LOCALAPPDATA:-./backend/dados}/SocialAnalytics/analytics.db:/painel/analytics.db:ro
+      - ${LOCALAPPDATA:-./backend/dados}/SocialAnalytics/.env:/painel/.env:ro
+      # Código das análises (db_manager.ler_*) que o Analista de Métricas usa.
+      - ${SOCIAL_ANALYTICS_DIR:-../social-analytics}/db_manager.py:/sistema/db_manager.py:ro
+      - ${SOCIAL_ANALYTICS_DIR:-../social-analytics}/caminhos.py:/sistema/caminhos.py:ro
+      - ${SOCIAL_ANALYTICS_DIR:-../social-analytics}/painel_dados.py:/sistema/painel_dados.py:ro
+      - ${SOCIAL_ANALYTICS_DIR:-../social-analytics}/coleta:/sistema/coleta:ro
     # Um processo só (estado dos agentes e WebSockets em memória). Atrás do túnel, o IP real do visitante
     # vem nos cabeçalhos X-Forwarded-* (bloqueio de login por IP).
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips "*"
