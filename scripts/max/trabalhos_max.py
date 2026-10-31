@@ -84,10 +84,13 @@ PASTA_PROSPECCAO = comum.TRABALHO / "prospeccao"  # fora do repositório
 def executar_prospeccao(payload: dict) -> str:
     """O pedido vem pronto do backend (comercial.py); o Claude Code só pesquisa em páginas públicas e devolve o
     bloco JSON. Ferramentas: só WebSearch e WebFetch (sem arquivos, Bash nem MCP). Quem cria os leads e valida os
-    contatos (LGPD) é o backend."""
+    contatos (LGPD) é o backend. `web: false` (pedido com a carteira nominal, ex.: persona): nenhuma ferramenta."""
     PASTA_PROSPECCAO.mkdir(parents=True, exist_ok=True)
-    comando = [comum.claude_exe(), "-p", "--output-format", "json", "--max-turns", "80",
-               "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch"]
+    if payload.get("web", True) is False:
+        comando = [comum.claude_exe(), "-p", "--output-format", "json", "--max-turns", "3", "--tools", ""]
+    else:
+        comando = [comum.claude_exe(), "-p", "--output-format", "json", "--max-turns", "80",
+                   "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch"]
     texto = comum.rodar_claude(comando, payload["prompt"], PASTA_PROSPECCAO, min(int(payload.get("limite_s", 2400)), 2400),
                                cancelado=_cancelado)
     if not texto.strip():

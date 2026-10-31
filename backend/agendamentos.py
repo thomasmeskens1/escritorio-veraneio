@@ -2,8 +2,8 @@
 
 Antes, um interpretador de frases criava rotinas a partir do texto do chat, e briefings longos com "todos os dias"
 no conteúdo viravam rotina (testes reais de 28 e 29/10/2026). Decisão do Thomas (29/10/2026): mensagem no chat
-nunca agenda nada. No horário, a tarefa segue o pipeline normal (orquestrador.nova_tarefa): status no canvas,
-resposta no chat, histórico e registro.
+nunca agenda nada. No horário, a tarefa segue o mesmo caminho do pedido manual (_encaminhar: estudo, prospecção,
+produção ou orquestrador.nova_tarefa): status no canvas, resposta no chat, histórico e registro.
 """
 
 import asyncio
@@ -197,8 +197,7 @@ def criar(login: str, andar: str, agente_id: str, tarefa: str, regra: dict, desc
 
 async def _executar(rotina_id: int) -> None:
     """Disparo do job: entrega a tarefa ao pipeline normal."""
-    import orquestrador  # import tardio: evita ciclo
-    from estado import AGENTES_PRODUCAO, Status, buscar_agente
+    from estado import Status, buscar_agente
 
     linha = _obter(rotina_id)
     if not linha or not linha["ativo"]:
@@ -236,14 +235,40 @@ async def _executar(rotina_id: int) -> None:
         "texto": f"Executando a rotina \"{linha['tarefa']}\" ({linha['descricao']}).",
     })
     try:
-        empresa = linha["empresa"] or empresas.PADRAO
-        if agente.id in AGENTES_PRODUCAO:  # PNG/MP4 seguem pela produção, como no chat
-            import producao
-            await producao.enfileirar(linha["usuario"], linha["andar"], agente, linha["tarefa"], empresa=empresa)
-        else:
-            await orquestrador.nova_tarefa(linha["usuario"], linha["andar"], agente, linha["tarefa"], empresa=empresa)
+        await _encaminhar(linha, agente)
     except Exception:
         log.exception("Rotina %s falhou ao iniciar.", rotina_id)
+
+
+async def _encaminhar(linha, agente) -> None:
+    """O mesmo desvio do chat (main.py): estudo com pesquisa na web pelo Max, prospecção/persona pelo comercial,
+    produção pela fila de produção; o resto, pipeline normal. Antes, toda rotina ia ao orquestrador e um estudo ou
+    uma prospecção agendada virava conversa num modelo gratuito, sem web (prospectador-07, estrategista-20). A
+    resposta volta ao chat do agente, como no pedido manual."""
+    import comercial
+    import config
+    import estudos
+    import orquestrador  # import tardio: evita ciclo
+    from estado import AGENTES_PRODUCAO
+
+    usuario, andar, texto = linha["usuario"], linha["andar"], linha["tarefa"]
+    empresa = linha["empresa"] or empresas.PADRAO
+    if agente.id in AGENTES_PRODUCAO:  # PNG/MP4 seguem pela produção, como no chat
+        import producao
+        await producao.enfileirar(usuario, andar, agente, texto, empresa=empresa)
+    elif config.usa_max(usuario) and estudos.e_estudo(agente.id, texto):
+        await estudos.iniciar(usuario, andar, agente, texto, estudos.empresa_do_estudo(agente.id, texto, empresa))
+    elif agente.id == comercial.AGENTE and comercial.e_pedido_de_trabalho(texto):
+        if comercial.PEDE_CRIACAO.search(texto) or not config.usa_max(usuario):
+            # Leads só vão ao Monday com a aprovação da prévia, no chat; rotina nunca aprova.
+            await gerenciador.enviar_para_usuario(usuario, {
+                "tipo": "aviso", "andar": andar, "agente": agente.id, "titulo": "Rotina não executada",
+                "texto": "Rotina não cria leads no Monday nem prospecta sem o Max: a prospecção agendada traz a "
+                         "prévia, e a aprovação é sempre no chat."})
+            return
+        await comercial.iniciar(usuario, agente, texto)
+    else:
+        await orquestrador.nova_tarefa(usuario, andar, agente, texto, empresa=empresa)
 
 
 def iniciar() -> None:

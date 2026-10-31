@@ -6,10 +6,13 @@ ferramentas da diretoria (modelos de IA, mapa do Cérebro, treino) e o que é ex
 na web, prospecção) seguem como antes.
 """
 
-from auth import carregar_usuarios, e_master
+from auth import carregar_usuarios, e_master, ve_financeiro
 from estado import ANDARES
 
 TODOS = "*"
+# Trabalham sobre a carteira de clientes e os números (prospectador-15): só a Diretoria ou quem o master liberar
+# nominalmente no painel de usuários (o comercial). O padrão "todos os agentes" não os inclui.
+RESTRITOS = {"comercial/prospectador", "comercial/estrategista"}
 
 
 def agentes_do_usuario(login: str) -> str | list[str]:
@@ -29,7 +32,10 @@ def andares_do_usuario(login: str) -> str | list[str]:
 def pode_usar(usuario: dict, andar: str, agente_id: str) -> bool:
     login = usuario.get("sub", "")
     andares, agentes = andares_do_usuario(login), agentes_do_usuario(login)
-    return (andares == TODOS or andar in andares) and (agentes == TODOS or f"{andar}/{agente_id}" in agentes)
+    chave = f"{andar}/{agente_id}"
+    if chave in RESTRITOS and agentes == TODOS and not ve_financeiro(login):
+        return False
+    return (andares == TODOS or andar in andares) and (agentes == TODOS or chave in agentes)
 
 
 def pode_ver_andar(usuario: dict, andar: str) -> bool:

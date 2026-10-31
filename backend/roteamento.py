@@ -1,5 +1,7 @@
 """Classificação de dificuldade (sem custo de tokens) e plano de execução por dificuldade."""
 
+import logging
+import re
 from dataclasses import dataclass
 from enum import Enum
 
@@ -7,6 +9,8 @@ import aprendizado
 import config
 import saude
 import tarefas
+
+log = logging.getLogger(__name__)
 
 
 class Dificuldade(str, Enum):
@@ -54,6 +58,44 @@ def classificar(agente_id: str, texto: str) -> Dificuldade:
     return max(dificuldade, piso, key=_ORDEM.index)
 
 
+# --- Rota sigilosa (decisão 12, padrão; despachante-24) -------------------------------------------------------
+# CRM, carteira de clientes e financeiro nunca vão a modelo gratuito de fora (alguns provedores guardam o texto e
+# treinam com ele): só Max, modelo local (Ollama) ou a API do Claude, se estiver ligada. Sem IA na decisão.
+AGENTES_SIGILOSOS = frozenset({"prospectador", "estrategista"})  # trabalham sobre a carteira e os números
+_NAO_EXTERNOS = ("claude-code/", "ollama/", "anthropic/")
+TEXTO_SIGILOSO = re.compile(
+    r"R\$\s?\d|\b(crm|faturamento|faturou|faturamos|carteira de clientes|lista de clientes|contas (?:corporativas|"
+    r"ativas)|roas|roi|ticket m[eé]dio|lucro|receitas? (?:da|do|de|por|mensal|anual|total)|vendas (?:do|no|deste|"
+    r"por) (?:m[eê]s|ano|trimestre|semestre|per[ií]odo|empresa|canal))\b", re.I)
+
+
+def externo_gratuito(modelo: str) -> bool:
+    """Modelo gratuito de fora (OpenRouter :free, Groq, Mistral...): não recebe tarefa sigilosa."""
+    return not modelo.startswith(_NAO_EXTERNOS)
+
+
+def sigilosa(agente_id: str, pedido: str = "", contexto: str = "", tarefa_id: int = 0,
+             financeiro: bool = False) -> bool:
+    """A tarefa leva CRM, carteira ou financeiro? Agente da carteira, ferramenta financeira (`financeiro`), pedido
+    com valores ou termos do CRM, trecho financeiro do Cérebro já consultado ou nome de cliente no `contexto`."""
+    if agente_id in AGENTES_SIGILOSOS or financeiro or TEXTO_SIGILOSO.search(pedido or ""):
+        return True
+    try:
+        if tarefa_id:
+            import cerebro  # import tardio: o Cérebro carrega o índice
+
+            if cerebro._consultou_financeiro(tarefa_id):
+                return True
+        if contexto:
+            import carteira
+
+            return carteira.tem_nomes(contexto)
+    except Exception:
+        log.exception("Rota sigilosa: não consegui conferir o contexto; segue como sigilosa.")
+        return True
+    return False
+
+
 def _utilizaveis(etapas: list[Etapa]) -> list[Etapa]:
     return [e for e in etapas if config.modelo_disponivel(e.modelo) and saude.disponivel(e.modelo)]
 
@@ -66,12 +108,14 @@ def _gratuitos(maximo: int | None = None) -> list[Etapa]:
 
 def etapas_imediatas(dificuldade: Dificuldade, agente_id: str) -> list[Etapa]:
     """Gratuitos primeiro. Simples: Haiku antes do local (rápido e barato, com teto próprio).
-    O local só para simples/médias de agentes que ele atende bem."""
-    etapas = _gratuitos(MAX_GRATUITOS_IMEDIATOS)  # alguém esperando: no pior caso 3 x 4 min, não 6 x 4 min
+    O local só para simples/médias de agentes que ele atende bem. Agente da carteira (rota sigilosa): sem gratuitos
+    de fora, e o local entra em qualquer dificuldade (o Max, quando pode, entra antes dele no orquestrador)."""
+    sigiloso = agente_id in AGENTES_SIGILOSOS
+    etapas = [] if sigiloso else _gratuitos(MAX_GRATUITOS_IMEDIATOS)  # alguém esperando: no pior caso 3 x 4 min
     if dificuldade == Dificuldade.simples and tarefas.chat_rapido_liberado(agente_id):
         etapas.append(Etapa(config.MODELO_FILA_PADRAO, LIMITE_FILA))
-    if dificuldade in LIMITE_LOCAL and agente_id not in AGENTES_SEM_LOCAL and config.MODELO_LOCAL:
-        etapas.append(Etapa(config.MODELO_LOCAL, LIMITE_LOCAL[dificuldade]))
+    if (dificuldade in LIMITE_LOCAL or sigiloso) and agente_id not in AGENTES_SEM_LOCAL and config.MODELO_LOCAL:
+        etapas.append(Etapa(config.MODELO_LOCAL, LIMITE_LOCAL.get(dificuldade, LIMITE_LOCAL[Dificuldade.media])))
     return _utilizaveis(etapas)
 
 

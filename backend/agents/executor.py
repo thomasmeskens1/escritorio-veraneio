@@ -24,7 +24,7 @@ import saude
 import tarefas
 from agents import diretrizes, ferramentas_brevo, ferramentas_monday, ferramentas_painel, projeto
 from agents.perfis import PERFIS, contexto, descricao_tarefa
-from roteamento import Etapa, etapas_contingencia
+from roteamento import Etapa, etapas_contingencia, externo_gratuito, sigilosa
 
 # O CrewAI repete chamadas com erro 429 (3x, sem opção de configurar). Desligado para não
 # gastar cota repetindo o mesmo modelo: o roteamento já passa ao próximo. Revisar ao atualizar o crewai.
@@ -74,6 +74,22 @@ class PedidoGrandeDemais(LocalOcupado):
     diretrizes; o CrewAI e as consultas ao Cérebro somam o resto)."""
 
 
+class RotaSigilosa(LocalOcupado):
+    """Tarefa com CRM, carteira ou financeiro num gratuito de fora: pula para o próximo (Max, local), sem afastá-lo."""
+
+
+def _diretrizes(agente_id: str, tarefa_id: int, compacto: bool = False) -> str:
+    """Diretrizes do agente; a persona do Corporativo vai sem nomes de clientes para quem não é da Diretoria."""
+    empresa = cerebro.empresa_da_tarefa(tarefa_id)
+    extras = diretrizes.para(agente_id, compacto=compacto, empresa=empresa)
+    linha = tarefas.obter(tarefa_id) if tarefa_id else None
+    if extras and empresa == "cv_corporativo" and not (linha and auth.ve_financeiro(linha["usuario"])):
+        import carteira  # import tardio: lê os clientes do Monday (cache)
+
+        extras = carteira.ocultar(extras)
+    return extras
+
+
 ORCAMENTO_GROQ = 3500  # tokens estimados de persona + diretrizes + pedido (sobra para o CrewAI, Cérebro e resposta)
 
 
@@ -97,9 +113,14 @@ class ConsultarCerebro(BaseTool):
     args_schema: type[BaseModel] = _Pergunta
     agente: str
     tarefa_id: int
+    externo: bool = False  # gratuito de fora: trecho financeiro ou com nome de cliente não chega a ele
 
     def _run(self, pergunta: str) -> str:
-        return cerebro.consultar(pergunta, self.agente, self.tarefa_id)
+        resposta = cerebro.consultar(pergunta, self.agente, self.tarefa_id)
+        if self.externo and sigilosa("", "", resposta, self.tarefa_id):
+            return ("Esse conhecimento é sigiloso (CRM, carteira de clientes ou financeiro) e não pode ser usado aqui. "
+                    "Responda sem ele e diga ao usuário que esse detalhe fica com a Diretoria.")
+        return resposta
 
 
 class _Especificacao(BaseModel):
@@ -172,8 +193,7 @@ def _rodar_no_max(agente_id: str, descricao: str, esperado: str, limite_s: int, 
     etapa = re.search(r"Sua etapa \(\d+\): (.+)", descricao)  # projeto do Gestor: a pergunta é a etapa
     consulta = (etapa.group(1) if etapa else descricao)[:500]
     contexto_cerebro = cerebro.consultar(consulta, agente_id, tarefa_id) if agente_id != cerebro.ID else ""
-    prompt = max_texto.montar_prompt(PERFIS[agente_id],
-                                     diretrizes.para(agente_id, empresa=cerebro.empresa_da_tarefa(tarefa_id)),
+    prompt = max_texto.montar_prompt(PERFIS[agente_id], _diretrizes(agente_id, tarefa_id),
                                      contexto_cerebro, descricao, esperado)
     trabalho = max_texto.reservar()
     if trabalho is None:
@@ -206,6 +226,11 @@ def _rodar_max_ou_api(agente_id: str, descricao: str, esperado: str, limite_s: i
                 raise TimeoutError("Nem o Max nem a API ficaram disponíveis a tempo.")
             try:
                 return _rodar(agente_id, descricao, esperado, reserva, limite_s, total, tarefa_id)
+            except RotaSigilosa:  # etapa sigilosa e a reserva é gratuita de fora: espera o Max (não é falha dela)
+                if time.monotonic() >= fim:
+                    raise
+                time.sleep(5)
+                continue
             except Exception as erro:  # a falha é do modelo reserva, não do Max (revisão de 30/10/2026, 2.10)
                 saude.registrar_falha(reserva, str(erro))
                 raise saude.FalhaDoModelo(f"{reserva} (reserva do Max): {erro}", ja_registrada=True) from erro
@@ -247,7 +272,8 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
     if modelo == max_texto.MODELO:  # plano Max: sem tokens nem custo de API
         return _rodar_no_max(agente_id, descricao, esperado, limite_s, tarefa_id)
     # Todos os agentes de IA consultam o Cérebro (ele mesmo recebe os trechos já na descrição).
-    ferramentas = [] if agente_id == cerebro.ID else [ConsultarCerebro(agente=agente_id, tarefa_id=tarefa_id)]
+    ferramentas = [] if agente_id == cerebro.ID else [ConsultarCerebro(agente=agente_id, tarefa_id=tarefa_id,
+                                                                       externo=externo_gratuito(modelo))]
     if agente_id != cerebro.ID:
         descricao = _com_cerebro_pre_consultado(agente_id, descricao, tarefa_id)
     if agente_id == "construtor":
@@ -263,8 +289,7 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
                                                financeiro=auth.ve_financeiro(tarefa["usuario"]))
     perfil = dict(PERFIS[agente_id])
     # Diretrizes da Casa Veraneio (regras, marca e manual da função); versão curta no modelo local.
-    if (extras := diretrizes.para(agente_id, compacto=modelo.startswith(("ollama/", "groq/")),
-                                  empresa=cerebro.empresa_da_tarefa(tarefa_id))):
+    if (extras := _diretrizes(agente_id, tarefa_id, compacto=modelo.startswith(("ollama/", "groq/")))):
         perfil["backstory"] = f"{perfil['backstory']}\n\n{extras}"
     if any(f.name.startswith("analisar_") for f in ferramentas):  # regras de leitura dos números do painel
         perfil["backstory"] = f"{perfil['backstory']}\n\n{ferramentas_painel.instrucoes()}"
@@ -274,6 +299,15 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
                                     "sociais e dos e-mails, sem estimar valores em reais.")
     # Monday (criar itens) e painel analítico (várias consultas por análise) pedem mais voltas.
     monday_ativo = any(f.name.startswith(("criar_ite", "analisar_", "comparar_")) for f in ferramentas)
+    # Rota sigilosa (decisão 12): CRM, carteira ou financeiro nunca vão a um gratuito de fora; a tarefa segue para
+    # o Max ou o local. Conferido aqui, com o pedido completo (Cérebro já consultado), em qualquer rota ou fila.
+    # Nome de cliente só aparece no Cérebro do Corporativo (e no comum): nas outras empresas, sem ler o Monday.
+    corporativo = cerebro.empresa_da_tarefa(tarefa_id) in ("cv_corporativo", empresas.COMUM)
+    if externo_gratuito(modelo) and sigilosa(
+            agente_id, tarefa["texto"] if tarefa else "",
+            f"{perfil['backstory']}\n{descricao}" if corporativo else "", tarefa_id,
+            financeiro=any(f.name in ferramentas_painel.FINANCEIRAS for f in ferramentas)):
+        raise RotaSigilosa(f"tarefa sigilosa (CRM, carteira ou financeiro): {modelo} é gratuito de fora")
     if modelo.startswith("groq/") and (len(perfil["backstory"]) + len(descricao)) // 4 > ORCAMENTO_GROQ:
         raise PedidoGrandeDemais(f"pedido grande demais para o plano gratuito do Groq ({modelo})")
     agente = Agent(**perfil, llm=_llm(modelo, limite_s), tools=ferramentas,
