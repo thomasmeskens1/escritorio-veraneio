@@ -117,6 +117,7 @@ async function carregarTarefas() {
     if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
     const dados = await resposta.json();
     if (!painelAberto) return;
+    dados.resumo = { ...(dados.resumo || {}), uso_max: await carregarUsoMax() };
     renderizarPainel(dados);
     painelAtualizado.textContent = `Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`;
   } catch (erro) {
@@ -134,9 +135,61 @@ async function carregarTarefas() {
 function renderizarPainel({ resumo = {}, tarefas = [] }) {
   const blocos = [
     criarAvisos(resumo.avisos), criarResumo(resumo), criarCredito(resumo.anthropic), criarModelosFora(resumo.modelos_fora),
-    criarSaudeModelos(resumo.modelos_7d), criarAprendizado(resumo.aprendizado), criarListaTarefas(tarefas),
+    criarSaudeModelos(resumo.modelos_7d), criarUsoMax(resumo.uso_max), criarAprendizado(resumo.aprendizado),
+    criarListaTarefas(tarefas),
   ];
   painelConteudo.replaceChildren(...blocos.filter(Boolean));
+}
+
+// Medição do Max (despachante-07): consumo dos últimos 7 dias por tipo, agente e empresa. Só a Diretoria
+// (decisão 11); atualiza a cada minuto, não a cada 10 s.
+const INTERVALO_USO_MAX = 60000;
+let usoMax = null;
+let usoMaxEm = 0;
+
+async function carregarUsoMax() {
+  if (sessao?.role !== 'diretoria') return null;
+  if (Date.now() - usoMaxEm < INTERVALO_USO_MAX) return usoMax;
+  usoMaxEm = Date.now();
+  try {
+    const resposta = await fetch('/api/producao/uso-max', { headers: { Authorization: `Bearer ${sessao.token}` } });
+    if (resposta.ok) usoMax = await resposta.json();
+  } catch (erro) {
+    console.warn('Falha ao carregar o uso do Max:', erro);
+  }
+  return usoMax;
+}
+
+const ROTULOS_TIPO_MAX = { texto: 'Texto', anexo: 'Anexo', prospeccao: 'Prospecção', producao: 'Produção' };
+const numeroCurto = (n) => new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 }).format(n || 0);
+
+function criarUsoMax(uso) {
+  if (!uso || !uso.total || !uso.total.trabalhos) return null;
+  const caixa = novoEl('section', 'credito');
+  caixa.append(novoEl('h3', null, `Uso do Max (${uso.dias} dias)`));
+  const { total } = uso;
+  caixa.append(novoEl('p', 'credito-legenda',
+    `${total.trabalhos} trabalho(s) · ${formatarTempo(total.duracao_s)} · ${numeroCurto(total.tokens)} tokens · `
+    + `${numeroCurto(total.chars)} caracteres · ${total.rodadas} rodada(s)`));
+  [['Por tipo', uso.por_tipo, (c) => ROTULOS_TIPO_MAX[c.chave] || c.nome],
+    ['Por agente', uso.por_agente, (c) => c.nome], ['Por empresa', uso.por_empresa, (c) => c.nome]]
+    .forEach(([titulo, linhas = [], rotulo]) => {
+      if (!linhas.length) return;
+      const tabela = novoEl('table', 'saude-modelos');
+      const cabecalho = novoEl('tr');
+      [titulo, 'Trabalhos', 'Tempo', 'Tokens', 'Caracteres', 'Rodadas'].forEach((t) => cabecalho.append(novoEl('th', null, t)));
+      tabela.append(cabecalho);
+      linhas.slice(0, 8).forEach((c) => {
+        const linha = novoEl('tr', c.falhas ? 'saude-atencao' : null);
+        [rotulo(c), `${c.trabalhos}${c.falhas ? ` (${c.falhas} falha)` : ''}`, formatarTempo(c.duracao_s),
+          numeroCurto(c.tokens), numeroCurto(c.chars), c.rodadas].forEach((v) => linha.append(novoEl('td', null, String(v))));
+        tabela.append(linha);
+      });
+      caixa.append(tabela);
+    });
+  caixa.append(novoEl('p', 'credito-legenda', 'Tokens e rodadas vêm do Claude Code (trabalhador novo); o plano Max não '
+    + 'informa o limite exato da janela de 5 h.'));
+  return caixa;
 }
 
 // Modelos fora da rota: pausa curta (cota, limite, lentidão) ou AFASTADOS por falha recorrente (7 dias).

@@ -199,7 +199,7 @@ def _rodar_no_max(agente_id: str, descricao: str, esperado: str, limite_s: int, 
     trabalho = max_texto.reservar()
     if trabalho is None:
         raise MaxOcupado
-    max_texto.registrar_trabalho(tarefa_id, trabalho)
+    max_texto.registrar_trabalho(tarefa_id, trabalho, agente_id)  # agente da etapa: medição do Max
     return max_texto.executar(trabalho, prompt, limite_s)
 
 

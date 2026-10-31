@@ -49,7 +49,8 @@ def montar_anexo(payload: dict) -> tuple[list[str], str, Path]:
 def executar_anexo(payload: dict) -> str:
     comando, prompt, pasta = montar_anexo(payload)
     try:
-        descricao = comum.rodar_claude(comando, prompt, pasta, TEMPO_ANEXO, cancelado=_cancelado).strip()
+        descricao = comum.rodar_claude(comando, prompt, pasta, TEMPO_ANEXO, cancelado=_cancelado,
+                                     tipo="anexo").strip()
     finally:
         shutil.rmtree(pasta, ignore_errors=True)
     if not descricao:
@@ -76,7 +77,7 @@ def executar_texto(payload: dict) -> str:
     # Só escreve a resposta: nenhuma ferramenta (lista de permissão vazia, não lista de bloqueio) e nenhum MCP.
     comando = [comum.claude_exe(), "-p", "--output-format", "json", "--max-turns", "3", "--tools", ""]
     texto = comum.rodar_claude(comando, payload["prompt"], PASTA_TEXTO, min(int(payload.get("limite_s", 900)), 900),
-                               cancelado=_cancelado)
+                               cancelado=_cancelado, tipo="texto")
     if not texto.strip():
         raise RuntimeError("O Claude Code não devolveu texto.")
     return texto.strip()
@@ -98,7 +99,7 @@ def executar_prospeccao(payload: dict) -> str:
         comando = [comum.claude_exe(), "-p", "--output-format", "json", "--max-turns", "80",
                    "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch"]
     texto = comum.rodar_claude(comando, payload["prompt"], PASTA_PROSPECCAO, min(int(payload.get("limite_s", 2400)), 2400),
-                               cancelado=_cancelado)
+                               cancelado=_cancelado, tipo="prospeccao")
     if not texto.strip():
         raise RuntimeError("O Claude Code não devolveu a pesquisa.")
     return texto.strip()
@@ -124,17 +125,20 @@ def executar(trabalho: dict) -> None:
     global _em_execucao
     _em_execucao = trabalho["id"]
     log(f"Trabalho #{trabalho['id']} ({trabalho['tipo']})")
+    comum.zerar_uso()  # medição do Max: o consumo deste trabalho vai junto com a conclusão/falha
     try:
         executor = EXECUTORES.get(trabalho["tipo"])
         if not executor:
             raise RuntimeError(f"Tipo de trabalho desconhecido: {trabalho['tipo']}")
         resultado = executor(trabalho.get("payload") or {})
-        comum.chamar("POST", f"/api/producao/trabalhos/{trabalho['id']}/concluir", {"resultado": resultado})
+        comum.chamar("POST", f"/api/producao/trabalhos/{trabalho['id']}/concluir", {"resultado": resultado,
+                                                                                   "uso": comum.uso_acumulado()})
         log(f"   concluído ({len(resultado)} caracteres)")
     except Exception as erro:
         log(f"   falhou: {erro}")
         try:
-            comum.chamar("POST", f"/api/producao/trabalhos/{trabalho['id']}/falhar", {"erro": str(erro)})
+            comum.chamar("POST", f"/api/producao/trabalhos/{trabalho['id']}/falhar", {"erro": str(erro),
+                                                                                  "uso": comum.uso_acumulado()})
         except Exception as erro_api:
             log(f"   não foi possível avisar a falha ao backend: {erro_api}")
         if isinstance(erro, comum.MaxSemCota):

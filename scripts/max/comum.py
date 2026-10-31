@@ -184,12 +184,76 @@ def encerrar_arvore(processo: subprocess.Popen) -> None:
         processo.wait()
 
 
+# Modelo por tipo de trabalho (despachante-06): dados/modelos_max.json, fora do git, lido a cada chamada (muda sem
+# reiniciar). Ex.: {"texto": "sonnet", "anexo": "sonnet"}. Sem o arquivo, tipo ausente, "" ou "padrao": nenhuma troca
+# (o modelo padrão do Claude Code, como sempre foi).
+ARQUIVO_MODELOS = DADOS / "modelos_max.json"
+TIPOS_DE_TRABALHO = ("texto", "anexo", "prospeccao", "producao")
+_NOME_DE_MODELO = re.compile(r"[A-Za-z0-9][A-Za-z0-9._\-\[\]]{0,63}")
+
+
+def modelo_para(tipo: str) -> str:
+    """Alias/nome do modelo para este tipo de trabalho ("" = padrão do Claude Code)."""
+    try:
+        escolhas = json.loads(ARQUIVO_MODELOS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    valor = str(escolhas.get(tipo) or "").strip() if isinstance(escolhas, dict) and tipo in TIPOS_DE_TRABALHO else ""
+    if valor.lower() in ("", "padrao", "padrão") or not _NOME_DE_MODELO.fullmatch(valor):
+        return ""
+    return valor
+
+
+# Medição do Max (despachante-07): o que o Claude Code devolve na saída JSON (tokens, rodadas) e a duração medida,
+# somados por trabalho (a produção pode rodar duas vezes). Vai ao backend junto com a conclusão ou a falha.
+_uso = threading.local()
+
+
+def zerar_uso() -> None:
+    _uso.dados = {"chars_entrada": 0, "chars_saida": 0, "tokens_entrada": 0, "tokens_cache": 0, "tokens_saida": 0,
+                  "rodadas": 0, "duracao_s": 0.0, "modelo": ""}
+
+
+def uso_acumulado() -> dict:
+    if not hasattr(_uso, "dados"):
+        zerar_uso()
+    return {**_uso.dados, "duracao_s": round(_uso.dados["duracao_s"], 1)}
+
+
+def _somar_uso(saida: dict, prompt: str, duracao_s: float, modelo: str) -> None:
+    if not hasattr(_uso, "dados"):
+        zerar_uso()
+    d, usage = _uso.dados, saida.get("usage") if isinstance(saida.get("usage"), dict) else {}
+    numero = lambda v: int(v) if isinstance(v, (int, float)) and v >= 0 else 0
+    d["chars_entrada"] += len(prompt)
+    d["chars_saida"] += len(str(saida.get("result") or ""))
+    d["tokens_entrada"] += numero(usage.get("input_tokens"))
+    d["tokens_cache"] += numero(usage.get("cache_creation_input_tokens")) + numero(usage.get("cache_read_input_tokens"))
+    d["tokens_saida"] += numero(usage.get("output_tokens"))
+    d["rodadas"] += numero(saida.get("num_turns"))
+    d["duracao_s"] += max(duracao_s, 0.0)
+    usados = list(saida.get("modelUsage") or {}) if isinstance(saida.get("modelUsage"), dict) else []
+    d["modelo"] = (",".join(usados) or modelo or d["modelo"])[:80]
+
+
 def rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: dict | None = None,
-                 ao_progresso=None, cancelado=None) -> str:
+                 ao_progresso=None, cancelado=None, tipo: str = "") -> str:
     """Roda o Claude Code com o prompt pela entrada padrão; devolve o texto final ou levanta RuntimeError.
     Sempre isolado (ISOLAMENTO) e com o ambiente sem segredos. `ao_progresso(linhas)`: chamado quando o
-    progresso.txt da pasta muda (a cada INTERVALO_PROGRESSO s)."""
-    comando = [comando[0], *ISOLAMENTO, *comando[1:]]
+    progresso.txt da pasta muda (a cada INTERVALO_PROGRESSO s). `tipo`: escolhe o modelo (modelos_max.json) e
+    soma o consumo em uso_acumulado()."""
+    modelo = modelo_para(tipo) if tipo else ""
+    comando = [comando[0], *ISOLAMENTO, *(["--model", modelo] if modelo else []), *comando[1:]]
+    inicio = time.monotonic()
+    try:
+        return _rodar_claude(comando, prompt, cwd, timeout, env, ao_progresso, cancelado, modelo)
+    except (subprocess.TimeoutExpired, Cancelado):  # encerrado no meio: sem saída JSON, só a duração
+        _somar_uso({}, prompt, time.monotonic() - inicio, modelo)
+        raise
+
+
+def _rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: dict | None, ao_progresso,
+                  cancelado, modelo: str) -> str:
     progresso = cwd / ARQUIVO_PROGRESSO
     progresso.unlink(missing_ok=True)
     visto: list[str] = []
@@ -231,6 +295,9 @@ def rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env: 
         saida = json.loads(texto_saida or "{}")
     except ValueError:
         saida = {"is_error": True, "result": (texto_saida or "")[-500:]}
+    if not isinstance(saida, dict):
+        saida = {"is_error": True, "result": str(saida)[-500:]}
+    _somar_uso(saida, prompt, time.monotonic() - inicio, modelo)
     if processo.returncode != 0 or saida.get("is_error"):
         motivo = {"error_max_turns": "atingiu o limite de rodadas",
                   "error_during_execution": "erro durante a execução"}.get(saida.get("subtype"), saida.get("subtype"))

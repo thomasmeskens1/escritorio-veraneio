@@ -51,7 +51,14 @@ def empresa_da_campanha(nome: str, assunto: str, remetente: str = "", marca_pain
     return "cv_corporativo" if marca_painel == "corp" or EMAIL_CORP.search(texto) else "casa_veraneio"
 
 
+# Trava (prospectador-16, 31/10/2026): este script só LÊ campanhas enviadas. Nunca cria, importa nem lê contatos ou
+# listas (o Brevo só recebe contato com consentimento; lead da Prospecção Ativa nunca vira lista).
+CAMINHOS_PERMITIDOS = ("/emailCampaigns",)
+
+
 def _get(caminho: str, chave: str) -> dict:
+    if not caminho.startswith(CAMINHOS_PERMITIDOS) or re.search(r"/(contacts|lists|import)\b", caminho, re.I):
+        raise PermissionError(f"Brevo: {caminho.split('?')[0]} não é permitido (só leitura de campanhas).")
     requisicao = urllib.request.Request(f"{API}{caminho}", headers={"api-key": chave, "accept": "application/json"})
     with urllib.request.urlopen(requisicao, timeout=60) as resposta:
         return json.load(resposta)

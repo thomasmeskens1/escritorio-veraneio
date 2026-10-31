@@ -76,10 +76,12 @@ def reservar() -> int | None:
 
 
 _trabalhos_da_tarefa: dict[int, set[int]] = {}
+_origem: dict[int, tuple[int, str]] = {}  # trabalho -> (tarefa, agente da etapa): vai no payload (medição do Max)
 
 
-def registrar_trabalho(tarefa_id: int, trabalho_id: int) -> None:
+def registrar_trabalho(tarefa_id: int, trabalho_id: int, agente_id: str = "") -> None:
     _trabalhos_da_tarefa.setdefault(tarefa_id, set()).add(trabalho_id)
+    _origem[trabalho_id] = (tarefa_id, agente_id)
 
 
 def cancelar_da_tarefa(tarefa_id: int) -> int:
@@ -95,9 +97,11 @@ def cancelar_da_tarefa(tarefa_id: int) -> int:
 
 def executar(trabalho_id: int, prompt: str, limite_s: int = LIMITE_S) -> str:
     """Entrega o pedido ao trabalho reservado e espera a resposta (em thread). Levanta TimeoutError/saude.FalhaDoModelo."""
+    tarefa_id, agente_id = _origem.pop(trabalho_id, (None, ""))
+    payload = {"prompt": prompt, "limite_s": limite_s, "tarefa_id": tarefa_id, "agente": agente_id}
     with _db() as db:
         db.execute("UPDATE trabalhos_max SET payload = ?, status = 'pendente' WHERE id = ?",
-                   (json.dumps({"prompt": prompt, "limite_s": limite_s}, ensure_ascii=False), trabalho_id))
+                   (json.dumps(payload, ensure_ascii=False), trabalho_id))
     fim = time.monotonic() + limite_s
     while time.monotonic() < fim:
         linha = _db().execute("SELECT status, resultado FROM trabalhos_max WHERE id = ?", (trabalho_id,)).fetchone()
