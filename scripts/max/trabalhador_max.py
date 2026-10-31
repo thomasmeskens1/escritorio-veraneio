@@ -24,6 +24,7 @@ from urllib.parse import urlparse
 
 import catalogo_fotos_empresas
 import catalogo_lodges
+import conferencia_arte
 import link_drive
 import comum
 import emails_brevo
@@ -381,6 +382,7 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
         # chegavam só aos agentes do chat, e o Max que monta o PNG/MP4 repetia o que a equipe já tinha recusado.
         producao.get("regras") or "",
         regras_fotos(producao.get("empresa") or "casa_veraneio"),
+        conferencia_arte.instrucao(producao.get("empresa") or "casa_veraneio", producao.get("entrega") or ""),
         f"Grave SOMENTE dentro da pasta atual ({pasta}), que é o rascunho desta peça. Arquivos de trabalho (HTML, "
         "fundos, recortes, logos, cópias de fotos, cenas brutas) ficam FORA da subpasta "
         f"{PASTA_FINAL}/. Só o que estiver em {PASTA_FINAL}/ vai para o Drive (não use \"MARKETING > THOMAS\" citado "

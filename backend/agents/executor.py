@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 import agentes_dinamicos
 import atividade
 import auth
+import conferente
 import config
 import empresas
 import encaminhamento
@@ -391,6 +392,8 @@ def _executar_sincrono(tarefa_id: int, agente_id: str, texto: str, etapa: Etapa,
     total.texto = _garantir_formulario(total.texto)
     total.texto = empresas.sem_precos(total.texto, cerebro.empresa_da_tarefa(tarefa_id), texto)  # Casa Vero
     total.texto = sem_espanhol(total.texto)
+    # Regras duras (conferente.py): só aviso no fim da entrega, inclusive dos itens gravados no Monday.
+    total.texto = conferente.anotar(total.texto, agente_id, cerebro.empresa_da_tarefa(tarefa_id), texto, tarefa_id)
     return total
 
 
