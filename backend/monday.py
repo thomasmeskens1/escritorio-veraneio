@@ -25,6 +25,7 @@ from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile
 import config
 import empresas
 import monday_datas
+import segredos
 import tarefas
 
 log = logging.getLogger(__name__)
@@ -214,6 +215,7 @@ def mudar_status(item_id: int, rotulo: str) -> None:
 
 
 def escrever_legenda(item_id: int, texto: str) -> None:
+    texto = segredos.limpar(texto)  # texto de modelo gratuito/local também nunca leva chave ao Monday (despachante-31)
     _api("mutation ($b: ID!, $i: ID!, $c: String!, $v: JSON!) { change_column_value(board_id: $b, item_id: $i, "
          "column_id: $c, value: $v) { id } }",
          {"b": str(BOARD), "i": str(item_id), "c": COL_LEGENDA, "v": json.dumps({"text": texto})})
@@ -223,7 +225,7 @@ ASSINATURA = "🤖 Escritório Veraneio"  # todo comentário do sistema começa 
 
 
 def comentar(item_id: int, texto: str) -> None:
-    texto = texto.strip()
+    texto = segredos.limpar(texto).strip()
     if not texto.startswith(ASSINATURA):
         texto = f"{ASSINATURA}\n\n{texto}"
     corpo = "".join(f"<p>{html.escape(linha) or '&nbsp;'}</p>" for linha in texto.splitlines())
@@ -287,7 +289,8 @@ def criar_item(grupo_id: str, nome: str, valores: dict) -> dict:
     """`valores`: coluna -> valor no formato da API (ex.: {"data": {"date": "2026-12-05"}})."""
     return _api("mutation ($b: ID!, $g: String!, $n: String!, $v: JSON!) { create_item(board_id: $b, group_id: $g, "
                 "item_name: $n, column_values: $v) { id name url } }",
-                {"b": str(BOARD), "g": grupo_id, "n": nome, "v": json.dumps(valores)})["create_item"]
+                {"b": str(BOARD), "g": grupo_id, "n": segredos.limpar(nome),
+                 "v": segredos.limpar(json.dumps(valores))})["create_item"]
 
 
 def criar_webhook(url: str) -> dict:
@@ -386,7 +389,7 @@ def notificar(usuario_monday: int | None, item_id: int, texto: str) -> None:
     if not usuario_monday:
         return
     _api("mutation ($u: ID!, $i: ID!, $t: String!) { create_notification(user_id: $u, target_id: $i, text: $t, "
-         "target_type: Project) { text } }", {"u": str(usuario_monday), "i": str(item_id), "t": texto[:250]})
+         "target_type: Project) { text } }", {"u": str(usuario_monday), "i": str(item_id), "t": segredos.limpar(texto)[:250]})
 
 
 def item_da_tarefa(tarefa_id: int) -> int | None:

@@ -14,6 +14,7 @@ from typing import Callable
 
 import config
 import saude
+import segredos
 from agents.perfis import ESTILO_CHAT
 from estado import ANDARES
 
@@ -58,7 +59,7 @@ def _gravar(arquivo: Path, texto: str) -> None:
     if arquivo.exists():
         return
     temporario = arquivo.with_suffix(f".{threading.get_ident()}.tmp")  # duas tentativas não dividem o temporário
-    temporario.write_text(texto, encoding="utf-8")
+    temporario.write_text(segredos.limpar(texto), encoding="utf-8")  # vai ao Drive: nunca leva chave (despachante-31)
     temporario.replace(arquivo)
 
 
@@ -268,7 +269,7 @@ def _passagem(pasta: Path, plano: list[dict]) -> str:
         else:
             linhas.append(f"- [ ] {n}. {_nome(passo['agente'])}: {passo['instrucao']}")
     texto = "# Passagem\n\n" + "\n".join(linhas) + "\n"
-    (pasta / "passagem.md").write_text(texto, encoding="utf-8")
+    (pasta / "passagem.md").write_text(segredos.limpar(texto), encoding="utf-8")
     return texto
 
 

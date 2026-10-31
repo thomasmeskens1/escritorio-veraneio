@@ -29,7 +29,8 @@ LIMIAR_DUPLICADO = 0.97    # consolidação: quase idênticos
 COS_MINIMO = 0.40          # sem termo em comum, só entra se o significado for bem próximo
 PESO_COSSENO, PESO_BM25 = 0.65, 0.35
 # Trechos financeiros vindos do painel analítico (Thomas, 29/10/2026: vendas, receita e investimento só para a Diretoria).
-FINANCEIRO_REF = re.compile(r"^analytics/[^/]+/(crm|google-ads|meta-ads)\b|:financeiro$")
+# O manual 14 (persona do Corporativo) cita a carteira de clientes: mesma trava (brainstorm de 31/10/2026, prospectador-15).
+FINANCEIRO_REF = re.compile(r"^analytics/[^/]+/(crm|google-ads|meta-ads)\b|:financeiro$|^14_persona_corporativo\.md$")
 LAMBDA_MMR = 0.7
 PONTUACAO_LIMITE = 2.0
 PASSO_SUCESSO, PASSO_FALHA = 0.10, 0.15  # 👍/👎 do usuário (avaliacoes.py) e falha da tarefa

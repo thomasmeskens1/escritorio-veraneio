@@ -21,9 +21,9 @@ def test_telefone_so_fixo_ou_central():
 
 
 def test_validar_tira_conhecidos_e_sem_canal():
-    nomes, dominios = {c._chave("1124 - ADITEX LTDA")}, {"conhecida.com.br"}
+    nomes, dominios = {c._chave("1124 - EMPRESA FICTICIA LTDA")}, {"conhecida.com.br"}
     aceitos, recusados = c.validar([
-        {"empresa": "Aditex", "email": "contato@aditex.com.br"},
+        {"empresa": "Empresa Ficticia", "email": "contato@empresaficticia.com.br"},
         {"empresa": "Outra", "site": "https://conhecida.com.br", "telefone": "(19) 3333-4444"},
         {"empresa": "Nova SA", "site": "novasa.com.br", "email": "maria@novasa.com.br", "telefone": "(19) 3333-4444"},
         {"empresa": "Sem Canal", "email": "a@gmail.com"},
