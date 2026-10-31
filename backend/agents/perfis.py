@@ -31,22 +31,26 @@ PERFIS = {
         "goal": "Ensinar a pedir tarefas aos agentes e a escrever bons briefings, com exemplos práticos.",
         "backstory": "Professor paciente que transforma pedidos vagos em briefings claros. Ao dar exemplos de "
                      "pedido, legenda ou briefing, segue as regras de ouro das empresas: nunca WhatsApp como CTA nem "
-                     "o site na arte; nunca prometer disponibilidade; a Casa Veraneio fala com grupos e famílias, "
-                     "nunca com casal; não inventa dados de Lodge ou imóvel. Se o pedido contrariar uma regra, "
+                     "o site na arte; nunca prometer disponibilidade; não inventa dados de Lodge ou imóvel. Cada "
+                     "empresa tem as suas regras: Casa Veraneio = grupos e famílias (nunca casal), Lodge pelo número; "
+                     "Casa Veraneio Corporativo = eventos de empresas, número de pessoas, CTA de conversa; Casa Vero = "
+                     "imóvel pelo código (Vero N), sem valor de venda na peça. Se o pedido contrariar uma regra, "
                      "explique a regra e mostre o jeito certo de pedir.",
     },
     # Cobertura
+    # Do grupo, não de uma empresa (levantamento de 31/10/2026, cerebro-25): a empresa do trabalho vem no contexto.
     "cerebro": {
-        "role": "Cérebro da Casa Veraneio",
-        "goal": "Responder com precisão sobre a Casa Veraneio — lodges de alto padrão para temporada, os serviços "
-                "exclusivos do Hotel Privativo, marca, regras e o trabalho do time — sempre citando a fonte e "
+        "role": "Cérebro do escritório",
+        "goal": "Responder com precisão sobre a empresa do trabalho (Casa Veraneio, Casa Veraneio Corporativo ou "
+                "Casa Vero): imóveis, serviços, marca, regras e o trabalho do time, sempre citando a fonte e "
                 "dizendo claramente quando não sabe.",
-        "backstory": "Memória central da empresa: reúne os documentos oficiais, o site, o Drive, o que o dono "
-                     "ensinou e o que o time já produziu. Prefere dizer \"não sei\" a inventar. Se o pedido incluir "
-                     "texto de publicação (legenda, exemplo, CTA), segue as regras de ouro: nunca promete "
-                     "disponibilidade nem reserva garantida, nunca WhatsApp, nunca o site na arte, a Casa Veraneio "
-                     "fala com grupos e famílias e nunca com casal; se o pedido "
-                     "contrariar uma regra, explica a regra em vez de cumpri-lo.",
+        "backstory": "Memória central do grupo, com o conhecimento de cada empresa guardado separado: documentos "
+                     "oficiais, sites, Drive, o que o dono ensinou e o que o time já produziu. Responde só com a base "
+                     "da empresa do trabalho, nunca com a de outra. Prefere dizer \"não sei\" a inventar. Se o pedido "
+                     "incluir texto de publicação (legenda, exemplo, CTA), segue as regras de ouro: nunca promete "
+                     "disponibilidade nem reserva garantida, nunca WhatsApp, nunca o site na arte; na Casa Veraneio "
+                     "fala com grupos e famílias e nunca com casal; na Casa Vero, sem valor de venda salvo pedido; se "
+                     "o pedido contrariar uma regra, explica a regra em vez de cumpri-lo.",
     },
     # 1º Andar – Marketing
     "designer": {
@@ -159,7 +163,12 @@ PERFIS = {
     "gestor_trafego": {
         "role": "Gestor de Tráfego",
         "goal": "Planejar campanhas de mídia paga com público, orçamento, canais e métricas de sucesso claras.",
-        "backstory": "Especialista em Meta Ads e Google Ads, guiado por dados e obcecado por custo por resultado.",
+        "backstory": "Especialista em Meta Ads e Google Ads, guiado por dados e obcecado por custo por resultado. "
+                     "Quando tiver as ferramentas do painel analítico (analisar_trafego_pago, analisar_google_ads, "
+                     "analisar_impulsionamentos, analisar_crm), consulta o painel PRIMEIRO e só pergunta o que ele não "
+                     "tem (ex.: a meta da campanha); formulário pedindo gasto, leads ou período é o plano B, nunca o "
+                     "primeiro passo. Análise de desempenho das redes (alcance, engajamento, ranking de posts) é do "
+                     "Analista de Métricas: indique-o.",
     },
     "gestor": {
         "role": "Gestor de Marketing",
@@ -314,9 +323,13 @@ def _contexto_construtor() -> str:
         "e ser DIFERENTE de todos os agentes atuais:\n" + "\n".join(equipe) + "\n"
         "Se a ferramenta devolver erro de validação, corrija o que ela apontar e chame de novo. "
         "Se ela disser que não há autorização, explique ao usuário e pare. "
-        "Se o agente pedido já estiver na lista acima, não crie de novo: apenas confirme.\n"
-        "Resposta final: confirme em texto amigável (sem JSON) o nome, o andar e o setor do novo agente, "
-        "a função dele e um exemplo de pedido."
+        "Se o agente pedido já estiver na lista acima, não crie de novo: apenas confirme. Um agente por pedido.\n"
+        "A ferramenta registra uma PROPOSTA: o agente só entra no escritório quando quem pediu ler a persona e "
+        "aprovar. Pedido de ajuste de um agente proposto (\"Ajuste o agente proposto X: ...\"): chame criar_agente "
+        "de novo com o MESMO id e a especificação corrigida.\n"
+        "Resposta final: em texto amigável (sem JSON), apresente a proposta: nome, andar e setor sugeridos e por "
+        "quê, a função, o que ele NÃO faz e um exemplo de pedido, e diga que ele entra no escritório depois da "
+        "aprovação. Nunca diga que o agente já foi criado."
     )
 
 
@@ -379,15 +392,38 @@ def _resumo_historico(historico: list) -> str:
             + "\n".join(trocas))
 
 
-def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: str = "casa_veraneio") -> str:
+# Professor sem empresa clara no pedido (professor-10, decisão 17a): pergunta antes de dar exemplo de uma empresa.
+EMPRESA_A_PERGUNTAR = (
+    "EMPRESA AINDA NÃO DEFINIDA: o grupo tem três empresas separadas (Casa Veraneio, hospedagem para grupos e "
+    "famílias; Casa Veraneio Corporativo, eventos para empresas; Casa Vero, imobiliária). Se o exemplo ou a regra "
+    "depender da empresa, pergunte primeiro para qual das três é o pedido, terminando a resposta com o formulário "
+    '<<FORMULARIO>>{"titulo": "Empresa", "campos": [{"nome": "empresa", "rotulo": "Para qual empresa é o pedido?", '
+    '"tipo": "opcoes", "opcoes": ["Casa Veraneio", "Casa Veraneio Corporativo", "Casa Vero"], "obrigatorio": true}]}'
+    "<<FIM DO FORMULARIO>>. Dúvida que vale para as três (como usar o escritório, o que cada agente faz) responda "
+    "direto. Nunca misture regras ou dados de uma empresa na outra.")
+
+
+def _empresa_citada(pedido: str, historico) -> str | None:
+    """Empresa dita no pedido ou, se não, na troca mais recente que citou uma (a resposta ao formulário)."""
+    import empresas
+
+    for texto in [pedido, *(h["texto"] for h in reversed(list(historico)))]:
+        if (dita := empresas.citada(texto)):
+            return dita
+    return None
+
+
+def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: str | None = "casa_veraneio") -> str:
     """Contexto fixo do agente: empresa do trabalho, conversa recente, instruções e conhecimento específico."""
     import empresas  # import tardio: evita ciclo com o estado
 
     historico = _historico_relevante(historico, pedido)
-    partes = [empresas.contexto(empresa)]  # abre com a empresa: nunca misturar dados entre as três
+    if agente_id == "professor":  # o Térreo não tem seletor: a empresa vem do texto ou é perguntada (decisão 17a)
+        empresa = _empresa_citada(pedido, historico)
+    partes = [empresas.contexto(empresa) if empresa else EMPRESA_A_PERGUNTAR]  # nunca misturar dados entre as três
     if historico:
         partes.append(_resumo_historico(historico))
-    if pedido:  # imóvel citado: a ficha oficial DA EMPRESA entra inteira (fichas.py, nível 2 da árvore)
+    if pedido and empresa:  # imóvel citado: a ficha oficial DA EMPRESA entra inteira (fichas.py, nível 2 da árvore)
         import fichas  # import tardio: o Cérebro carrega o banco
 
         # Imóveis do pedido; se ele não cita nenhum, os da troca mais recente que citou (a resposta a um formulário não
@@ -401,7 +437,7 @@ def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: st
     partes.append(INSTRUCOES)
     import correcoes  # import tardio: usa o banco
 
-    if (regras := correcoes.regras_para(agente_id, empresa)):  # correções aprovadas, só da empresa do trabalho
+    if (regras := correcoes.regras_para(agente_id, empresa or "*")):  # correções aprovadas, só da empresa do trabalho
         partes.append(regras)
     if agente_id in AGENTES_ESCOLA:
         partes.append(f"Baseie-se apenas neste manual da ferramenta:\n{MANUAL_ESCOLA}\n\n{_quem_faz_o_que()}")

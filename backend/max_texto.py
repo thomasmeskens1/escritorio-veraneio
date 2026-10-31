@@ -54,8 +54,12 @@ def _ocupado() -> bool:
 
 
 def pode_usar(usuario: str, agente_id: str) -> bool:
-    """O Max entra na rota desta tarefa? (dono, agente sem ferramentas próprias e trabalhador ligado)."""
-    return config.usa_max(usuario) and agente_id not in AGENTES_COM_FERRAMENTAS and online()
+    """O Max entra na rota desta tarefa? (dono, agente sem ferramentas próprias e trabalhador ligado). Agente criado
+    pelo Construtor fica fora: a persona dele foi escrita por modelo e o Max roda no PC (construtor-06)."""
+    import agentes_dinamicos  # import tardio: depende das personas
+
+    return (config.usa_max(usuario) and agente_id not in AGENTES_COM_FERRAMENTAS
+            and not agentes_dinamicos.do_construtor(agente_id) and online())
 
 
 def reservar() -> int | None:

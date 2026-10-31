@@ -1,4 +1,4 @@
-"""Cérebro: o conhecimento central (RAG) da Casa Veraneio.
+"""Cérebro: o conhecimento central (RAG) do grupo, com cada empresa separada.
 
 Substitui a Diretora. Os agentes consultam pela ferramenta consultar_cerebro (um estagiário leva a resposta
 até o andar deles); a diretoria conversa direto com o Cérebro, e só a conta do dono pode ensiná-lo.
@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 import atividade
 import cerebro_base as base
+import cerebro_conferencia as conferencia
 import cerebro_embed as embed
 import cerebro_estagiarios as estagiarios
 import config
@@ -53,6 +54,10 @@ ROTULOS_FONTE = {"oficial": "documento oficial", "ensinado": "ensinado pela dire
                  "drive": "Drive", "rede": "redes sociais (YouTube/Instagram)",
                  "dados": "dados do painel analítico",
                  "tarefa": "trabalho anterior da equipe"}
+
+# Resposta de tarefa é referência de estilo, não fonte de dado (cerebro-13): "8 suítes" errado numa legenda antiga
+# voltava como conhecimento e contaminava as peças seguintes.
+AVISO_TAREFA = " (exemplo de trabalho anterior: não use como fonte de preço, capacidade ou data)"
 
 _ENSINO = re.compile(r"^\s*(aprenda|anote|memorize|lembre(?:-se)?|ensinar|registre)\b\s*(?:-\s*se\b)?\s*:?\s*",
                      re.IGNORECASE)
@@ -94,6 +99,7 @@ def _formatar(trechos: list[dict], limite: int) -> str:
     blocos = []
     for n, t in enumerate(trechos, 1):
         ref = f" ({t['fonte_ref']})" if t["fonte_ref"] and t["fonte_tipo"] in ("oficial", "site", "drive", "rede", "dados") else ""
+        ref += AVISO_TAREFA if t["fonte_tipo"] == "tarefa" else ""
         conteudo = t["conteudo"] if len(t["conteudo"]) <= por_trecho else t["conteudo"][:por_trecho].rstrip() + "…"
         blocos.append(f"[{n}] {t['titulo']} — fonte: {ROTULOS_FONTE.get(t['fonte_tipo'], t['fonte_tipo'])}{ref}, "
                       f"{t['data']}\n{conteudo}")
@@ -116,7 +122,8 @@ def _formatar_em_camadas(trechos: list[dict], limite: int, completos: int = COMP
     for n, t in enumerate(trechos[completos:], completos + 1):
         texto = " ".join(t["conteudo"].split())
         frase = (achou.group(1) if (achou := PRIMEIRA_FRASE.match(texto)) else texto[:140].rstrip() + "…")
-        linha = f"\n[{n}] {t['titulo']} — {ROTULOS_FONTE.get(t['fonte_tipo'], t['fonte_tipo'])}, {t['data']}: {frase}"
+        aviso = AVISO_TAREFA if t["fonte_tipo"] == "tarefa" else ""
+        linha = f"\n[{n}] {t['titulo']} — {ROTULOS_FONTE.get(t['fonte_tipo'], t['fonte_tipo'])}{aviso}, {t['data']}: {frase}"
         if len(resumo) + len(linha) > orcamento:
             break  # só linhas inteiras
         resumo += linha
@@ -189,7 +196,7 @@ def consultar(pergunta: str, agente: str, tarefa_id: int = 0) -> str:
             estagiarios.concluir_visita(estagiario)
     if not trechos:
         return ("O Cérebro não tem nada registrado sobre isso. Não invente: diga que essa informação não está "
-                "na base da Casa Veraneio ou pergunte ao usuário.")
+                f"na base da {empresas.nome(empresa_da_tarefa(tarefa_id))} ou pergunte ao usuário.")
     linha = tarefas.obter(tarefa_id) if tarefa_id else None
     return ("Conhecimento do Cérebro (cite a fonte ao usar; prefira o mais recente se houver conflito):\n\n"
             + empresas.sem_precos(_formatar_em_camadas(trechos, MAX_CARACTERES_FERRAMENTA), empresa_da_tarefa(tarefa_id),
@@ -259,11 +266,48 @@ def aprender_tarefa(tarefa_id: int) -> int | None:
         trecho_id = base._inserir("tarefa", referencia, f"{nome}: {sem_contatos(linha['texto'].strip())[:70]}", conteudo,
                                   linha["empresa"] or empresas.PADRAO,
                                   peso=None if do_dono else base.PESOS_FONTE["tarefa"] * PESO_OUTROS_USUARIOS)
+        if (erradas := _contra_a_ficha(resposta, linha["empresa"] or empresas.PADRAO)):
+            base.ativar_trecho_da_tarefa(tarefa_id, False)  # entra inativo: o dado errado não volta em outra peça
+            tarefas.registrar_evento(tarefa_id, "cerebro_nao_aprendeu", ID,
+                                     detalhe="Resposta diverge da ficha oficial: " + "; ".join(erradas))
         _acordar.set()
         return trecho_id
     except Exception:
         log.exception("Cérebro: falha ao aprender com a tarefa %s.", tarefa_id)
         return None
+
+
+def _contra_a_ficha(resposta: str, empresa: str) -> list[str]:
+    """Resposta que cita UM imóvel: fatos (suítes, quartos, banheiros, pessoas) que a ficha oficial desmente. Com
+    vários imóveis não dá para saber de qual é cada número: não acusa (o trecho já vai rotulado como exemplo)."""
+    import fichas  # import tardio: as fichas leem a base
+
+    padroes = [fichas.VERO_CITADO, fichas.LODGE_CITADO] if empresa == "casa_vero" else [fichas.LODGE_CITADO]
+    numeros = {str(int(n)) for p in padroes for n in p.findall(resposta or "")}
+    if len(numeros) != 1 or not (ficha := fichas.ficha(numeros.pop(), empresa)):
+        return []
+    return conferencia.divergencias(resposta, ficha)
+
+
+def conferir_citacoes(tarefa_id: int, resposta: str) -> str:
+    """Resposta do Cérebro: cada [n] conferido com o trecho n que ele recebeu (cerebro-03). Só marca, nunca apaga;
+    cada linha marcada vai para o Registro de atividade."""
+    try:
+        consulta = base.db().execute("SELECT ids_conhecimento FROM consultas_cerebro WHERE tarefa_id = ? AND agente = ? "
+                                     "ORDER BY id DESC LIMIT 1", (tarefa_id, ID)).fetchone() if tarefa_id else None
+        ids = json.loads(consulta["ids_conhecimento"] or "[]") if consulta else []
+        if not ids or not conferencia.CITACAO.search(resposta or ""):
+            return resposta
+        marcas = ",".join("?" * len(ids))
+        conteudos = {l["id"]: f"{l['titulo']}\n{l['conteudo']}" for l in base.db().execute(
+            f"SELECT id, titulo, conteudo FROM conhecimento WHERE id IN ({marcas})", tuple(ids))}
+        texto, problemas = conferencia.conferir_citacoes(resposta, [conteudos.get(i, "") for i in ids])
+    except Exception:
+        log.exception("Cérebro: falha ao conferir as citações da tarefa %s.", tarefa_id)
+        return resposta
+    for problema in problemas:
+        tarefas.registrar_evento(tarefa_id, "citacao_sem_fonte", ID, detalhe=problema)
+    return texto
 
 
 # --- Subida, trabalhador de embeddings e consolidação ----------------------------------------------------
@@ -355,6 +399,45 @@ def estatisticas(authorization: str = Header("")):
             "pode_ensinar": str(usuario.get("sub", "")).lower() == config.DONO_MAX,
             "embeddings": {"modelo": config.MODELO_EMBEDDING, "pendentes": len(base.pendentes()),
                            "ollama_ok": embed.ollama_ok()}}
+
+
+@rotas.get("/contradiz/{observacao_id}")
+def contradiz(observacao_id: int, authorization: str = Header("")):
+    """Correção aprovada (cerebro-07): os trechos que ela contradiz, para a Diretoria desativar com um clique. Saem do
+    que a resposta corrigida usou, do trecho que ela mesma virou e de uma busca pelo texto da correção."""
+    import correcoes  # import tardio: correções importam o Cérebro na aprovação
+
+    correcoes._dono(authorization)
+    obs = correcoes._db().execute("SELECT * FROM observacoes WHERE id = ?", (observacao_id,)).fetchone()
+    if not obs:
+        raise HTTPException(status_code=404, detail="Correção não encontrada.")
+    texto = obs["regra"] or obs["correcao"]
+    tarefa_id, empresa = obs["tarefa_anterior"], correcoes.empresa_da_observacao(obs)
+    ids = {i for l in base.db().execute("SELECT ids_conhecimento FROM consultas_cerebro WHERE tarefa_id = ?",
+                                        (tarefa_id or 0,)) for i in json.loads(l["ids_conhecimento"] or "[]")}
+    ids |= {t["id"] for t in base.buscar(texto, k=8, empresa=empresa if empresas.valida(empresa) else empresas.COMUM)}
+    if not ids:
+        return {"trechos": []}
+    marcas = ",".join("?" * len(ids))
+    linhas = base.db().execute(f"SELECT id, titulo, conteudo, fonte_tipo, fonte_ref FROM conhecimento WHERE ativo = 1 "
+                               f"AND id IN ({marcas})", tuple(ids)).fetchall()
+    da_tarefa = {f"tarefa:{tarefa_id}", f"tarefa:{tarefa_id}:financeiro"}
+    candidatos = [{"id": l["id"], "titulo": l["titulo"], "conteudo": l["conteudo"],
+                   "fonte": ROTULOS_FONTE.get(l["fonte_tipo"], l["fonte_tipo"]),
+                   "da_tarefa": l["fonte_ref"] in da_tarefa} for l in linhas]
+    return {"trechos": [{"id": c["id"], "titulo": c["titulo"], "fonte": c["fonte"], "da_tarefa": c["da_tarefa"],
+                         "trecho": " ".join(c["conteudo"].split())[:300]}
+                        for c in conferencia.contradizem(texto, candidatos)]}
+
+
+@rotas.post("/trechos/{trecho_id}/desativar")
+def desativar_trecho(trecho_id: int, authorization: str = Header("")):
+    """Tira um trecho das buscas (o histórico fica guardado). Só a Diretoria."""
+    import correcoes
+
+    correcoes._dono(authorization)
+    base._desativar([trecho_id], None)
+    return {"ok": True}
 
 
 class Documento(BaseModel):

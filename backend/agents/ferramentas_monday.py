@@ -117,8 +117,10 @@ def _descrever_roteiro(item_id: int, roteiro: str) -> None:
 class VerPlanejamentoMonday(BaseTool):
     name: str = "ver_planejamento_monday"
     description: str = ("Lista os itens de um grupo do board de Social Media no Monday (um mês ou 'Definir Data'), "
-                        "com data de postagem e status. Use antes de criar itens, para não duplicar.")
+                        "só da empresa deste trabalho (coluna Conta), com data de postagem e status. Use antes de "
+                        "criar itens, para não duplicar.")
     args_schema: type[BaseModel] = _Grupo
+    tarefa_id: int = 0
 
     def _run(self, grupo: str) -> str:
         try:
@@ -128,11 +130,16 @@ class VerPlanejamentoMonday(BaseTool):
             itens = monday.itens_do_grupo(achado["id"])
         except Exception as erro:
             return f"Não foi possível ler o Monday agora: {erro}"
+        # Só a Conta da empresa da tarefa (levantamento de 31/10/2026): no planejamento da Casa Vero, os itens da Casa
+        # Veraneio do mesmo mês entravam na conta de duplicatas e da grade.
+        tarefa = tarefas.obter(self.tarefa_id) if self.tarefa_id else None
+        itens, de_fora = monday.da_empresa(itens, tarefa["empresa"] if tarefa else "")
+        fora = f" ({de_fora} item(ns) de outras empresas ficaram de fora)" if de_fora else ""
         if not itens:
-            return f"O grupo {achado['title']} está vazio."
+            return f"O grupo {achado['title']} não tem itens desta empresa{fora}."
         linhas = [f"- {i['name']} | " + " | ".join(f"{c['id']}: {c['text'] or '—'}" for c in i["column_values"])
                   for i in itens]
-        return f"Itens em {achado['title']} ({len(itens)}):\n" + "\n".join(linhas)
+        return f"Itens em {achado['title']} ({len(itens)}){fora}:\n" + "\n".join(linhas)
 
 
 class _Contador(BaseModel):
@@ -258,5 +265,5 @@ def para(agente_id: str, tarefa_id: int = 0) -> list[BaseTool]:
     if agente_id != "social_media" or not monday.ativo():
         return []
     contador = _Contador()
-    return [VerPlanejamentoMonday(), CriarItensMonday(contador=contador, tarefa_id=tarefa_id),
+    return [VerPlanejamentoMonday(tarefa_id=tarefa_id), CriarItensMonday(contador=contador, tarefa_id=tarefa_id),
             CriarItemMonday(contador=contador, tarefa_id=tarefa_id), AtualizarItemMonday(tarefa_id=tarefa_id)]

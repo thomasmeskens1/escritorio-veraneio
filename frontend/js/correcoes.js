@@ -34,8 +34,62 @@ async function decidirCorrecao(caminho, corpo) {
     if (!resposta.ok) throw new Error((await resposta.json().catch(() => ({}))).detail || resposta.status);
   } catch (erro) {
     correcoes.erro = `Não foi possível salvar: ${erro.message}`;
+    if (andar) carregarCorrecoes(andar, agente);
+    return false;
   }
   if (andar) carregarCorrecoes(andar, agente);
+  return true;
+}
+
+// Correção aprovada (cerebro-07): os trechos do Cérebro que ela contradiz, para desativar com um clique. A busca é
+// por palavras e números; quem decide é a Diretoria (pode ser falso alarme).
+async function mostrarContradicoes(observacaoId) {
+  let trechos = [];
+  try {
+    const resposta = await fetch(`/api/cerebro/contradiz/${observacaoId}`, { headers: { Authorization: `Bearer ${sessao.token}` } });
+    if (resposta.ok) trechos = (await resposta.json()).trechos || [];
+  } catch {
+    return;
+  }
+  if (!trechos.length) return;
+  fecharFormularioPopup();
+  const fundo = novoEl('div', 'modal aberto modal-formulario');
+  const janela = novoEl('section', 'janela janela-formulario janela-usuario');
+  janela.setAttribute('role', 'dialog');
+  janela.setAttribute('aria-modal', 'true');
+  const barra = novoEl('header', 'janela-barra');
+  const titulo = novoEl('div', 'janela-titulo');
+  titulo.append(novoEl('h2', null, 'Trechos que contradizem a correção'),
+    novoEl('p', null, 'Desative os que estiverem errados: eles saem das buscas do Cérebro (o histórico fica guardado).'));
+  const fechar = novoEl('button', 'fechar', '×');
+  fechar.type = 'button';
+  fechar.setAttribute('aria-label', 'Fechar');
+  fechar.addEventListener('click', fecharFormularioPopup);
+  barra.append(titulo, fechar);
+  const corpo = novoEl('div', 'formulario-corpo usuario-corpo');
+  trechos.forEach((t) => {
+    const bloco = novoEl('div', 'reg-mensagem reg-resposta');
+    const desativar = novoEl('button', 'botao-secundario botao-perigo', 'Desativar');
+    desativar.type = 'button';
+    desativar.addEventListener('click', async () => {
+      desativar.disabled = true;
+      try {
+        const r = await fetch(`/api/cerebro/trechos/${t.id}/desativar`, { method: 'POST', headers: { Authorization: `Bearer ${sessao.token}` } });
+        desativar.textContent = r.ok ? 'Desativado' : 'Não foi possível';
+      } catch {
+        desativar.textContent = 'Sem conexão';
+      }
+    });
+    bloco.append(novoEl('strong', null, `${t.titulo} · ${t.da_tarefa ? 'a resposta corrigida' : t.fonte}`),
+      novoEl('p', null, t.trecho), desativar);
+    corpo.append(bloco);
+  });
+  janela.append(barra, corpo);
+  fundo.append(janela);
+  fundo.addEventListener('click', (e) => { if (e.target === fundo) fecharFormularioPopup(); });
+  fundo.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); fecharFormularioPopup(); } });
+  document.body.append(fundo);
+  popupFormulario = fundo;
 }
 
 // Pop-up de uma correção ou elogio: a mensagem inteira, a resposta do agente e as três decisões (só aqui).
@@ -80,8 +134,9 @@ function abrirCorrecao(o) {
   const acoes = novoEl('div', 'usuario-acoes');
   const decidir = (caminho, corpoPedido) => async () => {
     acoes.querySelectorAll('button').forEach((b) => { b.disabled = true; });
-    await decidirCorrecao(caminho, corpoPedido?.());
+    const ok = await decidirCorrecao(caminho, corpoPedido?.());
     fecharFormularioPopup();
+    if (ok && caminho.endsWith('/aprovar') && o.tipo !== 'elogio') mostrarContradicoes(o.id);
   };
   const botao = (texto, classe, acao) => {
     const b = novoEl('button', classe, texto);

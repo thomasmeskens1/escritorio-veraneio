@@ -152,16 +152,22 @@ function mostrarFormularioPendente(andar, agente) {
 }
 
 // Respostas rápidas (ex.: "Só o planejamento" / "Peça final"): o clique envia a resposta como mensagem.
+// `preencher`: só coloca o texto na caixa para a pessoa completar (ex.: "Pedir ajuste" do agente proposto).
 function criarOpcoes(opcoes) {
   const grupo = document.createElement('div');
   grupo.className = 'msg-opcoes';
-  opcoes.forEach(({ rotulo, texto }) => {
+  opcoes.forEach(({ rotulo, texto, preencher }) => {
     const botao = document.createElement('button');
     botao.type = 'button';
     botao.className = 'botao-secundario msg-ajuste';
     botao.textContent = rotulo;
     botao.addEventListener('click', () => {
       if (modalInput.disabled || modalEnviar.disabled) return;
+      if (preencher) {
+        modalInput.value = texto;
+        modalInput.focus();
+        return;
+      }
       grupo.querySelectorAll('button').forEach((b) => { b.disabled = true; });
       modalInput.value = texto;
       document.getElementById('modal-form').requestSubmit();

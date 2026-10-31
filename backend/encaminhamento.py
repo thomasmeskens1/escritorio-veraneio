@@ -23,7 +23,11 @@ ESCOPO = {
     "social_media": r"calend[aá]rio|planejamento|pautas?|cronograma|hashtags?",
     "email_marketing": r"e-?mails?|newsletter|brevo|pr[eé]-?header|disparos?|campanha de e-?mail",
     "gestor_trafego": r"campanhas?|an[uú]ncios?|tr[aá]fego|segmenta[cç][aã]o|p[uú]blicos?",
-    "analista_metricas": r"m[eé]tricas?|relat[oó]rios?|indicadores?|kpis?|resultados?",
+    # Análise de peças publicadas fica com o Analista (levantamento de 31/10/2026: "Compare os Reels de setembro e
+    # outubro" ia para o Gestor).
+    "analista_metricas": r"m[eé]tricas?|relat[oó]rios?|indicadores?|kpis?|resultados?|desempenho|alcance|"
+                         r"engajamento|salvamentos?|compar\w*|ranking|performance|an[aá]lis\w*|"
+                         r"(?:melhores|piores) (?:posts?|publica\w+|reels|pe[cç]as|stories|carross\w+)",
     "analista_tendencias": r"tend[eê]ncias?|previs[aã]o|previs[oõ]es|sazonal(?:idade)?|datas? comemorativas?|feriad[aã]o|"
                            r"feriados?|eventos? do ano",
 }

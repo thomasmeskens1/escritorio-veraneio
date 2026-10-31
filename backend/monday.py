@@ -267,9 +267,20 @@ def grupo_por_nome(nome: str, criar: bool = False) -> dict | None:
 
 def itens_do_grupo(grupo_id: str) -> list[dict]:
     dados = _api("query ($b: [ID!], $g: [String]) { boards(ids: $b) { groups(ids: $g) { items_page(limit: 200) "
-                 "{ items { id name column_values(ids: [\"data\", \"status\"]) { id text } } } } } }",
-                 {"b": [str(BOARD)], "g": [grupo_id]})
+                 f"{{ items {{ id name column_values(ids: [\"data\", \"status\", \"{COL_CONTA}\"]) {{ id text }} }} }} "
+                 "} } }", {"b": [str(BOARD)], "g": [grupo_id]})
     return dados["boards"][0]["groups"][0]["items_page"]["items"]
+
+
+def da_empresa(itens: list[dict], empresa: str) -> tuple[list[dict], int]:
+    """Itens cuja Conta é a da empresa (o grupo do mês tem as três marcas juntas); devolve (itens, quantos de outras
+    empresas ficaram de fora). Item sem Conta fica, marcado na leitura: pode ser de qualquer uma."""
+    if empresa not in empresas.EMPRESAS:
+        return itens, 0
+    rotulo = empresas.EMPRESAS[empresa]["monday"].lower()
+    conta = lambda i: next((c["text"] or "" for c in i["column_values"] if c["id"] == COL_CONTA), "").strip()
+    meus = [i for i in itens if conta(i) in SEM_CONTA or conta(i).lower() == rotulo]
+    return meus, len(itens) - len(meus)
 
 
 def criar_item(grupo_id: str, nome: str, valores: dict) -> dict:
