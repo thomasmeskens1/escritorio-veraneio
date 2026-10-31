@@ -6,6 +6,7 @@
 """
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -122,10 +123,8 @@ def areia(tmp_path, monkeypatch):
     spec.loader.exec_module(modulo)  # sem as variáveis de ambiente: nenhum gancho instalado
     peca = tmp_path / "peca"
     peca.mkdir()
-    monkeypatch.setattr(modulo, "_BLOQUEADAS", [str(tmp_path / "repo")])
-    monkeypatch.setattr(modulo, "_LIBERADAS", [])
-    monkeypatch.setattr(modulo, "_ESCRITA", [str(peca)])
-    monkeypatch.setattr(modulo, "_PROGRAMAS", {"ffmpeg", "python"})
+    # A configuração fica presa no gancho (31/10/2026): o teste monta um gancho próprio em vez de mexer no módulo.
+    modulo._gancho = modulo._criar_gancho([str(tmp_path / "repo")], [], [str(peca)], ["ffmpeg", "python"])
     return modulo, tmp_path, peca
 
 
@@ -148,6 +147,44 @@ def test_caixa_de_areia_bloqueia_segredo_repositorio_rede_e_programas(areia):
                          ("socket.connect", (None, ("127.0.0.1", 8080))),
                          ("subprocess.Popen", (None, ["ffmpeg", "-i", str(peca / "a.mp4"), str(peca / "b.mp4")], None, None))]:
         modulo._gancho(evento, args)  # a produção normal continua
+
+
+def test_caixa_de_areia_nao_se_desliga_por_dentro(areia, tmp_path):
+    """Um script da produção não desliga a caixa trocando o módulo, o os.path ou o builtins (31/10/2026)."""
+    import subprocess
+    import sys
+
+    modulo, raiz, peca = areia
+    segredo = raiz / "repo" / "segredo.txt"
+    segredo.parent.mkdir()
+    segredo.write_text("isca", encoding="utf-8")
+    arquivo = Path("/repo/scripts/max/caixa_de_areia/sitecustomize.py")
+    script = tmp_path / "ataque.py"
+    script.write_text(
+        "import builtins, os, sys, re\n"
+        "import sitecustomize as s\n"
+        "for nome in dir(s):\n"
+        "    if nome.startswith('_') and isinstance(getattr(s, nome), (list, tuple, set, frozenset)):\n"
+        "        setattr(s, nome, ())\n"
+        "os.path.abspath = lambda p: p\n"
+        "builtins.any = lambda *_: False\n"
+        "builtins.isinstance = lambda *_: False\n"
+        "re.match = lambda *_: None\n"
+        "barrados = []\n"
+        "for tentativa in (lambda: sys.settrace(lambda *a: None), lambda: __import__('gc').get_objects()):\n"
+        "    try:\n"
+        "        tentativa()\n"
+        "    except PermissionError:\n"
+        "        barrados.append(1)\n"
+        "try:\n"
+        f"    print(open({str(segredo)!r}).read())\n"
+        "except PermissionError:\n"
+        "    print('BARRADO', len(barrados))\n", encoding="utf-8")
+    env = {**os.environ, "PYTHONPATH": str(arquivo.parent), "VERANEIO_AREIA_BLOQUEADAS": str(raiz / "repo"),
+           "VERANEIO_AREIA_ESCRITA": str(peca), "VERANEIO_AREIA_PROGRAMAS": "python"}
+    saida = subprocess.run([sys.executable, str(script)], env=env, capture_output=True, text=True, timeout=60)
+    assert "isca" not in saida.stdout
+    assert "BARRADO 2" in saida.stdout, saida.stdout + saida.stderr
 
 
 # --- Item 1.10: "Parar" de verdade --------------------------------------------------------------------------------
