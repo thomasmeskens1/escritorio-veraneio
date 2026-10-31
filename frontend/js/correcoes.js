@@ -13,6 +13,7 @@ async function carregarCorrecoes(andar, agente) {
       Object.assign(correcoes, { erro: 'Não foi possível carregar as correções.', oculto: false });
     } else {
       Object.assign(correcoes, { dados: await resposta.json(), erro: '', oculto: false });
+      if (typeof atualizarAvisoCerebro === 'function') atualizarAvisoCerebro(correcoes.dados.observacoes?.length || 0);
     }
   } catch {
     Object.assign(correcoes, { erro: 'Servidor indisponível.', oculto: false });

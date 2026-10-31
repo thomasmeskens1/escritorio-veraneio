@@ -1,6 +1,7 @@
 // Ratinho do Cérebro (Thomas, 29/10/2026): aparece no canto inferior direito, animado, quando há correções ou
 // elogios esperando aprovação. Só para a Diretoria e o master. O clique leva à Cobertura com a ficha do Cérebro
 // aberta. Avisos: em tempo real ("correcao_nova", correcoes.avisar_diretoria) e ao entrar, se houver pendências.
+// O clique não o fecha (Thomas, 31/10/2026): ele some quando a lista de pendências zera, ou no "×".
 
 const RATO_CEREBRO = `
 <svg class="rato" viewBox="0 0 120 110" aria-hidden="true">
@@ -29,11 +30,13 @@ const RATO_CEREBRO = `
 
 let avisoCerebro = null;
 let avisoCerebroVisto = false; // o aviso de pendências ao entrar sai uma vez por sessão
+let avisoCerebroDispensado = false; // "×": só volta com pendência nova em tempo real
 
 const veAvisoCerebro = () => !!sessao && (sessao.role === 'diretoria' || sessao.master);
 
 function mostrarAvisoCerebro(total, ultima = '') {
   if (!veAvisoCerebro() || !total) return;
+  avisoCerebroDispensado = false;
   fecharAvisoCerebro(true);
   const aviso = novoEl('button', 'aviso-cerebro');
   aviso.type = 'button';
@@ -49,11 +52,11 @@ function mostrarAvisoCerebro(total, ultima = '') {
   fechar.title = 'Dispensar';
   fechar.addEventListener('click', (e) => {
     e.stopPropagation();
+    avisoCerebroDispensado = true;
     fecharAvisoCerebro();
   });
   aviso.append(texto, novoEl('span', 'aviso-cerebro-selo', String(total)), fechar);
   aviso.addEventListener('click', () => {
-    fecharAvisoCerebro();
     if (typeof podeAcessar === 'function' && !podeAcessar('cobertura')) return;
     renderizarAndar('cobertura');
     abrirAgente('cobertura', 'cerebro'); // ficha do Cérebro aberta, com a lista de correções e elogios
@@ -85,7 +88,22 @@ async function verificarAvisoCerebro() {
   }
 }
 
+// A lista de correções foi recarregada (aprovou, descartou, abriu a ficha): o aviso acompanha o total e só some
+// quando não há mais nada para aprovar.
+function atualizarAvisoCerebro(total) {
+  if (!total) return fecharAvisoCerebro();
+  if (!avisoCerebro?.isConnected) {
+    if (!avisoCerebroDispensado) mostrarAvisoCerebro(total);
+    return;
+  }
+  const selo = avisoCerebro.querySelector('.aviso-cerebro-selo');
+  const resumo = avisoCerebro.querySelector('.aviso-cerebro-texto small');
+  if (selo) selo.textContent = String(total);
+  if (resumo) resumo.textContent = `${total} para revisar no Cérebro · clique para abrir`;
+}
+
 function limparAvisoCerebro() {
   fecharAvisoCerebro(true);
   avisoCerebroVisto = false;
+  avisoCerebroDispensado = false;
 }
