@@ -264,7 +264,8 @@ async def aprovar(observacao_id: int, decisao: Decisao, authorization: str = Hea
     agente = "*" if decisao.escopo == "todos" else obs["agente"]
     regra = decisao.regra.strip()
     crua = (obs["correcao"] or "").strip()
-    if len(crua) >= REGRA_CRUA_MIN and crua in regra:
+    # O aprendizado da semana já vem escrito como regra pelo Cérebro: a trava vale só para correções e elogios.
+    if obs["tipo"] != "aprendizado" and len(crua) >= REGRA_CRUA_MIN and crua in regra:
         raise HTTPException(status_code=422, detail="Escreva a regra em uma ou duas frases: o texto inteiro da conversa "
                                                     "não serve de regra para os próximos pedidos.")
     empresa = "*" if decisao.todas_as_empresas else empresa_da_observacao(obs)

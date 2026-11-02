@@ -50,7 +50,11 @@ async function decidirCorrecao(caminho, corpo) {
       headers: { Authorization: `Bearer ${sessao.token}`, 'Content-Type': 'application/json' },
       body: corpo ? JSON.stringify(corpo) : undefined,
     });
-    if (!resposta.ok) throw new Error((await resposta.json().catch(() => ({}))).detail || resposta.status);
+    if (!resposta.ok) {
+      const detalhe = (await resposta.json().catch(() => ({}))).detail;
+      // 422 da validação vem como lista ({msg}); o da regra, como texto.
+      throw new Error(Array.isArray(detalhe) ? detalhe.map((d) => d.msg).join('; ') : detalhe || resposta.status);
+    }
   } catch (erro) {
     correcoes.erro = `Não foi possível salvar: ${erro.message}`;
     if (andar) carregarCorrecoes(andar, agente);
@@ -152,9 +156,15 @@ function abrirCorrecao(o) {
   caixaTodas.type = 'checkbox';
   todas.append(caixaTodas, document.createTextNode(` Vale para as três empresas (sem marcar: só ${o.empresa_nome || 'a empresa da tarefa'})`));
   const acoes = novoEl('div', 'usuario-acoes');
+  const aviso = novoEl('p', 'rotinas-nota erro');
   const decidir = (caminho, corpoPedido) => async () => {
     acoes.querySelectorAll('button').forEach((b) => { b.disabled = true; });
     const ok = await decidirCorrecao(caminho, corpoPedido?.());
+    if (!ok) { // o pop-up fica aberto com o motivo, para ajustar a regra e tentar de novo
+      acoes.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+      aviso.textContent = correcoes.erro;
+      return;
+    }
     fecharFormularioPopup();
     if (ok && caminho.endsWith('/aprovar') && o.tipo !== 'elogio') mostrarContradicoes(o.id);
   };
@@ -172,7 +182,7 @@ function abrirCorrecao(o) {
     botao('Descartar', 'botao-secundario botao-perigo', decidir(`${o.id}/descartar`)),
   );
   if (o.tipo === 'elogio') acoes.append(botaoGuardarModelo(o.id)); // texto inteiro como modelo (js/referencias.js)
-  corpo.append(rotulo, regra, todas, acoes);
+  corpo.append(rotulo, regra, todas, aviso, acoes);
   janela.append(barra, corpo);
   fundo.append(janela);
   fundo.addEventListener('click', (e) => { if (e.target === fundo) fecharFormularioPopup(); });

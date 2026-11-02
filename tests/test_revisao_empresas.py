@@ -24,12 +24,12 @@ def test_termos_financeiros_sem_marcar_preco_publico():
         assert not cerebro.TERMOS_FINANCEIROS.search(texto), texto
 
 
-def _observacao(empresa: str, texto: str) -> int:
+def _observacao(empresa: str, texto: str, tipo: str = "correcao") -> int:
     tarefa = tarefas.criar("ana-regra", "marketing", "copywriter", "Legenda", "simples", empresa=empresa)
     with correcoes._db() as db:
         return db.execute("INSERT INTO observacoes (em, usuario, andar, agente, tarefa_anterior, correcao, tipo) "
-                          "VALUES (?, 'ana-regra', 'marketing', 'copywriter', ?, ?, 'correcao')",
-                          (tarefas._agora(), tarefa, texto)).lastrowid
+                          "VALUES (?, 'ana-regra', 'marketing', 'copywriter', ?, ?, ?)",
+                          (tarefas._agora(), tarefa, texto, tipo)).lastrowid
 
 
 @pytest.fixture
@@ -57,6 +57,12 @@ def test_texto_cru_da_conversa_nao_vira_regra(aprovar):
     crua = "Uma casa a 300 metros da praia, com 7 suítes para 16 pessoas, piscina privativa, jacuzzi " * 3 + "adorei!"
     with pytest.raises(HTTPException):
         aprovar(_observacao("casa_veraneio", crua), f"Seguir este padrão aprovado por Ana: {crua}"[:500])
+
+
+def test_aprendizado_longo_da_semana_aprova_como_veio(aprovar):
+    # O Cérebro já escreve o aprendizado como regra; antes, com 200+ caracteres, a trava do texto cru o barrava (422).
+    texto = "Nas legendas de Lodge, abra com a experiência e só depois cite suítes e capacidade; " * 3
+    assert aprovar(_observacao("casa_veraneio", texto, "aprendizado"), texto.strip()) == {"ok": True}
 
 
 def test_todas_as_empresas_busca_nas_tres_com_etiqueta():
