@@ -173,7 +173,7 @@ function criarModelosEstilo() {
         botaoGuardar(c.tarefa_id));
       bloco.append(linha);
     });
-    if (d.modelos.length) bloco.append(novoEl('small', 'correcao-meta', `Ativos (até ${d.maximo_por_grupo} por empresa, agente e formato):`));
+    if (d.modelos.length) bloco.append(novoEl('small', 'correcao-meta', `Ativos (${d.modelos.length}; ficam até você remover):`));
     d.modelos.forEach((m) => {
       const linha = novoEl('div', 'correcao-regra-ativa');
       const remover = novoEl('button', 'botao-secundario', 'Remover');

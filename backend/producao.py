@@ -21,6 +21,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
+import ajustes
 import atividade
 import config
 import correcoes
@@ -561,7 +562,9 @@ async def _montar_producao(linha) -> dict:
         "fichas": await asyncio.to_thread(fichas.fichas_citadas, linha["texto"], linha["empresa"]),  # da empresa
         "empresa": linha["empresa"],  # o trabalhador escolhe manuais e acervo da empresa (nunca misturar)
         "entrega": "visual" if base else tipo_de_entrega(linha["texto"]),  # ajuste: sempre sobre a peça
-        "regras": correcoes.regras_da_producao(linha["agente"], linha["empresa"]),  # correções aprovadas
+        # Correções aprovadas e os últimos ajustes pedidos nas peças deste produtor (ajustes.py).
+        "regras": "\n\n".join(p for p in (correcoes.regras_da_producao(linha["agente"], linha["empresa"]),
+                                          ajustes.para_contexto(linha["agente"], linha["empresa"])) if p),
     }
 
 

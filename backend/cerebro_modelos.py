@@ -8,7 +8,9 @@ misturadas), agente e formato (legenda, descrição de casa, e-mail, roteiro, an
 
 Aprovado, o modelo entra na busca do Cérebro com etiqueta própria (fonte "modelo", peso 0,7) e o aviso "siga o tom e a
 estrutura, nunca copie os fatos". Um 👎 numa resposta que usou o modelo tira pontos dele (avaliacoes.py, como em
-qualquer trecho). No máximo MAX_POR_GRUPO por empresa, agente e formato: o mais antigo sai.
+qualquer trecho). Sem limite de quantidade (Thomas, 03/11/2026: é normal ter mais de 10 positivos por empresa, e
+nada aprovado se perde): só sai quem a Diretoria remover. Para não tomar o lugar das fichas, cada busca traz no máximo
+cerebro_base.MAX_MODELOS_POR_BUSCA modelos (os mais parecidos com o pedido).
 """
 
 import re
@@ -29,7 +31,6 @@ rotas = APIRouter(prefix="/api/modelos")
 FORMATOS = {"legenda": "Legenda de post", "descricao_casa": "Descrição de casa", "email": "E-mail",
             "roteiro": "Roteiro de vídeo", "anuncio": "Anúncio", "outro": "Outro texto"}
 AGENTES_DE_TEXTO = {"copywriter", "social_media", "email_marketing", "gestor_trafego", "moviemaker", "gestor"}
-MAX_POR_GRUPO = 10      # gestor-22: sem curadoria a biblioteca cresce sem fim
 TEXTO_MAX = 4000
 CANDIDATOS_DIAS = 30
 # Rodapé que o sistema acrescenta à resposta (conferente.rodape, avisos do Monday): não é parte do texto aprovado.
@@ -105,12 +106,7 @@ def guardar(empresa: str, agente: str, formato: str, texto: str, quem: str, tare
             "INSERT INTO modelos_estilo (empresa, agente, formato, texto, tarefa_id, observacao_id, aprovado_por, "
             "criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (empresa, agente, formato, texto, tarefa_id, observacao_id, quem, base.agora())).lastrowid
-        antigos = [l[0] for l in conexao.execute(
-            "SELECT id FROM modelos_estilo WHERE empresa = ? AND agente = ? AND formato = ? AND ativo = 1 "
-            "ORDER BY id DESC LIMIT -1 OFFSET ?", (empresa, agente, formato, MAX_POR_GRUPO))]
     base.substituir_ref("modelo", f"modelo:{novo}", *_conteudo(formato, agente, texto, quem), empresa)
-    for antigo in antigos:
-        remover(antigo)
     return novo
 
 
@@ -176,7 +172,7 @@ class NovoModelo(BaseModel):
 def listar(authorization: str = Header("")):
     correcoes._dono(authorization)
     nomes = {login: dados["nome"] for login, dados in carregar_usuarios().items()}
-    return {"formatos": FORMATOS, "maximo_por_grupo": MAX_POR_GRUPO,
+    return {"formatos": FORMATOS,
             "modelos": [{"id": m["id"], "empresa_nome": empresas.nome(m["empresa"]),
                          "agente_nome": _nome_agente(m["agente"]), "formato": FORMATOS.get(m["formato"], m["formato"]),
                          "previa": m["texto"][:160], "aprovado_por": m["aprovado_por"], "criado_em": m["criado_em"]}

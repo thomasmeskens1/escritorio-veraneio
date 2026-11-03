@@ -517,6 +517,11 @@ def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: st
 
     if (regras := correcoes.regras_para(agente_id, empresa or "*")):  # correções aprovadas, só da empresa do trabalho
         partes.append(regras)
+    if empresa:  # últimos ajustes pedidos a este agente na empresa do trabalho (ajustes.py)
+        import ajustes
+
+        if (pedidos := ajustes.para_contexto(agente_id, empresa)):
+            partes.append(pedidos)
     if agente_id in AGENTES_ESCOLA:
         partes.append(f"Baseie-se apenas neste manual da ferramenta:\n{MANUAL_ESCOLA}\n\n{_quem_faz_o_que()}{_fichas_de_pedido()}")
         if login:

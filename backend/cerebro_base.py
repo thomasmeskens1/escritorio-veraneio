@@ -26,6 +26,8 @@ log = logging.getLogger(__name__)
 PESOS_FONTE = {"ensinado": 1.3, "oficial": 1.2, "site": 1.1, "drive": 1.0, "dados": 1.0, "rede": 0.85, "tarefa": 0.6,
                "estudo": 0.5, "modelo": 0.7}  # rede: YouTube/Instagram (fala e legenda valem menos que a ficha)
 # modelo: texto aprovado pela Diretoria como exemplo de estilo (cerebro_modelos.py); vale como tom, nunca como fato.
+# A biblioteca de modelos não tem limite: por busca, no máximo estes, para os fatos (ficha, manuais) caberem.
+MAX_MODELOS_POR_BUSCA = 2
 # Estudo do Estrategista e do Analista de Tendências (estrategista-27): estimativa, peso menor e validade de 90 dias
 # (refazer o estudo renova: o novo substitui o antigo do mesmo assunto).
 VALIDADE_ESTUDO = timedelta(days=90)
@@ -407,6 +409,8 @@ def buscar(pergunta: str, k: int = 5, empresa: str = PADRAO, financeiro: bool = 
                      - (1 - LAMBDA_MMR) * max((parecido(i, j) for j in escolhidos), default=0.0))
         escolhidos.append(melhor)
         restantes.remove(melhor)
+        if sum(indice.fontes[i] == "modelo" for i in escolhidos) >= MAX_MODELOS_POR_BUSCA:
+            restantes = [i for i in restantes if indice.fontes[i] != "modelo"]
     def titulo(i: int) -> str:
         if not todas or indice.empresas[i] == COMUM:
             return indice.titulos[i]

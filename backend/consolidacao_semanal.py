@@ -27,6 +27,7 @@ rotas = APIRouter(prefix="/api/cerebro")
 
 MAX_APRENDIZADOS = 6
 MAX_EXEMPLOS_POR_AGENTE = 4
+MAX_AJUSTES_POR_AGENTE = 8
 _rodando = False
 
 
@@ -51,7 +52,7 @@ def coletar(dias: int = 7) -> dict:
         votos = {}
     grupos: dict = defaultdict(lambda: {"concluidas": 0, "falhas": 0, "tempo_total": 0.0, "positivos": 0,
                                         "negativos": 0, "exemplos": [], "insatisfacoes": [],
-                                        "motivos": Counter()})
+                                        "motivos": Counter(), "ajustes": 0, "pedidos_de_ajuste": []})
     for t in db.execute("SELECT id, agente, empresa, status, texto, tempo_segundos FROM tarefas WHERE criada_em >= ? "
                         "AND status IN ('concluida', 'falhou')", (desde,)):
         g = grupos[(empresas.nome(t["empresa"]), t["agente"])]
@@ -67,6 +68,15 @@ def coletar(dias: int = 7) -> dict:
         g = grupos[(empresas.nome(o["empresa"]) if o["empresa"] else "—", o["agente"])]
         if len(g["exemplos"]) < MAX_EXEMPLOS_POR_AGENTE:
             g["exemplos"].append({"tipo": o["tipo"], "texto": limpo(o["correcao"])[:300]})
+    # Ajustes pedidos nas peças (Thomas, 03/11/2026): o que a equipe teve de mandar refazer é o melhor sinal do que o
+    # agente ainda erra; o padrão repetido vira aprendizado para aprovar (ajustes.py).
+    import ajustes
+
+    for a in ajustes.da_semana(desde):
+        g = grupos[(empresas.nome(a["empresa"]) if a["empresa"] else "—", a["agente"])]
+        g["ajustes"] += 1
+        if len(g["pedidos_de_ajuste"]) < MAX_AJUSTES_POR_AGENTE:
+            g["pedidos_de_ajuste"].append(a["pedido"])
     # Motivo do 👎 (Onda 2, cerebro-08 e cerebro-20): categoria, etapa onde errou e texto já sem contatos/segredos.
     for i in insatisfacoes.da_semana(desde):
         g = grupos[(empresas.nome(i["empresa"]) if i["empresa"] else "—", i["agente"])]
@@ -78,6 +88,7 @@ def coletar(dias: int = 7) -> dict:
         {"empresa": empresa, "agente": agente, "agente_nome": nomes.get(agente, agente),
          "concluidas": g["concluidas"], "falhas": g["falhas"], "positivos": g["positivos"], "negativos": g["negativos"],
          "tempo_medio_s": round(g["tempo_total"] / max(g["concluidas"] + g["falhas"], 1)), "exemplos": g["exemplos"],
+         **({"ajustes_pedidos": g["ajustes"], "pedidos_de_ajuste": g["pedidos_de_ajuste"]} if g["ajustes"] else {}),
          **({"motivos_do_negativo": dict(g["motivos"].most_common()), "insatisfacoes": g["insatisfacoes"]}
             if g["motivos"] else {})}
         for (empresa, agente), g in sorted(grupos.items(), key=lambda x: (str(x[0][0]), x[0][1]))]}
@@ -98,6 +109,9 @@ def _prompt(dados: dict) -> str:
         "repetida com a contagem (ex.: \"3 de 4 👎 do Designer foram dados errados\"); \"Demorou demais ou travou\" é "
         "problema de operação, não vira regra de conteúdo. Quando a insatisfação disser a `etapa` onde errou, proponha "
         f"a regra ao agente daquela etapa ({etapas}), não ao último agente da entrega.\n\n"
+        "Quando houver `pedidos_de_ajuste` (o que a equipe mandou refazer nas peças), procure o que se repete (ex.: "
+        "\"aumente a logo\" em 3 peças) e proponha a regra que evitaria o ajuste, citando a contagem no `porque`; "
+        "ajuste de uma peça só (trocar uma foto específica) não vira regra.\n\n"
         f"Agentes válidos (use o id; \"*\" = todos os agentes): {agentes}\n\n"
         f"Dados da semana:\n{json.dumps(dados, ensure_ascii=False)[:20000]}\n\n"
         "Responda SOMENTE com este bloco:\n<<APRENDIZADOS>>\n"

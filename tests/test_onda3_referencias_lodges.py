@@ -111,15 +111,22 @@ def test_modelo_entra_na_busca_com_etiqueta_so_da_empresa():
         modelos.guardar("*", "copywriter", "legenda", "Texto que valeria para as três empresas.", "Pessoa Teste")
 
 
-def test_maximo_por_grupo_tira_o_mais_antigo(monkeypatch):
-    monkeypatch.setattr(modelos, "MAX_POR_GRUPO", 2)
+def test_sem_limite_nenhum_modelo_aprovado_sai_sozinho():
+    # Thomas, 03/11/2026: é normal ter mais de 10 positivos por empresa; só sai quem a Diretoria remover.
     ids = [modelos.guardar("casa_veraneio", "gestor_trafego", "anuncio", f"Anúncio modelo número {n} com chamada "
-                           "clara e curta.", "Pessoa Teste") for n in range(3)]
+                           "clara e curta.", "Pessoa Teste") for n in range(12)]
     ativos = {m["id"] for m in modelos.ativos("casa_veraneio") if m["formato"] == "anuncio"}
-    assert ativos == set(ids[1:])
-    assert not base.db().execute("SELECT 1 FROM conhecimento WHERE fonte_ref = ? AND ativo = 1",
-                                 (f"modelo:{ids[0]}",)).fetchone()
+    assert ativos == set(ids)
     assert modelos.remover(ids[1]) and not modelos.remover(ids[1])
+
+
+def test_busca_traz_no_maximo_dois_modelos():
+    for n in range(5):
+        modelos.guardar("casa_veraneio", "copywriter", "legenda", f"Legenda modelo zzqmodelo número {n}: gramado, "
+                        f"piscina e fogo de chão variação {n * 7} para o grupo.", "Pessoa Teste")
+    base.indice_atual(fresco=True)
+    trechos = base.buscar("zzqmodelo gramado piscina fogo de chão", k=5, empresa="casa_veraneio")
+    assert sum(t["fonte_tipo"] == "modelo" for t in trechos) == base.MAX_MODELOS_POR_BUSCA
 
 
 def test_elogio_vira_modelo_pela_lista_de_aprovacao(monkeypatch):
