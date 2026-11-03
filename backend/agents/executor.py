@@ -38,7 +38,8 @@ MAX_ITERACOES_MONDAY = 14  # Social Media com o Monday: consultas + leitura do b
 # <tool_call><function=criar_item_monday><parameter=nome>...</parameter>...</function></tool_call>
 CHAMADA_EM_TEXTO = re.compile(r"(?:<tool_call>\s*)?<function=([\w-]+)>(.*?)(?:</function>\s*(?:</tool_call>)?|$)", re.S)
 PARAMETRO_EM_TEXTO = re.compile(r"<parameter=([\w-]+)>\s*(.*?)\s*(?:</parameter>|(?=<parameter=)|$)", re.S)
-MAX_TOKENS_SAIDA_CLAUDE = 2000
+# 2000 cortava o planejamento do mês no meio (tarefa 239, 03/11/2026: resposta vazia na reserva do Max).
+MAX_TOKENS_SAIDA_CLAUDE = 8000
 # Modelo de raciocínio que devolve o pensamento em vez da resposta (teste de estresse de 28/10/2026: "We need to
 # answer..." chegou como resposta ao usuário).
 RACIOCINIO_VAZADO = re.compile(r"\s*(We need to|The user (asks|wants|is asking)|Let me (think|analy)|Okay, (so|let)|"

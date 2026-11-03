@@ -1,5 +1,6 @@
 """Gerenciador de conexões WebSocket com múltiplos clientes."""
 
+import asyncio
 import logging
 import time
 from typing import Callable
@@ -11,6 +12,10 @@ log = logging.getLogger(__name__)
 # Presença (painel de usuários do master): o navegador avisa a cada minuto se a pessoa interagiu nos últimos 5 min
 # com a aba visível. Ativo = alguma conexão nessa situação; ausente = conectado sem interação; offline = sem conexão.
 AUSENTE_APOS_S = 5 * 60
+# Conexão que parou de ler (aba do celular em segundo plano): sem limite, o envio esperava para sempre e travava quem
+# enviou. Teste real (03/11/2026, tarefa 239): o aviso "foi para a fila" nunca terminou, o Gestor ficou "trabalhando"
+# e a fila não pegava mais a tarefa dele.
+ENVIO_LIMITE_S = 10
 
 
 class GerenciadorConexoes:
@@ -60,12 +65,20 @@ class GerenciadorConexoes:
 
     async def enviar(self, ws: WebSocket, mensagem: dict) -> bool:
         try:
-            await ws.send_json(mensagem)
+            await asyncio.wait_for(ws.send_json(mensagem), ENVIO_LIMITE_S)
             return True
-        except Exception:
-            log.info("Conexão perdida ao enviar; removendo cliente.")
+        except Exception:  # inclui o tempo-limite: o navegador reconecta sozinho e recebe as pendências
+            log.info("Conexão perdida ou parada ao enviar; removendo cliente.")
             self.desconectar(ws)
+            asyncio.ensure_future(self._fechar(ws))  # o navegador vê o fechamento e reconecta (js/rede.js)
             return False
+
+    @staticmethod
+    async def _fechar(ws: WebSocket) -> None:
+        try:
+            await asyncio.wait_for(ws.close(), ENVIO_LIMITE_S)
+        except Exception:
+            pass
 
     async def enviar_para_usuario(self, login: str, mensagem: dict) -> bool:
         """Envia a todas as conexões do usuário; True se ao menos uma recebeu."""
