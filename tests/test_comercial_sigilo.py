@@ -172,7 +172,11 @@ def test_o_que_e_sigiloso(carteira_ficticia):
     assert roteamento.sigilosa("prospectador") and roteamento.sigilosa("estrategista")
     assert roteamento.sigilosa("copywriter", "Compare o faturamento de setembro")
     assert roteamento.sigilosa("analista_metricas", "Quanto deu o ROAS?")
-    assert roteamento.sigilosa("copywriter", "Post com R$ 1.200 por noite")
+    # Preço público de Lodge não é sigiloso (Thomas, 03/11/2026); valor perto de termo financeiro continua sendo.
+    assert not roteamento.sigilosa("copywriter", "Post com R$ 1.200 por noite")
+    assert not roteamento.sigilosa("social_media", "Carnaval do Lodge 239: diária a partir de R$ 4.000")
+    assert roteamento.sigilosa("copywriter", "Investimos R$ 5.000 em anúncios em outubro")
+    assert roteamento.sigilosa("copywriter", "Tivemos R$ 80 mil de faturamento")
     assert roteamento.sigilosa("analista_metricas", "Resumo", financeiro=True)
     assert roteamento.sigilosa("copywriter", "Resuma", contexto="Trecho: a Talmira Foods fez evento em junho.")
     assert not roteamento.sigilosa("copywriter", "Escreva a legenda do post de Natal", contexto="Lodge com piscina.")

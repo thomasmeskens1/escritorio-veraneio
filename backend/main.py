@@ -466,6 +466,16 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     # ajuste todos os slides..." foi tratado como peça nova.
     elif base_ajuste:
         pass
+    # "Lance no Monday" ao Gestor: o último planejamento dele vai ao Social Media, que registra os itens no Monday.
+    elif encaminhamento.lancar_no_monday(andar, agente.id, texto):
+        if not (plano := encaminhamento.ultimo_planejamento(usuario["sub"])):
+            return await erro("Não achei um planejamento recente do Gestor para lançar. Peça o planejamento primeiro "
+                              "e, quando ele chegar, peça para lançar no Monday.", **alvo)
+        origem_id, agente = agente.id, buscar_agente(andar, encaminhamento.SOCIAL_MEDIA)
+        texto = encaminhamento.pedido_ao_social_media(texto, *plano)
+        aviso = {"titulo": "Lançando no Monday",
+                 "texto": f"Mandei o planejamento da tarefa #{plano[0]} ao Social Media, que cria os itens no Monday "
+                          "sem mudar o plano. O resumo do que foi criado chega aqui."}
     # Peça pedida sem dizer se quer o planejamento ou o arquivo pronto: pergunta antes (botões no chat).
     elif encaminhamento.precisa_escolher(andar, agente.id, texto):
         return await gerenciador.enviar(ws, {

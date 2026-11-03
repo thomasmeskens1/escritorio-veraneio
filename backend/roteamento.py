@@ -63,8 +63,12 @@ def classificar(agente_id: str, texto: str) -> Dificuldade:
 # treinam com ele): só Max, modelo local (Ollama) ou a API do Claude, se estiver ligada. Sem IA na decisão.
 AGENTES_SIGILOSOS = frozenset({"prospectador", "estrategista"})  # trabalham sobre a carteira e os números
 _NAO_EXTERNOS = ("claude-code/", "ollama/", "anthropic/")
+# Valor em reais só é sigiloso perto de termo financeiro: diária e preço público de Lodge não são (Thomas, 03/11/2026;
+# antes, "R$ 4.000 no Carnaval" tirava o pedido inteiro dos modelos gratuitos).
+_FINANCEIRO_PERTO = (r"(?:faturament\w*|fatur\w+|receitas?|vendas?|lucro|invest\w*|gast\w+|verba|or[cç]amento de m[ií]dia|"
+                     r"an[uú]ncios?|ads|ticket|margem|crm|cac|ltv|roas|roi|custo por)")
 TEXTO_SIGILOSO = re.compile(
-    r"R\$\s?\d|\b(crm|faturamento|faturou|faturamos|carteira de clientes|lista de clientes|contas (?:corporativas|"
+    rf"\b{_FINANCEIRO_PERTO}\b[^\n]{{0,40}}R\$\s?\d|R\$\s?\d[^\n]{{0,40}}\b{_FINANCEIRO_PERTO}\b|\b(crm|faturamento|faturou|faturamos|carteira de clientes|lista de clientes|contas (?:corporativas|"
     r"ativas)|roas|roi|ticket m[eé]dio|lucro|receitas? (?:da|do|de|por|mensal|anual|total)|vendas (?:do|no|deste|"
     r"por) (?:m[eê]s|ano|trimestre|semestre|per[ií]odo|empresa|canal))\b", re.I)
 

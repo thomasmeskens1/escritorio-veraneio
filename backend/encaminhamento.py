@@ -136,3 +136,36 @@ def tarefas_do_chat(andar: str, agente: str) -> dict[int, bool]:
 def pedido_original(texto: str) -> str:
     """'[Pedido feito ao Copywriter] Me dá 3 ideias...' -> 'Me dá 3 ideias...'."""
     return re.sub(r"^\[Pedido feito a[o]? [^\]]+\]\s*", "", texto)
+
+
+# "Lance no Monday" pedido ao Gestor (Thomas, 03/11/2026): o projeto do Gestor só planeja (a etapa não cria itens),
+# então o último planejamento dele vai ao Social Media, que tem as ferramentas do Monday, para registrar como está.
+SOCIAL_MEDIA = "social_media"
+LANCAR_MONDAY = re.compile(r"\b(lan[cç]\w*|sub\w*|suba|cadastr\w*|registr\w*|cri\w+|coloq\w*|coloc\w*|envi\w*|mand\w*|"
+                           r"jog\w*|p[oô]e|ponha|inclu\w*|adicion\w*|insir\w*|inser\w*)\b.{0,80}?\bmonday\b",
+                           re.IGNORECASE | re.S)
+PLANO_MIN = 200
+
+
+def lancar_no_monday(andar: str, agente_id: str, texto: str) -> bool:
+    return (andar == ANDAR and agente_id == GESTOR and bool(LANCAR_MONDAY.search(texto or ""))
+            and bool(buscar_agente(ANDAR, SOCIAL_MEDIA)))
+
+
+def ultimo_planejamento(login: str) -> tuple[int, str] | None:
+    """(id, resposta) do último trabalho concluído do Gestor para esta pessoa, ou None."""
+    import tarefas  # import tardio: o banco só abre quando há pedido
+
+    linha = tarefas._db().execute(
+        "SELECT id, resposta FROM tarefas WHERE usuario = ? AND agente = ? AND status = 'concluida' "
+        "AND resposta IS NOT NULL ORDER BY id DESC LIMIT 1", (login, GESTOR)).fetchone()
+    return (linha["id"], linha["resposta"]) if linha and len(linha["resposta"].strip()) >= PLANO_MIN else None
+
+
+def pedido_ao_social_media(texto: str, tarefa_id: int, plano: str) -> str:
+    return (f"[Pedido feito ao Gestor] {texto}\n\n"
+            f"Registre no Monday TODAS as peças do planejamento abaixo, feito pelo Gestor (tarefa #{tarefa_id}), numa "
+            "chamada só de criar_itens_monday. Antes, use ver_planejamento_monday no grupo do mês para não duplicar o "
+            "que já existe. Não refaça nem mude o plano: datas, horários, formatos, temas, Lodges e roteiros como "
+            "estão; o que o plano não definir fica vazio. Sem responsável (o Thomas aloca depois). Responda com o "
+            "resumo do que foi criado no Monday.\n\nPLANEJAMENTO DO GESTOR:\n" + plano)
