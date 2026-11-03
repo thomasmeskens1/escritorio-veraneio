@@ -411,7 +411,18 @@ async function carregarHistorico(andar, agente) {
     // Mensagem ao vivo que também está no histórico fica na posição cronológica dele.
     const salvas = (dados.mensagens || []).map((m) => converterDoServidor(andar, agente, m));
     const noHistorico = new Set(salvas.map(assinaturaNaMescla).filter(Boolean));
-    const aoVivo = (historicos[k] || []).filter((m) => !noHistorico.has(assinaturaNaMescla(m)));
+    // A fala ao vivo não tem número de tarefa e a salva tem (às vezes com o formato acrescentado pelo servidor):
+    // reconhece pelo texto. Antes, numa reconexão, a pergunta ficava repetida DEPOIS da resposta (Francielle,
+    // 03/11/2026).
+    const falasSalvas = salvas.filter((m) => m.tipo === 'voce').map((m) => (m.texto || '').trim());
+    const jaSalva = (m) => { // cada fala salva reconhece uma só ao vivo ("pode seguir" duas vezes são duas)
+      if (m.tipo !== 'voce' || m.tarefa_id != null) return false;
+      const texto = (m.texto || '').trim();
+      const i = falasSalvas.findIndex((t) => t === texto || t.startsWith(`${texto}\n`));
+      if (i >= 0) falasSalvas.splice(i, 1);
+      return i >= 0;
+    };
+    const aoVivo = (historicos[k] || []).filter((m) => !noHistorico.has(assinaturaNaMescla(m)) && !jaSalva(m));
     salvas.forEach((m) => marcarVista(k, m));
     historicos[k] = [...salvas, ...aoVivo];
     if (dados.pendentes?.length && dadosAgente(andar, agente).status === 'trabalhando') pendentes.add(k);

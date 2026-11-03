@@ -135,7 +135,11 @@ def tarefas_do_chat(andar: str, agente: str) -> dict[int, bool]:
 
 def pedido_original(texto: str) -> str:
     """'[Pedido feito ao Copywriter] Me dá 3 ideias...' -> 'Me dá 3 ideias...'."""
-    return re.sub(r"^\[Pedido feito a[o]? [^\]]+\]\s*", "", texto)
+    texto = re.sub(r"^\[Pedido feito a[o]? [^\]]+\]\s*", "", texto)
+    return texto.split(SEPARADOR, 1)[0]  # o que o sistema acrescentou ao pedido não aparece como fala do usuário
+
+
+SEPARADOR = "\n\n---\n"  # separa o pedido do usuário das instruções acrescentadas pelo sistema
 
 
 # "Lance no Monday" pedido ao Gestor (Thomas, 03/11/2026): o projeto do Gestor só planeja (a etapa não cria itens),
@@ -163,7 +167,7 @@ def ultimo_planejamento(login: str) -> tuple[int, str] | None:
 
 
 def pedido_ao_social_media(texto: str, tarefa_id: int, plano: str) -> str:
-    return (f"[Pedido feito ao Gestor] {texto}\n\n"
+    return (f"[Pedido feito ao Gestor] {texto}{SEPARADOR}"
             f"Registre no Monday TODAS as peças do planejamento abaixo, feito pelo Gestor (tarefa #{tarefa_id}), numa "
             "chamada só de criar_itens_monday. Antes, use ver_planejamento_monday no grupo do mês para não duplicar o "
             "que já existe. Não refaça nem mude o plano: datas, horários, formatos, temas, Lodges e roteiros como "

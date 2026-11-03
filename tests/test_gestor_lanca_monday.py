@@ -26,3 +26,9 @@ def test_pega_o_ultimo_planejamento_concluido_do_gestor():
     assert tarefa_id == novo and plano.startswith("Semana 1")
     pedido = encaminhamento.pedido_ao_social_media("Lance no Monday", tarefa_id, plano)
     assert "criar_itens_monday" in pedido and f"#{novo}" in pedido and "Não refaça" in pedido
+
+
+def test_no_chat_aparece_so_o_que_a_pessoa_escreveu():
+    pedido = encaminhamento.pedido_ao_social_media("Lance no Monday", 1, "Semana 1: 3 Reels " * 20)
+    assert encaminhamento.pedido_original(pedido) == "Lance no Monday"
+    assert encaminhamento.pedido_original("[Pedido feito ao Copywriter] Me dá 3 ideias") == "Me dá 3 ideias"
