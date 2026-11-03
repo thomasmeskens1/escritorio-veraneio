@@ -317,6 +317,14 @@ def _quem_faz_o_que() -> str:
             "o agente certo e mostre o pedido para ele.")
 
 
+def _fichas_de_pedido() -> str:
+    """Manual 16 (fora do git): o que cada agente precisa receber, com bons exemplos (Thomas aprovou em 03/11/2026)."""
+    from config import PASTA_CONHECIMENTO
+
+    achados = sorted(PASTA_CONHECIMENTO.glob("16_*.md"))
+    return f"\n\n{achados[0].read_text(encoding='utf-8').strip()}" if achados else ""
+
+
 def _contexto_construtor() -> str:
     from agentes_dinamicos import setores_com_vagas  # import tardio: o módulo depende de PERFIS
 
@@ -510,7 +518,7 @@ def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: st
     if (regras := correcoes.regras_para(agente_id, empresa or "*")):  # correções aprovadas, só da empresa do trabalho
         partes.append(regras)
     if agente_id in AGENTES_ESCOLA:
-        partes.append(f"Baseie-se apenas neste manual da ferramenta:\n{MANUAL_ESCOLA}\n\n{_quem_faz_o_que()}")
+        partes.append(f"Baseie-se apenas neste manual da ferramenta:\n{MANUAL_ESCOLA}\n\n{_quem_faz_o_que()}{_fichas_de_pedido()}")
         if login:
             partes.append(_o_que_a_pessoa_abre(login))
     if agente_id == "construtor":
