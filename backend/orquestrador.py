@@ -177,8 +177,10 @@ async def _tentar(tarefa, agente: Agente, etapa: Etapa):
         tarefas.registrar_evento(tarefa["id"], "tentativa", agente.id, etapa.modelo)
         texto = tarefa["texto"] + (f"\n\n{tarefa['contexto_anexos']}" if tarefa["contexto_anexos"] else "")
         return await executar(agente.id, texto, etapa, historico, tarefa["id"]), ""
-    except LocalOcupado as motivo:  # também PedidoGrandeDemais (Groq): pula sem afastar o modelo
-        return None, str(motivo) or "modelo local ocupado"
+    except LocalOcupado as motivo:  # também PedidoGrandeDemais (Groq) e RotaSigilosa: pula sem afastar o modelo
+        motivo = str(motivo) or "modelo local ocupado"
+        tarefas.registrar_evento(tarefa["id"], "pulada", agente.id, etapa.modelo, motivo)  # visível no andamento
+        return None, motivo
     except MaxOcupado:  # o Max está com outra tarefa: segue para a API, em paralelo
         tarefas.registrar_evento(tarefa["id"], "falha_modelo", agente.id, etapa.modelo, "Max ocupado; seguindo para a API")
         return None, "Max ocupado"

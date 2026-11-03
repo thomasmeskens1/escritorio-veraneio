@@ -166,8 +166,14 @@ def cancelar_tarefa(tarefa_id: int) -> None:
 def _llm(modelo: str, limite_s: int) -> LLM:
     # Sem novas tentativas no mesmo modelo: em caso de falha, o roteamento decide o próximo passo.
     if modelo.startswith("anthropic/"):
-        return LLM(model=modelo, api_key=config.ANTHROPIC_API_KEY, timeout=min(limite_s, 120),
-                   max_retries=0, max_tokens=MAX_TOKENS_SAIDA_CLAUDE)
+        llm = LLM(model=modelo, api_key=config.ANTHROPIC_API_KEY, timeout=min(limite_s, 120),
+                  max_retries=0, max_tokens=MAX_TOKENS_SAIDA_CLAUDE)
+        # Claude 5.x raciocina por padrão (blocos de raciocínio vazios) e o CrewAI só lê os blocos de texto: quando o
+        # raciocínio gastava todo o max_tokens, a resposta virava "Invalid response from LLM call - None or empty"
+        # (tarefa 239, 03/11/2026; antes, 36, 51 e 85). Haiku 5.5 aceita "disabled"; Sonnet 5.5 só "between_tools".
+        modo = "between_tools" if "sonnet-5-5" in modelo else "disabled"
+        object.__setattr__(llm, "thinking", {"type": modo})  # dict: o modelo do CrewAI mandaria budget_tokens=None
+        return llm
     if modelo.startswith("openrouter/"):
         return LLM(model=modelo, base_url=config.OPENROUTER_BASE_URL, api_key=config.OPENROUTER_API_KEY,
                    timeout=90, max_retries=0)
@@ -220,7 +226,9 @@ def _rodar_max_ou_api(agente_id: str, descricao: str, esperado: str, limite_s: i
     """Etapa de projeto com o Max na rota: Max se livre; senão a API em paralelo; sem API, espera o Max."""
     fim = time.monotonic() + limite_s
     while True:
-        if agente_id not in max_texto.AGENTES_COM_FERRAMENTAS and not agentes_dinamicos.do_construtor(agente_id):
+        # Na etapa de projeto as ferramentas do Monday, Brevo e painel não entram (ver _rodar): só o Construtor precisa
+        # de ferramenta do sistema (CriarAgente). Antes o Social Media nunca ia ao Max aqui (tarefa 239).
+        if agente_id != "construtor" and not agentes_dinamicos.do_construtor(agente_id):
             try:
                 return _rodar_no_max(agente_id, descricao, esperado, max(60, int(fim - time.monotonic())), tarefa_id)
             except MaxOcupado:
