@@ -286,7 +286,7 @@ def test_instrucao_do_editor_de_video(motion):
     assert "motion.py" in texto and "--empresa casa_vero" in texto and "outra empresa" in texto
     assert trabalhador_max.instrucao_motion("criador_imagens", "casa_vero") == ""
     ritmo = trabalhador_max.RITMO_VIDEO
-    assert "3,5 a 6 s" in ritmo and "5 a 7 takes" in ritmo and "NUNCA acelerar" in ritmo and "0,8 a 0,9x" in ritmo
+    assert "3,5 a 6 s" in ritmo and "5 a 7 takes" in ritmo and "NUNCA acelerar" in ritmo and "0,75x" in ritmo  # 04/11/2026
     assert "batida" in ritmo
 
 
