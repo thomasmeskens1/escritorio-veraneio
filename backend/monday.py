@@ -56,6 +56,13 @@ TIPOS = {
                   "essas páginas saem em vídeo e a equipe inclui o Editor de Vídeo"),
     "REELS": "Reels do Instagram: vídeo vertical 9:16, 1080×1920, com legenda",
     "SHORTS": "YouTube Shorts: vídeo vertical 9:16, 1080×1920, com título e descrição",
+    # Tipos novos (decisão 10, Thomas, 04/11/2026).
+    "LINKEDIN": ("Post do LinkedIn (sobretudo Corporativo): imagem 1:1 1080×1080 ou 4:5 1080×1350, ou documento em PDF "
+                 "com páginas 1080×1350, com texto profissional"),
+    "TIKTOK": "Vídeo do TikTok: vertical 9:16, 1080×1920, com legenda curta (costuma sair do próprio Reels, manual 15)",
+    "YOUTUBE": ("Vídeo longo do YouTube: horizontal 16:9, 1920×1080, com título, descrição e capa (thumbnail "
+                "1280×720)"),
+    "NEWSLETTER": "E-mail marketing (newsletter): rascunho no Brevo feito pelo E-mail Marketing, uma ideia por e-mail",
 }
 NOME_PADRAO = re.compile(r"^\s*([A-ZÀ-Ü]+)\s*\|\s*(.+)$")
 
@@ -105,7 +112,8 @@ def tipo_do_item(nome: str) -> str | None:
 
 # Tipo citado num pedido de chat ("monta 4 stories para dezembro"); stories antes de post ("post nos stories").
 TIPO_NO_TEXTO = [("STORIES", r"stories|story"), ("CARROSSEL", r"carross[eé]is|carrossel"), ("REELS", r"reels?"),
-                 ("SHORTS", r"shorts"), ("POST", r"posts?")]
+                 ("SHORTS", r"shorts"), ("TIKTOK", r"tik ?toks?"), ("YOUTUBE", r"youtube"),
+                 ("LINKEDIN", r"linked ?in"), ("NEWSLETTER", r"newsletters?"), ("POST", r"posts?")]
 
 
 def tipo_no_texto(texto: str) -> str | None:

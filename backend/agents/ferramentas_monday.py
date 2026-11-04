@@ -38,7 +38,8 @@ class _Grupo(BaseModel):
 
 class _NovoItem(BaseModel):
     nome: str = Field(description="'TIPO | Descrição'. TIPO é um de: STORIES, POST (single post estático), CARROSSEL, "
-                                  "REELS, SHORTS. Ex.: 'POST | As melhores casas para o seu Réveillon'")
+                                  "REELS, SHORTS, TIKTOK, YOUTUBE (vídeo longo 16:9), LINKEDIN, NEWSLETTER (e-mail). "
+                                  "Ex.: 'POST | As melhores casas para o seu Réveillon'")
     grupo: str = Field("", description="Mês do item (ex. 'Dezembro'). O grupo final sai da data_postagem; sem data, "
                                        "o item vai para 'Definir Data'.")
     data_postagem: str = Field("", description="AAAA-MM-DD. Vazio se o usuário não deu data ou disse que não tem: "
