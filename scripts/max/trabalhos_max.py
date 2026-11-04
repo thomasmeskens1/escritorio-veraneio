@@ -106,8 +106,22 @@ def executar_prospeccao(payload: dict) -> str:
     return texto.strip()
 
 
+# --- documento (planilha/.docx da resposta, Thomas 04/11/2026): cópia no Drive, na pasta da solicitação -------------
+
+def executar_documento(payload: dict) -> str:
+    """Grava o arquivo em ESCRITÓRIO VERANEIO/<andar>/<pasta da solicitação>/ (sem Max: só cópia)."""
+    import base64
+
+    pasta = comum.DRIVE / payload["pasta_andar"] / payload["pasta"]
+    pasta.mkdir(parents=True, exist_ok=True)
+    destino = pasta / Path(payload["nome"]).name
+    destino.write_bytes(base64.b64decode(payload["conteudo_b64"]))
+    log(f"   documento no Drive: {destino.relative_to(comum.DRIVE).as_posix()}")
+    return destino.relative_to(comum.DRIVE).as_posix()
+
+
 EXECUTORES = {"anexo": executar_anexo, "site": executar_site, "texto": executar_texto,
-              "prospeccao": executar_prospeccao,
+              "prospeccao": executar_prospeccao, "documento": executar_documento,
               "desdobrar": desdobrar_formatos.executar}  # botão "Desdobrar": 4:5 e 9:16 pelo molde, em código (sem Max)
 
 

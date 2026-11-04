@@ -75,7 +75,8 @@ def _config() -> dict:
 def ve_nomes(login: str) -> bool:
     from auth import ve_financeiro
 
-    return ve_financeiro(login) or login in set(_config().get("veem_nomes") or [])
+    veem = set(_config().get("veem_nomes") or [])
+    return ve_financeiro(login) or "*" in veem or login in veem  # "*": todos os usuários (Thomas, 04/11/2026)
 
 
 def ve_valores(login: str) -> bool:

@@ -41,7 +41,8 @@ log = logging.getLogger("veraneio.producao")
 
 ARQUIVO_TOKEN = config.DADOS_DIR / "operador.token"
 MODELO_MAX = "claude-code/max"
-TIPOS_TRABALHO = {"anexo", "site", "prospeccao"}  # prospeccao: pesquisa na web do Prospectador (comercial.py)
+TIPOS_TRABALHO = {"anexo", "site", "prospeccao", "documento"}  # prospeccao: pesquisa na web do Prospectador
+# (comercial.py); documento: planilha/.docx da resposta gravada no Drive pelo trabalhador (documentos_entrega.py)
 
 # Pasta de cada andar dentro de "ESCRITÓRIO VERANEIO" no Drive.
 PASTAS_ANDAR = {"marketing": "MARKETING", "comercial": "COMERCIAL", "porao": "PORÃO", "terreo": "TÉRREO", "cobertura": "COBERTURA"}
@@ -368,6 +369,10 @@ class NovoTrabalho(BaseModel):
 # --- Trabalhos do Max (anexo | site) ----------------------------------------------------
 
 async def criar_trabalho(tipo: str, payload: dict) -> int:
+    return criar_trabalho_agora(tipo, payload)
+
+
+def criar_trabalho_agora(tipo: str, payload: dict) -> int:
     if tipo not in TIPOS_TRABALHO:
         raise ValueError(f"Tipo de trabalho desconhecido: {tipo}")
     with _db() as db:

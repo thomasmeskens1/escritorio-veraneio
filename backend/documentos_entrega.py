@@ -6,8 +6,9 @@ de aprovação da Onda 2) e aparece junto com a resposta. A rota de anexos só e
 documento com dado financeiro (decisão 12) fica com quem já via aquilo no chat. Tudo em código: nada vai a modelo
 nenhum, e a descrição do anexo já nasce gravada (se a pessoa reenviar o arquivo, nenhuma IA o lê).
 
-Drive: a API não enxerga o Drive (só o PC do trabalhador do Max). Gravar em ESCRITÓRIO VERANEIO/<andar>/ fica para
-quando houver a montagem (ver relatório da Onda 3); a pasta FINAL é da produção do Max e não é usada aqui.
+Drive (Thomas, 04/11/2026): o documento também vai para o Drive, numa pasta própria da solicitação
+(ESCRITÓRIO VERANEIO/<andar>/<EMPRESA ｜ TIPO - ASSUNTO>). A API não enxerga o Drive: o arquivo vai num trabalho
+"documento" e o trabalhador do Max, no PC, grava (scripts/max/trabalhos_max.py). A pasta FINAL é da produção do Max.
 """
 
 import logging
@@ -19,6 +20,7 @@ from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import Response
 
 import anexos
+import base64
 import cerebro_imoveis as imoveis
 import documentos
 import empresas
@@ -75,7 +77,39 @@ def anexar(tarefa_id: int, conteudo: bytes, nome: str, mime: str, descricao: str
                    (anexo_id, linha["usuario"], anexos._nome_seguro(nome), mime, len(conteudo), relativo,
                     descricao[:4000], tarefas._agora()))
         db.execute("INSERT OR IGNORE INTO anexos_resposta (tarefa_id, anexo_id) VALUES (?, ?)", (tarefa_id, anexo_id))
+    _para_o_drive(linha, conteudo, anexos._nome_seguro(nome), mime)
     return anexo_id
+
+
+SIGLA_EMPRESA = {"casa_veraneio": "VERANEIO", "cv_corporativo": "CORP", "casa_vero": "VERO"}  # como na produção
+TIPO_DA_PASTA = {"cerebro": "PLANILHA", "estrategista": "ESTUDO", "gestor_trafego": "PLANO"}
+DRIVE_MAX_BYTES = 5 * 1024 * 1024
+
+
+def pasta_da_solicitacao(linha) -> str:
+    """"EMPRESA ｜ TIPO - ASSUNTO" (mesmo padrão das pastas de produção), com o número da tarefa: um pedido, uma pasta."""
+    import encaminhamento
+
+    pedido = re.sub(r"\s+", " ", encaminhamento.pedido_original(linha["texto"] or "")).strip()
+    assunto = re.sub(r'[<>:"/\\|?*｜]', " ", pedido)  # proibidos em nome de pasta no Windows
+    assunto = re.sub(r"\s+", " ", assunto)[:50].strip(" .").upper() or "DOCUMENTO"
+    sigla = SIGLA_EMPRESA.get(linha["empresa"] or empresas.PADRAO, "VERANEIO")
+    return f"{sigla} ｜ {TIPO_DA_PASTA.get(linha['agente'], 'DOCUMENTO')} - {assunto} #{linha['id']}"
+
+
+def _para_o_drive(linha, conteudo: bytes, nome: str, mime: str) -> None:
+    """Enfileira a cópia no Drive (nunca derruba a resposta: sem Drive, o anexo do chat continua valendo)."""
+    if len(conteudo) > DRIVE_MAX_BYTES:
+        return log.warning("Documento da tarefa %s grande demais para o Drive (%s bytes).", linha["id"], len(conteudo))
+    try:
+        import producao  # import tardio: produção depende do orquestrador
+
+        producao.criar_trabalho_agora("documento", {
+            "tarefa_id": linha["id"], "nome": nome, "mime": mime,
+            "pasta_andar": producao.PASTAS_ANDAR.get(linha["andar"], linha["andar"].upper()),
+            "pasta": pasta_da_solicitacao(linha), "conteudo_b64": base64.b64encode(conteudo).decode()})
+    except Exception:
+        log.exception("Documento da tarefa %s não foi para a fila do Drive.", linha["id"])
 
 
 def de(tarefa_id: int) -> list[dict]:

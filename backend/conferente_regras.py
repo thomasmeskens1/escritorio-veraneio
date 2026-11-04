@@ -43,9 +43,8 @@ REGRAS = {
         # Legenda leva a ficha com diária (manual 07 §4); a arte, só com pedido (decisão 3).
         "valores_na_legenda": True,
         "sem_hospedagem": False,
-        # Manual 01 §5 e §7: o padrão do nome do período (Réveillon 2027 × 2026/27) está PENDENTE na equipe.
-        # TODO: preencher quando a equipe decidir (ex.: [r"\bR[eé]veillon 2026/27\b"] se o padrão for "2027").
-        "nome_periodo_vetado": [],
+        # Manual 01 §5: o período se chama "Réveillon 2027" (Thomas, 04/11/2026), nunca "2026/27".
+        "nome_periodo_vetado": [r"\bR[eé]veillon\s+(?:20)?26\s*/\s*(?:20)?27\b"],
     },
     "cv_corporativo": {
         # Manual 11 §5.
