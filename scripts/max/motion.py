@@ -453,11 +453,13 @@ def main_vinheta(argumentos: list[str]) -> None:
     args = argparse.ArgumentParser(prog="motion.py vinheta", description=motion_vinheta.__doc__.splitlines()[0])
     args.add_argument("--empresa", required=True, choices=sorted(motion_vinheta.VINHETAS))
     args.add_argument("--formato", default="1080x1920", choices=motion_vinheta.FORMATOS)
-    args.add_argument("--saida", required=True, help="MP4 da vinheta (dentro da pasta da peça)")
+    args.add_argument("--saida", required=True, help="MP4 da vinheta (dentro da pasta da peça; .mov com --sem-fundo)")
     args.add_argument("--variante", default="A", type=str.upper, choices=motion_vinheta.motion_opcoes.VARIANTES,
                       help="opção da vinheta: A (aprovada, padrão de produção), B, C ou D (alternativas)")
+    args.add_argument("--sem-fundo", action="store_true", help="MOV ProRes 4444 com transparência, para edição")
     opcoes = args.parse_args(argumentos)
-    r = motion_vinheta.vinheta(opcoes.empresa, opcoes.formato, Path(opcoes.saida), Path.cwd(), opcoes.variante)
+    gerar = motion_vinheta.vinheta_sem_fundo if opcoes.sem_fundo else motion_vinheta.vinheta
+    r = gerar(opcoes.empresa, opcoes.formato, Path(opcoes.saida), Path.cwd(), opcoes.variante)
     print(f"Vinheta: {r['saida']} ({r['quadros']} quadros em {r['segundos']} s)")
 
 

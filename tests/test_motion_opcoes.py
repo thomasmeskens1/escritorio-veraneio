@@ -130,3 +130,31 @@ def test_opcoes_de_cada_empresa_sao_historias_diferentes(mv):
         funcoes = {opcao["camadas"] for opcao in opcoes.values()}
         assert len(funcoes) == 4, empresa
         assert len({opcao["titulo"] for opcao in opcoes.values()}) == 4, empresa
+
+
+def test_veraneio_aprovada_tem_o_pino_caindo_e_quicando(mv, logos):
+    """Definitiva da Casa Veraneio (Thomas, 04/11/2026): a A aprovada, com o pino caindo do topo e quicando curto."""
+    import motion_opcoes_comum
+    render = mv.Renderizador("casa_veraneio", "1080x1920", logos["casa_veraneio"])
+    b = render.roteiro["batidas"]
+    inicio, toque = b["queda"]
+    (_, final), _ = motion_opcoes_comum.base_do_simbolo(render.palco)
+    assert _corpo(render, inicio + 0.001).y < 0  # entra de fora do quadro
+    assenta = [_corpo(render, toque + k / 240) for k in range(round(motion_opcoes_comum.ASSENTA * 240) + 1)]
+    assert max(c.y for c in assenta) > final + 2 and max(c.esticar[0] for c in assenta) > 1.08
+    assert b["rastro"][0] >= toque + motion_opcoes_comum.ASSENTA - 0.05
+
+
+def test_recorte_sem_fundo_recompoe_o_quadro(mv):
+    """Recorte por diferença (preto e branco): sobre qualquer cor, o RGBA recompõe o quadro original."""
+    tamanho = (4, 1)
+    cor, alfa = (217, 161, 91), [1.0, 0.5, 0.2, 0.0]
+    sobre = lambda f: bytes(round(c * a + f * (1 - a)) for a in alfa for c in cor)  # noqa: E731
+    rgba = Image.frombytes("RGBA", tamanho, mv._recorte(sobre(0), sobre(255), tamanho))
+    for x, a in enumerate(alfa):
+        assert abs(rgba.getpixel((x, 0))[3] - 255 * a) <= 1
+    verde = Image.new("RGBA", tamanho, (4, 66, 35, 255))
+    verde.alpha_composite(rgba)
+    for x, a in enumerate(alfa):
+        esperado = [round(c * a + v * (1 - a)) for c, v in zip(cor, (4, 66, 35))]
+        assert all(abs(p - e) <= 3 for p, e in zip(verde.getpixel((x, 0))[:3], esperado))

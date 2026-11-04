@@ -18,7 +18,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageMath
 
 import motion_icones
 import motion_opcoes
@@ -214,7 +214,7 @@ def _setor(imagem: Image.Image, cx: float, cy: float, atual: float, inicial: flo
 class Renderizador:
     """Compõe as camadas do roteiro sobre o fundo e faz o desfoque de movimento por superamostragem no tempo."""
 
-    def __init__(self, empresa: str, formato: str, logo: Path, variante: str = "A"):
+    def __init__(self, empresa: str, formato: str, logo: Path, variante: str = "A", fundo_liso=None):
         if formato not in FORMATOS:
             raise ValueError(f"Formato da vinheta: {', '.join(FORMATOS)}")
         self.empresa = empresa
@@ -225,7 +225,8 @@ class Renderizador:
         if self.roteiro.get("preparar"):  # imagens próprias da opção (cortina, painel de LED...)
             self.roteiro["preparar"](self.palco)
         self.duracao = self.roteiro["duracao"]
-        self.fundo = self._fundo()
+        # fundo_liso (r, g, b): cor chapada no lugar do fundo da marca (preto e branco no recorte sem fundo)
+        self.fundo = Image.new("RGB", (self.largura, self.altura), fundo_liso) if fundo_liso else self._fundo()
 
     def _fundo(self) -> Image.Image:
         """Cor da marca nas bordas e um pouco de luz no centro (profundidade discreta, sem faixas)."""
@@ -362,9 +363,41 @@ class Renderizador:
             yield dados
 
 
+def _recorte(sobre_preto: bytes, sobre_branco: bytes, tamanho: tuple[int, int]) -> bytes:
+    """Quadro RGBA a partir do mesmo quadro sobre preto e sobre branco (recorte por diferença): alfa = 1 - (branco -
+    preto) e cor = preto / alfa. Exato para composição linear: desfoque de movimento, brilhos e anéis translúcidos
+    saem com a transparência certa."""
+    preto = Image.frombytes("RGB", tamanho, sobre_preto)
+    alfa = ImageChops.invert(ImageChops.subtract(Image.frombytes("RGB", tamanho, sobre_branco), preto).convert("L"))
+    canais = [ImageMath.lambda_eval(lambda a: a["convert"](a["min"](a["c"] * 255 / a["max"](a["alfa"], 1), 255), "L"),
+                                    c=canal, alfa=alfa) for canal in preto.split()]
+    return Image.merge("RGBA", (*canais, alfa)).tobytes()
+
+
+def vinheta_sem_fundo(empresa: str, formato: str, saida: Path, base: Path | None = None, variante: str = "A") -> dict:
+    """A vinheta sem fundo, para edição (sobre outro vídeo): MOV ProRes 4444 com canal alfa, sem áudio. As cores são
+    as da versão com fundo (Veraneio e CORP. claras, para imagens escuras ou médias; Vero escura, para imagens
+    claras)."""
+    if formato not in FORMATOS:
+        raise ValueError(f"Formato da vinheta: {', '.join(FORMATOS)}")
+    saida = Path(saida).resolve()
+    logo = arquivo_logo(empresa, Path(base or saida.parent).resolve())
+    comeco = time.perf_counter()
+    preto, branco = (Renderizador(empresa, formato, logo, variante, fundo) for fundo in ((0, 0, 0), (255, 255, 255)))
+    saida.parent.mkdir(parents=True, exist_ok=True)
+    tamanho = (preto.largura, preto.altura)
+    quadros = (_recorte(p, b, tamanho) for p, b in zip(preto.quadros_crus(), branco.quadros_crus()))
+    comando = [achar_ffmpeg() or "ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgba",
+               "-s", formato, "-framerate", str(FPS), "-i", "-", "-c:v", "prores_ks", "-profile:v", "4",
+               "-pix_fmt", "yuva444p10le", "-vendor", "apl0", str(saida)]
+    _rodar(comando, quadros)
+    return {"saida": saida, "quadros": round(preto.duracao * FPS), "segundos": round(time.perf_counter() - comeco, 1),
+            "avisos": []}
+
+
 def vinheta(empresa: str, formato: str, saida: Path, base: Path | None = None, variante: str = "A") -> dict:
     """Renderiza a vinheta (MP4 H.264 yuv420p 30 fps, trilha AAC silenciosa) na opção `variante` (A, a de
-    produção, ou B, C, D). Devolve {"saida", "quadros", "segundos", "avisos"}."""
+    produção, ou B, C, D). Devolve {"saida", "quadros", "segundos", "avisos"}. Sem fundo: vinheta_sem_fundo."""
     if formato not in FORMATOS:
         raise ValueError(f"Formato da vinheta: {', '.join(FORMATOS)}")
     saida = Path(saida).resolve()

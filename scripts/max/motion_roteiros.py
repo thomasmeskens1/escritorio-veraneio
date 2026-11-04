@@ -5,8 +5,8 @@ quadro, como lista de camadas. As batidas (início, fim em segundos) ficam em RO
   encolhe e vira pino, o pino gira e vira chave, a casa nasce, a chave dá a volta e gira na porta, a casa acende,
   faíscas, a casa encolhe até um ponto, onda em anel e o logo se forma (pino saindo do desfoque, chave subindo).
 - casa_veraneio (casas de alto padrão para grupos, natureza): sol nascendo atrás das montanhas, chalé em A com
-  piscina, a mala chega balançando, tudo converge num ponto, anel, o pino sai do desfoque e a seta orbital se
-  desenha em volta dele.
+  piscina, a mala chega balançando, tudo converge num ponto, o pino cai do topo da tela, toca no anel e quica
+  curto como mola (versão definitiva, Thomas 04/11/2026), e a seta orbital se desenha em volta dele.
 - cv_corporativo (produtora 360° de eventos): calendário com o dia marcado, palco com refletores cruzando os
   feixes, duas taças brindam com faíscas, tudo converge, anel, pino e seta orbital, "CORP." por último.
 Nos três o símbolo nasce no centro e desliza para o lugar dele enquanto o nome sai de trás, linha a linha.
@@ -117,12 +117,21 @@ def logo(t: float, p: Palco, b: dict) -> list:
                           peca.y + peca.imagem.height / 2, peca=nome,
                           revela=("direita", e, 70 * u) if q < 1 else None, opacidade=min(1.0, q * 2.5),
                           corte_esq=p.simbolo_direita + ox - 10 * u if desliza < 1 else None))
-    s = trecho(t, *b["surge"])
-    escala = 0.8 + 0.2 * ease_out_back(s, 1.3)
-    comum = {"pivo": p.pivo, "escala": escala}
-    desfoque = 22 * u * (1 - ease_out_cubic(min(1.0, s * 1.2)))
-    camadas.append(_c(p.principal, x, y, peca=p.principal, desfoque=desfoque,
-                      opacidade=ease_out_cubic(min(1.0, s * 3)), **comum))
+    if "queda" in b:  # Casa Veraneio: o pino cai do topo e quica curto, como mola (Thomas, 04/11/2026)
+        from motion_opcoes_comum import base_do_simbolo, queda  # import tardio: aquele módulo importa este
+        (bx, by), pivo = base_do_simbolo(p)
+        dy, esticar = queda(t, *b["queda"], p.simbolo_altura, by + oy + 0.04 * p.altura)
+        x, y = bx + ox, by + oy + dy
+        comum = {"pivo": pivo, "escala": 1.0, "esticar": esticar}
+        oy += dy
+        camadas.append(_c(p.principal, x, y, peca=p.principal, **comum))
+    else:
+        s = trecho(t, *b["surge"])
+        escala = 0.8 + 0.2 * ease_out_back(s, 1.3)
+        comum = {"pivo": p.pivo, "escala": escala}
+        desfoque = 22 * u * (1 - ease_out_cubic(min(1.0, s * 1.2)))
+        camadas.append(_c(p.principal, x, y, peca=p.principal, desfoque=desfoque,
+                          opacidade=ease_out_cubic(min(1.0, s * 3)), **comum))
     if "chave" in p.pecas:  # Vero: a chave sobe para dentro do pino (LOGO_anima)
         k = trecho(t, *b["chave"])
         if k > 0:
@@ -216,9 +225,12 @@ def _vero(t: float, p: Palco) -> list:
 
 # ---------------------------------------------------------------- Casa Veraneio
 
+# "queda" (início, toque): o pino cai do topo enquanto a história converge e toca o centro junto do lampejo, das
+# faíscas e do anel; quica ~0,53 s (motion_opcoes_comum.QUIQUE) e só então a seta se desenha.
 BATIDAS_VERANEIO = {"paisagem": (0.0, 3.25), "chale": (1.2, 3.25), "piscina": (1.45, 3.25), "mala": (1.95, 3.25),
-                    "converge": (2.85, 3.25), "faiscas": (3.25, 3.8), "anel": (3.27, 4.05), "surge": (3.3, 3.85),
-                    "rastro": (3.72, 4.3), "desliza": (4.3, 4.85), "nome1": (4.47, 4.95), "nome2": (4.57, 5.05)}
+                    "converge": (2.85, 3.25), "queda": (2.86, 3.28), "surge": (2.86, 3.81), "faiscas": (3.25, 3.8),
+                    "anel": (3.27, 4.05), "rastro": (3.84, 4.42), "desliza": (4.42, 4.97), "nome1": (4.59, 5.07),
+                    "nome2": (4.69, 5.17)}
 
 
 def _converge(t: float, inicio: float, fim: float, x: float, y: float, cx: float, cy: float, giro: float):
@@ -342,6 +354,6 @@ def _corp(t: float, p: Palco) -> list:
 
 ROTEIROS = {
     "casa_vero": {"duracao": 6.35, "batidas": BATIDAS_VERO, "camadas": _vero},
-    "casa_veraneio": {"duracao": 6.3, "batidas": BATIDAS_VERANEIO, "camadas": _veraneio},
+    "casa_veraneio": {"duracao": 6.4, "batidas": BATIDAS_VERANEIO, "camadas": _veraneio},
     "cv_corporativo": {"duracao": 6.45, "batidas": BATIDAS_CORP, "camadas": _corp},
 }
