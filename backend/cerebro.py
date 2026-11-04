@@ -45,9 +45,12 @@ AGENTES_FINANCEIROS = {"analista_metricas", "estrategista", "gestor_trafego"}  #
 TERMOS_FINANCEIROS = re.compile(
     r"faturamento|\breceitas?\b|investimento em (?:m[íi]dia|an[úu]ncios|tr[áa]fego)|gasto (?:em|com) (?:m[íi]dia|an[úu]ncios)|"
     r"\bvendas? (?:do|no|de) (?:m[êe]s|per[íi]odo|ano|trimestre)|\bROAS\b|\bCAC\b|\bLTV\b|ticket m[ée]dio|\blucro|"
-    r"margem (?:de lucro|bruta|l[íi]quida|de contribui)|\bCRM\b|contas? (?:ativas|corporativas)|"
-    r"leads? (?:ganhos|fechados)|\bpipeline\b|carteira de clientes",
+    r"margem (?:de lucro|bruta|l[íi]quida|de contribui)|\bCRM\b|"
+    r"leads? (?:ganhos|fechados)|\bpipeline\b",
     re.IGNORECASE)
+# Lista de clientes um a um (sem soma): visível a todos desde a decisão 11 (Thomas, 04/11/2026); o trecho fica
+# marcado ":carteira" só para não ir a um gratuito de fora (base.SIGILOSO_REF).
+TERMOS_CARTEIRA = re.compile(r"contas? (?:ativas|corporativas)|carteira de clientes", re.IGNORECASE)
 PESO_OUTROS_USUARIOS = 0.75  # tarefa de outro usuário vale 75% da do Thomas (0,45 contra 0,6)
 MAX_CARACTERES_FERRAMENTA = 3000  # resposta da ferramenta (tokens dos agentes)
 MAX_CARACTERES_CONTEXTO = 6000    # trechos na tarefa do próprio Cérebro
@@ -150,15 +153,25 @@ def empresa_da_tarefa(tarefa_id: int) -> str:
     return linha["empresa"] if linha and linha["empresa"] else empresas.PADRAO
 
 
-def _consultou_financeiro(tarefa_id: int) -> bool:
-    """A resposta se apoiou em algum trecho financeiro (painel: CRM, Ads; ou tarefa já marcada)."""
+def _refs_consultadas(tarefa_id: int) -> list[str]:
     ids = {i for l in base.db().execute("SELECT ids_conhecimento FROM consultas_cerebro WHERE tarefa_id = ?",
                                         (tarefa_id,)) for i in json.loads(l["ids_conhecimento"] or "[]")}
     if not ids:
-        return False
+        return []
     marcas = ",".join("?" * len(ids))
-    refs = base.db().execute(f"SELECT fonte_ref FROM conhecimento WHERE id IN ({marcas})", tuple(ids)).fetchall()
-    return any(base.FINANCEIRO_REF.search(r["fonte_ref"] or "") for r in refs)
+    return [r["fonte_ref"] or "" for r in base.db().execute(f"SELECT fonte_ref FROM conhecimento WHERE id IN ({marcas})",
+                                                            tuple(ids)).fetchall()]
+
+
+def _consultou_financeiro(tarefa_id: int) -> bool:
+    """A resposta se apoiou em algum trecho financeiro (painel: CRM, Ads; ou tarefa já marcada)."""
+    return any(base.FINANCEIRO_REF.search(r) for r in _refs_consultadas(tarefa_id))
+
+
+def _consultou_sigiloso(tarefa_id: int) -> bool:
+    """Financeiro ou carteira de clientes (manual 14, tarefas ":carteira"): para a rota sigilosa (decisão 12). A
+    carteira abriu para todos os usuários na decisão 11 (04/11/2026), mas segue fora dos gratuitos de fora."""
+    return any(base.SIGILOSO_REF.search(r) for r in _refs_consultadas(tarefa_id))
 
 
 def _ve_financeiro(tarefa_id: int) -> bool:
@@ -279,13 +292,15 @@ def aprender_tarefa(tarefa_id: int) -> int | None:
                     f"{resposta[:800]}{'…' if len(resposta) > 800 else ''}")
         conteudo = sem_contatos(conteudo)
         # Resposta de quem vê o financeiro, com valores em reais, nos agentes que leem vendas/receita/investimento:
-        # o trecho fica marcado e só volta nas buscas da Diretoria (base.FINANCEIRO_REF).
+        # o trecho fica marcado e só volta nas buscas da Diretoria (base.FINANCEIRO_REF). Carteira de clientes (de
+        # qualquer usuário): ":carteira", visível a todos e fora dos gratuitos de fora (decisão 11, 04/11/2026).
         from auth import ve_financeiro
 
         financeira = ve_financeiro(linha["usuario"]) and (
             linha["agente"] in AGENTES_FINANCEIROS or bool(TERMOS_FINANCEIROS.search(resposta))
             or _consultou_financeiro(tarefa_id))
-        referencia = f"tarefa:{tarefa_id}{':financeiro' if financeira else ''}"
+        da_carteira = not financeira and (bool(TERMOS_CARTEIRA.search(resposta)) or _consultou_sigiloso(tarefa_id))
+        referencia = f"tarefa:{tarefa_id}{':financeiro' if financeira else ':carteira' if da_carteira else ''}"
         titulo = f"{nome}: {sem_contatos(linha['texto'].strip())[:70]}"
         fonte = "estudo" if linha["agente"] in AGENTES_ESTUDO else "tarefa"
         if fonte == "estudo":  # selo com a data, peso menor e validade de 90 dias (cerebro_base.VALIDADE_ESTUDO)
@@ -450,7 +465,7 @@ def contradiz(observacao_id: int, authorization: str = Header("")):
     marcas = ",".join("?" * len(ids))
     linhas = base.db().execute(f"SELECT id, titulo, conteudo, fonte_tipo, fonte_ref FROM conhecimento WHERE ativo = 1 "
                                f"AND id IN ({marcas})", tuple(ids)).fetchall()
-    da_tarefa = {f"tarefa:{tarefa_id}", f"tarefa:{tarefa_id}:financeiro"}
+    da_tarefa = {f"tarefa:{tarefa_id}", f"tarefa:{tarefa_id}:financeiro", f"tarefa:{tarefa_id}:carteira"}
     candidatos = [{"id": l["id"], "titulo": l["titulo"], "conteudo": l["conteudo"],
                    "fonte": ROTULOS_FONTE.get(l["fonte_tipo"], l["fonte_tipo"]),
                    "da_tarefa": l["fonte_ref"] in da_tarefa} for l in linhas]

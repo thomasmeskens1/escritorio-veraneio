@@ -6,28 +6,25 @@ sem IA, sem web e sem o Max (decisão 12: carteira e CRM são sigilosos). Três 
   2. Recompra: data provável do próximo evento pelo ritmo de cada cliente (aniversário com 1 evento);
   3. Pré-reserva de fim de ano: quem fez evento em nov/dez nos últimos 2 anos e ainda não fechou o deste ano;
   4. Recorrência: quantos clientes compram 1, 2, 3+ vezes, intervalo médio e quantos sumiram (só contagens).
-Quem chega aqui já passou no acesso do painel (Prospectador e Estrategista são restritos: acesso.RESTRITOS).
-Nomes: só a Diretoria e quem estiver em dados/agenda_clientes.json ("veem_nomes"; quem recebe a lista é decisão do
-Thomas, pendente). Os demais recebem só contagens. Valores em reais: só a Diretoria.
+Quem chega aqui já passou no acesso do painel (acesso.pode_usar).
+Nomes: todos os usuários (decisão 11, Thomas, 04/11/2026: leads e projetos são de todos). A receita somada de quem
+volta x quem comprou uma vez é visão de período: só a Diretoria (ve_valores).
 A versão mensal automática fica para depois das rotinas.
 """
 
 import asyncio
-import json
 import logging
 import re
 from collections import Counter, defaultdict
 from datetime import date, timedelta
 from statistics import mean, median
 
-import config
 import tarefas
 
 log = logging.getLogger(__name__)
 
 AGENTES = {"prospectador", "estrategista"}
 MODELO = "codigo/agenda-clientes"  # sem modelo de IA
-ARQUIVO_CONFIG = config.DADOS_DIR / "agenda_clientes.json"
 SEM_EVENTO_DIAS = 365
 JANELA_RECOMPRA_DIAS = 180   # recompra: próximas datas prováveis até 6 meses à frente
 AVISO_ANTES_DIAS = 60        # oferecer a data até 60 dias antes (prospectador-18: 60 a 90 dias)
@@ -64,22 +61,14 @@ def e_pedido(agente_id: str, texto: str) -> bool:
 
 # --- Quem vê o quê -------------------------------------------------------------------------------------------
 
-def _config() -> dict:
-    try:
-        return json.loads(ARQUIVO_CONFIG.read_text(encoding="utf-8")) if ARQUIVO_CONFIG.exists() else {}
-    except (OSError, ValueError):
-        log.warning("Agenda de clientes: %s ilegível; ninguém além da Diretoria vê nomes.", ARQUIVO_CONFIG.name)
-        return {}
-
-
 def ve_nomes(login: str) -> bool:
-    from auth import ve_financeiro
-
-    veem = set(_config().get("veem_nomes") or [])
-    return ve_financeiro(login) or "*" in veem or login in veem  # "*": todos os usuários (Thomas, 04/11/2026)
+    """Nomes dos clientes: qualquer usuário logado (decisão 11, Thomas, 04/11/2026). Antes: a Diretoria e a lista
+    "veem_nomes" de dados/agenda_clientes.json, que deixou de ser lida."""
+    return bool(login)
 
 
 def ve_valores(login: str) -> bool:
+    """Receita somada da recorrência (visão de período, decisão 11): só a Diretoria."""
     from auth import ve_financeiro
 
     return ve_financeiro(login)
@@ -431,8 +420,7 @@ def executar(login: str, texto: str, agente_id: str = "prospectador", hoje: date
     blocos = [f"Agenda de clientes do Corporativo em {hoje:%d/%m/%Y}: calculada no sistema com os dados do Monday "
               "(contas ativas e eventos ganhos), sem IA e sem pesquisa na web."]
     if not nomes:
-        blocos.append("Os nomes dos clientes ficam com a Diretoria (e com quem o Thomas liberar): aqui vão só as "
-                      "contagens.")
+        blocos.append("Sem usuário identificado: aqui vão só as contagens.")
     if "reativacao" in partes:
         prospeccao = em_prospeccao if em_prospeccao is not None else (_em_prospeccao() if nomes else set())
         blocos.append(_bloco_reativacao(reativacao(registros, hoje, prospeccao), nomes))

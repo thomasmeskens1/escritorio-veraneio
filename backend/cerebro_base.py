@@ -36,8 +36,13 @@ LIMIAR_DUPLICADO = 0.97    # consolidação: quase idênticos
 COS_MINIMO = 0.40          # sem termo em comum, só entra se o significado for bem próximo
 PESO_COSSENO, PESO_BM25 = 0.65, 0.35
 # Trechos financeiros vindos do painel analítico (Thomas, 29/10/2026: vendas, receita e investimento só para a Diretoria).
-# O manual 14 (persona do Corporativo) cita a carteira de clientes: mesma trava (brainstorm de 31/10/2026, prospectador-15).
-FINANCEIRO_REF = re.compile(r"^analytics/[^/]+/(crm|google-ads|meta-ads)\b|:financeiro$|^14_persona_corporativo\.md$")
+# São só totais por mês (painel_analitico.py), a visão somada que a decisão 11 (Thomas, 04/11/2026) mantém na Diretoria.
+FINANCEIRO_REF = re.compile(r"^analytics/[^/]+/(crm|google-ads|meta-ads)\b|:financeiro$")
+# Carteira de clientes (nomes, um a um): o manual 14 (persona do Corporativo) e as tarefas marcadas ":carteira". Até
+# 04/11/2026 tinham a trava da Diretoria (prospectador-15); a decisão 11 abriu para todos (leads e projetos são de
+# todos). Seguem sigilosos para os gratuitos de fora (roteamento.sigilosa, decisão 12): SIGILOSO_REF.
+CARTEIRA_REF = re.compile(r":carteira$|^14_persona_corporativo\.md$")
+SIGILOSO_REF = re.compile(f"{FINANCEIRO_REF.pattern}|{CARTEIRA_REF.pattern}")
 LAMBDA_MMR = 0.7
 PONTUACAO_LIMITE = 2.0
 PASSO_SUCESSO, PASSO_FALHA = 0.10, 0.15  # 👍/👎 do usuário (avaliacoes.py) e falha da tarefa
@@ -449,8 +454,9 @@ def ativar_trecho_da_tarefa(tarefa_id: int, ativo: bool) -> int:
     """👎 numa resposta: o trecho que ela virou sai das buscas (e volta se o voto for retirado ou trocado)."""
     with _trava, db() as conexao:
         mudou = conexao.execute("UPDATE conhecimento SET ativo = ? WHERE fonte_tipo IN ('tarefa', 'estudo') "
-                                "AND fonte_ref IN (?, ?)",
-                                (int(ativo), f"tarefa:{tarefa_id}", f"tarefa:{tarefa_id}:financeiro")).rowcount
+                                "AND fonte_ref IN (?, ?, ?)",
+                                (int(ativo), f"tarefa:{tarefa_id}", f"tarefa:{tarefa_id}:financeiro",
+                                 f"tarefa:{tarefa_id}:carteira")).rowcount
     if mudou:
         _mudou()
     return mudou

@@ -10,9 +10,11 @@ from auth import carregar_usuarios, e_master, ve_financeiro
 from estado import ANDARES
 
 TODOS = "*"
-# Trabalham sobre a carteira de clientes e os números (prospectador-15): só a Diretoria ou quem o master liberar
-# nominalmente no painel de usuários (o comercial). O padrão "todos os agentes" não os inclui.
-RESTRITOS = {"comercial/prospectador", "comercial/estrategista"}
+# Agentes fora do padrão "todos os agentes" (só a Diretoria ou quem o master liberar nominalmente). Antes eram o
+# Prospectador e o Estrategista (prospectador-15: carteira de clientes). Decisão 11 (Thomas, 04/11/2026): todos veem
+# tudo de leads e projetos, inclusive orçamentos; só a visão somada (vendas do mês, receita, ROAS...) fica com a
+# Diretoria, e essa trava já está dentro deles (estudos._painel, agenda_clientes.ve_valores, ferramentas_painel).
+RESTRITOS: set[str] = set()
 
 
 def agentes_do_usuario(login: str) -> str | list[str]:
