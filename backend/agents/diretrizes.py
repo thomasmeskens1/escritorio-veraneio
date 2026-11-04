@@ -43,7 +43,8 @@ SECOES = {
     "09": {"1": TODOS, "2": ("gestor", "social_media"), "3": ("gestor", "social_media"),
            "4": ("gestor", "social_media")},
     "10": {"1": TODOS, "2": TODOS, "3": TODOS, "4": ("gestor", "social_media"), "5": ("gestor", "social_media"),
-           "6": ("gestor", "prospectador", "estrategista"), "7": ("gestor", "gestor_trafego", "estrategista")},
+           "6": ("gestor", "prospectador", "estrategista"), "7": ("gestor", "gestor_trafego", "estrategista"),
+           "8": ("gestor", "social_media", "prospectador", "estrategista")},
 }
 ORDEM = ("00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "13", "15")
 # Agente -> documentos da função, que vão inteiros (exceto o 05, recortado pelo mapa para o Editor).
@@ -104,7 +105,7 @@ def _ler(caminho: Path, _mtime: float, agente_id: str, compacto: bool) -> str:
 DOC_DA_EMPRESA = {"cv_corporativo": "11", "casa_vero": "12"}
 FUNCAO_TODAS_EMPRESAS = ("13", "15")  # e-mail marketing e grade de publicações: um manual para as três
 FUNCAO_DA_EMPRESA = {"cv_corporativo": ("14",)}  # persona do cliente corporativo (Prospectador)
-COMUNS_OUTRAS = {"00": ("ouro", "2"), "08": ("1", "2", "3", "5"), "09": ("1", "2", "3", "4"), "10": ("1", "2", "3", "4", "5", "6", "7")}
+COMUNS_OUTRAS = {"00": ("ouro", "2"), "08": ("1", "2", "3", "5"), "09": ("1", "2", "3", "4"), "10": ("1", "2", "3", "4", "5", "6", "7", "8")}
 # Método de mídia paga do manual 02 para o Tráfego também no Corporativo e na Casa Vero (brainstorm de 31/10/2026,
 # gestor_trafego-09): sem ele, o agente não tinha estrutura de campanha, critério de vencedor nem nomenclatura. Vão só
 # as seções da função (mapa SECOES), com o aviso de que públicos, criativos e dados ali são da Casa Veraneio.
