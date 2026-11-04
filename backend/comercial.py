@@ -32,6 +32,10 @@ MODELO = "claude-code/max"
 QUADRO_CLIENTES, GRUPO_CLIENTES = 7803554314, "topics"            # Leads e Clientes Corp
 QUADRO_FUNIL, GRUPOS_GANHOS = 7803554343, ["closed", "group_mkztyx3c"]  # [Corp] Funil de Vendas
 QUADRO_LEADS, GRUPO_PROSPECCAO = 7803554300, "group_mm33wy2s"       # [Geral] Dash Comercial
+# Decisão 10 (Thomas, 04/11/2026): quem pediu para não ser contatado e as oportunidades em aberto ou perdidas também
+# contam como "já conhecidas" e nunca voltam numa prospecção nova.
+GRUPO_NAO_ABORDAR = "group_mm8sm7e3"                                 # [Corp] Não abordar (Dash Comercial)
+GRUPOS_FUNIL_CONHECIDOS = ["topics", "group_mkp57xqf"]               # Oportunidades ativas, Perdidos/Declinados
 COLUNAS_CLIENTE = ["industry", "text_mkxj2284", "dropdown_mkxj16y9", "data_mknc1nvw", "company_domain"]
 COLUNAS_GANHO = ["dropdown_mm3b42sb", "color_mm4pd1wc", "n_meros_mkmgpvds", "local_mkmgy5nb", "date_mkp5eds"]
 COLUNAS_LEAD = ["lead_email", "link_mm3393tw"]
@@ -145,8 +149,10 @@ def _dominio(texto: str) -> str:
 def ja_conhecidos() -> tuple[set[str], set[str]]:
     """(nomes, domínios) de clientes e de quem já está na Prospecção Ativa: não entram de novo."""
     base = clientes()
-    leads = _itens(QUADRO_LEADS, [GRUPO_PROSPECCAO], COLUNAS_LEAD)  # sempre fresco: a equipe cadastra à mão
-    nomes = {_chave(i["nome"]) for i in base["contas"] + base["ganhos"] + leads}
+    leads = _itens(QUADRO_LEADS, [GRUPO_PROSPECCAO, GRUPO_NAO_ABORDAR], COLUNAS_LEAD)  # sempre fresco: a equipe
+    # cadastra à mão
+    funil = _em_cache("funil_conhecido", lambda: _itens(QUADRO_FUNIL, GRUPOS_FUNIL_CONHECIDOS, ["deal_stage"]))
+    nomes = {_chave(i["nome"]) for i in base["contas"] + base["ganhos"] + leads + funil}
     dominios = {_dominio(i.get("company_domain", "")) for i in base["contas"]}
     dominios |= {_dominio(i.get(c, "")) for i in leads for c in COLUNAS_LEAD}
     return nomes - {""}, dominios - {""} - GRATUITOS
