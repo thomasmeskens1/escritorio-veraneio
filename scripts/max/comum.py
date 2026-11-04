@@ -298,6 +298,12 @@ def _rodar_claude(comando: list[str], prompt: str, cwd: Path, timeout: int, env:
     if not isinstance(saida, dict):
         saida = {"is_error": True, "result": str(saida)[-500:]}
     _somar_uso(saida, prompt, time.monotonic() - inicio, modelo)
+    # O que o Claude Code negou (teste real, 04/11/2026, peça #248: "o sistema negou a chamada de Bash", sem dizer
+    # qual): cada comando barrado vai ao log, para ajustar a lista de permissões.
+    for negado in (saida.get("permission_denials") or [])[:10]:
+        entrada = negado.get("tool_input") or {}
+        log(f"   NEGADO pelo Claude Code: {negado.get('tool_name')} "
+            f"{str(entrada.get('command') or entrada.get('file_path') or entrada)[:300]}")
     if processo.returncode != 0 or saida.get("is_error"):
         motivo = {"error_max_turns": "atingiu o limite de rodadas",
                   "error_during_execution": "erro durante a execução"}.get(saida.get("subtype"), saida.get("subtype"))
