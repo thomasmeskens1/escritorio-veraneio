@@ -7,7 +7,10 @@ foco, revelação do nome e ~1,2 s parado no fim.
 Cada empresa tem a própria história (motion_roteiros.py) e só o próprio logo (pasta dela em CÉREBRO/MARCAS,
 copiada para _referencias/<PASTA> da peça na produção). Ícones em motion_icones.py; só Pillow (sem numpy).
 
-Uso: python motion.py vinheta --empresa casa_veraneio --formato 1080x1920 --saida vinheta_9x16.mp4
+Opções (motion_opcoes.py): A é a aprovada e o padrão de produção; B, C e D são as alternativas para o Thomas
+escolher a definitiva (--variante B).
+
+Uso: python motion.py vinheta --empresa casa_veraneio --formato 1080x1920 --saida vinheta_9x16.mp4 [--variante B]
 """
 
 import math
@@ -18,6 +21,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 import motion_icones
+import motion_opcoes
 import motion_roteiros
 from motion_camadas import com_opacidade, cor, pasta_marcas
 from motion_video import CODIFICACAO, FPS, _rodar, achar_ffmpeg
@@ -35,8 +39,8 @@ OBTURADOR = 0.6   # fração do quadro "exposta" no desfoque de movimento (0,5 =
 MAX_AMOSTRAS = 28
 
 
-def duracao(empresa: str) -> float:
-    return motion_roteiros.ROTEIROS[empresa]["duracao"]
+def duracao(empresa: str, variante: str = "A") -> float:
+    return motion_opcoes.roteiro(empresa, variante)["duracao"]
 
 
 def arquivo_logo(empresa: str, base: Path) -> Path:
@@ -210,14 +214,16 @@ def _setor(imagem: Image.Image, cx: float, cy: float, atual: float, inicial: flo
 class Renderizador:
     """Compõe as camadas do roteiro sobre o fundo e faz o desfoque de movimento por superamostragem no tempo."""
 
-    def __init__(self, empresa: str, formato: str, logo: Path):
+    def __init__(self, empresa: str, formato: str, logo: Path, variante: str = "A"):
         if formato not in FORMATOS:
             raise ValueError(f"Formato da vinheta: {', '.join(FORMATOS)}")
         self.empresa = empresa
         self.largura, self.altura = (int(v) for v in formato.split("x"))
         self.pecas = partes_do_logo(empresa, logo, self.largura, self.altura)
         self.palco = motion_roteiros.Palco(self.largura, self.altura, self.pecas, VINHETAS[empresa][3])
-        self.roteiro = motion_roteiros.ROTEIROS[empresa]
+        self.roteiro = motion_opcoes.roteiro(empresa, variante)
+        if self.roteiro.get("preparar"):  # imagens próprias da opção (cortina, painel de LED...)
+            self.roteiro["preparar"](self.palco)
         self.duracao = self.roteiro["duracao"]
         self.fundo = self._fundo()
 
@@ -356,16 +362,16 @@ class Renderizador:
             yield dados
 
 
-def vinheta(empresa: str, formato: str, saida: Path, base: Path | None = None) -> dict:
-    """Renderiza a vinheta (MP4 H.264 yuv420p 30 fps, trilha AAC silenciosa). Devolve {"saida", "quadros",
-    "segundos", "avisos"}."""
+def vinheta(empresa: str, formato: str, saida: Path, base: Path | None = None, variante: str = "A") -> dict:
+    """Renderiza a vinheta (MP4 H.264 yuv420p 30 fps, trilha AAC silenciosa) na opção `variante` (A, a de
+    produção, ou B, C, D). Devolve {"saida", "quadros", "segundos", "avisos"}."""
     if formato not in FORMATOS:
         raise ValueError(f"Formato da vinheta: {', '.join(FORMATOS)}")
     saida = Path(saida).resolve()
     base = Path(base or saida.parent).resolve()
     logo = arquivo_logo(empresa, base)
     comeco = time.perf_counter()
-    render = Renderizador(empresa, formato, logo)
+    render = Renderizador(empresa, formato, logo, variante)
     saida.parent.mkdir(parents=True, exist_ok=True)
     total = round(render.duracao * FPS)
     comando = [achar_ffmpeg() or "ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",

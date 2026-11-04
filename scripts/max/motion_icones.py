@@ -270,6 +270,9 @@ DESENHOS = {"lupa": _lupa, "pino_vero": _pino_vero, "chave": _chave, "casa_vero"
             "montanhas": _montanhas, "chale": _chale, "piscina": _piscina, "mala": _mala,
             "calendario": _calendario, "holofote": _holofote, "feixe": _feixe, "palco": _palco, "taca": _taca,
             "brilho": _brilho, "faisca": _faisca}
+# Opções B, C e D da vinheta (Thomas, 04/11/2026): ícones extras em arquivo próprio (limite de 500 linhas).
+from motion_icones_opcoes import DESENHOS_OPCOES  # noqa: E402
+DESENHOS.update(DESENHOS_OPCOES)
 
 
 @lru_cache(maxsize=512)

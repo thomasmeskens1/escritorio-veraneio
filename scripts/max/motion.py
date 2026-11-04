@@ -9,6 +9,7 @@ anterior (tudo já entrou) não é redesenhado.
 
 Uso: python motion.py motion.json [--previa]
      python motion.py vinheta --empresa casa_veraneio --formato 1080x1920 --saida vinheta.mp4  (motion_vinheta.py)
+     python motion.py vinheta --empresa casa_veraneio --variante B ...  (opções B, C e D: motion_opcoes.py)
 
 motion.json (caminhos relativos à pasta dele, sempre dentro dela; fontes e logos vêm de _referencias/):
 {"formato": "1080x1920", "cascata": 0.15, "inicio": 0.3, "sai": true,
@@ -453,8 +454,10 @@ def main_vinheta(argumentos: list[str]) -> None:
     args.add_argument("--empresa", required=True, choices=sorted(motion_vinheta.VINHETAS))
     args.add_argument("--formato", default="1080x1920", choices=motion_vinheta.FORMATOS)
     args.add_argument("--saida", required=True, help="MP4 da vinheta (dentro da pasta da peça)")
+    args.add_argument("--variante", default="A", type=str.upper, choices=motion_vinheta.motion_opcoes.VARIANTES,
+                      help="opção da vinheta: A (aprovada, padrão de produção), B, C ou D (alternativas)")
     opcoes = args.parse_args(argumentos)
-    r = motion_vinheta.vinheta(opcoes.empresa, opcoes.formato, Path(opcoes.saida), Path.cwd())
+    r = motion_vinheta.vinheta(opcoes.empresa, opcoes.formato, Path(opcoes.saida), Path.cwd(), opcoes.variante)
     print(f"Vinheta: {r['saida']} ({r['quadros']} quadros em {r['segundos']} s)")
 
 
