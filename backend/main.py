@@ -46,6 +46,7 @@ import insatisfacoes
 import orquestrador
 import parar
 import producao
+import producao_semana
 import relatorios
 import repetir_lodges
 import reranker
@@ -121,7 +122,9 @@ async def ciclo_de_vida(_: FastAPI):
         log.warning("Monday: %d item(ns) voltaram a esperar o Gestor.", retomados)
     copias = asyncio.create_task(copiar_banco_periodicamente())
     alarme = asyncio.create_task(alarme_telegram.vigiar())  # avisos de operação no celular (despachante-16)
+    semana = asyncio.create_task(producao_semana.vigiar())  # "Produzir a semana": fila da noite (gestor-12, fase 2)
     yield
+    semana.cancel()
     alarme.cancel()
     agendamentos.parar()
     fila.cancel()
@@ -432,6 +435,11 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         empresa = empresas.PADRAO
     if ensino:  # "Aprenda: ..." (só o dono)
         return await ensinar_cerebro(ws, usuario, andar, agente, texto, empresa)
+    # "Produzir a semana" no Gestor (botão da pauta ou digitado): itens do Monday dos próximos 7 dias vão para a fila
+    # da noite, pelo caminho do botão Enviar. Sem IA e sem confirmação (decisão 5, Thomas, 04/11/2026).
+    if producao_semana.e_pedido(agente.id, texto):
+        await producao_semana.iniciar(usuario["sub"], andar, agente, texto, empresa)
+        return
     # Produção em espera neste chat (o Gestor fez uma pergunta): esta mensagem é a resposta.
     # Correção do Thomas a uma resposta recente vira observação para a revisão semanal (o pedido segue normal).
     orquestrador._em_segundo_plano(asyncio.to_thread(  # correção ou elogio: em segundo plano, sem atrasar a resposta

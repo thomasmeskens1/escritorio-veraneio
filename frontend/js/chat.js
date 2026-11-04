@@ -77,6 +77,8 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
     div.append(criarBotaoDesdobrar(tarefa_id)); // arte pronta: 4:5 e 9:16 pelo molde (backend/desdobrar.py)
   }
   if (opcoes?.length) div.append(criarOpcoes(opcoes));
+  const semana = tipo === 'agente' && opcoesDaPauta(texto);
+  if (semana?.length) div.append(criarOpcoes(semana));
   const repetir = tipo === 'agente' && tarefa_id && criarBotaoRepetir(tarefa_id, texto); // js/referencias.js
   if (repetir) div.append(repetir);
   if (tipo === 'agente' && tarefa_id) div.append(criarAvaliacao(tarefa_id, avaliacao)); // 👍/👎 (js/avaliacao.js)
@@ -154,6 +156,15 @@ function mostrarFormularioPendente(andar, agente) {
   if (!pedido || formulariosMostrados.has(assinatura)) return;
   formulariosMostrados.add(assinatura);
   abrirFormularioDaMensagem(pedido, ultima.tarefa_id);
+}
+
+// Pauta da semana do Gestor (backend/pauta_semana.py): um botão "Produzir a semana" por empresa da pauta. O clique
+// envia o comando com o nome completo da empresa (backend/producao_semana.py), sem confirmação (decisão 5,
+// Thomas, 04/11/2026). Vem do texto, então os botões voltam também quando o histórico recarrega.
+function opcoesDaPauta(texto) {
+  if (!/^PAUTA DA SEMANA/.test(texto || '')) return [];
+  return EMPRESAS_DO_GRUPO.filter(([, nome]) => texto.includes(`**${nome}** —`))
+    .map(([, nome]) => ({ rotulo: `Produzir a semana: ${nome}`, texto: `Produzir a semana da ${nome}` }));
 }
 
 // Respostas rápidas (ex.: "Só o planejamento" / "Peça final"): o clique envia a resposta como mensagem.
