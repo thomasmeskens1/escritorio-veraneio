@@ -236,11 +236,11 @@ def test_imagem_procura_logo_nas_referencias(motion, tmp_path):
 
 # ---------------------------------------------------------------- vinheta do logo
 
-def _logo(pasta: Path, nome: str) -> Path:
+def _logo(pasta: Path, nome: str, cor_nome=(240, 219, 195, 255)) -> Path:
     pasta.mkdir(parents=True, exist_ok=True)
     imagem = Image.new("RGBA", (900, 300), (0, 0, 0, 0))
     imagem.paste((217, 161, 91, 255), (0, 0, 280, 300))   # "símbolo"
-    imagem.paste((240, 219, 195, 255), (320, 60, 900, 240))  # "nome"
+    imagem.paste(cor_nome, (320, 60, 900, 240))  # "nome"
     imagem.save(pasta / nome)
     return pasta / nome
 
@@ -259,20 +259,65 @@ def test_vinheta_de_cada_empresa_usa_so_o_proprio_logo(motion, tmp_path):
 
 def test_vinheta_prefere_a_copia_da_peca_e_monta_os_quadros(motion, tmp_path):
     import motion_vinheta
+    from PIL import ImageChops
     peca = tmp_path / "peca"
-    logo = _logo(peca / "_referencias" / "CASA_VERO", "logo_vero_caramelo_creme.png")
-    assert motion_vinheta.arquivo_logo("casa_vero", peca) == logo
-    for formato in motion_vinheta.FORMATOS:
-        elementos = motion_vinheta.elementos("casa_vero", formato, logo)
-        largura, altura = (int(v) for v in formato.split("x"))
-        cena = motion.Cena(elementos, motion_vinheta.DURACAO, largura, altura, base=peca, sai=False,
-                           pastas=[logo.parent])
-        fim = cena.quadro(motion_vinheta.DURACAO - 0.05, "verde")
-        caixa = fim.convert("L").point(lambda v: 255 if v > 100 else 0).getbbox()  # o que não é Verde
-        assert abs((caixa[0] + caixa[2]) / 2 - largura / 2) < largura * 0.03  # logo centrado
-        assert caixa[1] > altura * 0.2 and caixa[3] < altura * 0.8
-        assert fim.getpixel((5, 5)) == (0, 54, 27, 255)  # fundo Verde opaco
-        assert cena.quadro(0.1, "verde").convert("RGB").getextrema() == ((0, 0), (54, 54), (27, 27))  # só Verde
+    for empresa, (pasta, nome, _altura, fundo, _luz) in motion_vinheta.VINHETAS.items():
+        logo = _logo(peca / "_referencias" / pasta, nome, (0, 54, 27, 255) if fundo == "creme" else (255,) * 4)
+        assert motion_vinheta.arquivo_logo(empresa, peca) == logo
+        duracao = motion_vinheta.duracao(empresa)
+        for formato in motion_vinheta.FORMATOS:
+            render = motion_vinheta.Renderizador(empresa, formato, logo)
+            largura, altura = render.largura, render.altura
+            fim = render.quadro(duracao - 0.05)
+            caixa = ImageChops.difference(fim, render.fundo).convert("L").point(
+                lambda v: 255 if v > 30 else 0).getbbox()  # o que não é fundo: o logo assentado
+            assert abs((caixa[0] + caixa[2]) / 2 - largura / 2) < largura * 0.03, (empresa, formato)  # centrado
+            assert caixa[1] > altura * 0.2 and caixa[3] < altura * 0.8
+            assert fim.getpixel((2, 2)) == motion.cor(fundo)[:3]  # fundo da marca, opaco, nas bordas
+            assert render.quadro(0.0).tobytes() == render.fundo.tobytes()  # começa vazio
+            assert render.quadro(duracao - 0.6).tobytes() == fim.tobytes()  # ~1,2 s parado no fim
+
+
+def test_logo_em_partes_refaz_o_png(motion, tmp_path):
+    import motion_vinheta
+    logo = _logo(tmp_path / "CASA_VERANEIO", "logo_caramelo_texto_creme.png")
+    pecas = motion_vinheta.partes_do_logo("casa_veraneio", logo, 1080, 1920)
+    assert {"corpo", "rastro", "nome1"} <= set(pecas)
+    simbolo = sum(p.imagem.getchannel("A").histogram()[255] for n, p in pecas.items() if not n.startswith("nome"))
+    assert simbolo > 0 and pecas["nome1"].x > pecas["corpo"].x  # o nome fica à direita do símbolo
+
+
+def test_roteiros_tem_batidas_em_ordem_e_logo_parado_no_fim(motion):
+    import motion_roteiros
+    assert set(motion_roteiros.ROTEIROS) == {"casa_veraneio", "cv_corporativo", "casa_vero"}
+    for empresa, roteiro in motion_roteiros.ROTEIROS.items():
+        assert 5.5 <= roteiro["duracao"] <= 6.5, empresa
+        batidas = roteiro["batidas"]
+        assert all(0 <= a < b <= roteiro["duracao"] for a, b in batidas.values()), empresa
+        assert roteiro["duracao"] - max(b for _, b in batidas.values()) >= 1.15, empresa  # ~1,2 s de logo parado
+        assert batidas["surge"][0] < batidas["desliza"][0] < batidas["nome1"][0]  # símbolo, depois o nome
+
+
+def test_ease_out_back_passa_pouco_do_ponto_e_assenta(motion):
+    from motion_camadas import ease_out_back, mola, trecho
+    assert ease_out_back(0) == pytest.approx(0) and ease_out_back(1) == pytest.approx(1)
+    pico = max(ease_out_back(i / 100) for i in range(101))
+    assert 1.0 < pico < 1.06  # elegante: passa ~4% e volta, sem quique de desenho animado
+    assert max(ease_out_back(i / 100, 1.7) for i in range(101)) > pico
+    assert mola(0) == 0 and abs(1 - mola(3.0)) < 0.01
+    assert trecho(1.5, 1.0, 2.0) == pytest.approx(0.5) and trecho(0.5, 1.0, 2.0) == 0 and trecho(3, 1, 2) == 1
+
+
+def test_icones_saem_rgba_no_tamanho_pedido(motion):
+    import motion_icones
+    for nome in motion_icones.DESENHOS:
+        imagem = motion_icones.icone(nome, 96)
+        assert imagem.mode == "RGBA" and imagem.size == (96, 96), nome
+        assert imagem.getchannel("A").getbbox(), nome  # tem desenho
+    assert motion_icones.icone("lupa", 64, aro=0.5).size == (64, 64)
+    assert motion_icones.anel(40, 3, (217, 161, 91)).mode == "RGBA"
+    with pytest.raises(ValueError):
+        motion_icones.icone("outro", 64)
 
 
 # ---------------------------------------------------------------- prompt do Editor de Vídeo

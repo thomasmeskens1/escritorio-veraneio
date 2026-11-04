@@ -68,6 +68,26 @@ def ease_in_cubic(t: float) -> float:
     return _limite(t) ** 3
 
 
+# Só a vinheta do logo (motion_vinheta.py; Thomas, 04/11/2026): passar um pouco do ponto e assentar, como na
+# referência profissional da Casa Vero. Fora do CURVAS de propósito: texto e caixa do motion.json seguem sem quique.
+def ease_out_back(t: float, forca: float = 1.1) -> float:
+    """Desacelera, passa do ponto (forca 1.1 ~ 4%; 1.7 ~ 10%) e volta. Começa em 0 e termina em 1."""
+    t = _limite(t) - 1
+    return 1 + (forca + 1) * t ** 3 + forca * t ** 2
+
+
+def mola(t: float, frequencia: float = 2.2, amortecimento: float = 5.0) -> float:
+    """Mola amortecida de 0 a 1 em t segundos: balanço que assenta (giro da chave, da mala)."""
+    if t <= 0:
+        return 0.0
+    return 1 - math.exp(-amortecimento * t) * math.cos(2 * math.pi * frequencia * t)
+
+
+def trecho(t: float, inicio: float, fim: float) -> float:
+    """Progresso de 0 a 1 de t dentro do intervalo [inicio, fim]."""
+    return _limite((t - inicio) / (fim - inicio)) if fim > inicio else float(t >= fim)
+
+
 CURVAS = {"linear": linear, "ease_out_cubic": ease_out_cubic, "ease_out_quint": ease_out_quint,
           "ease_in_out_cubic": ease_in_out_cubic, "ease_in_cubic": ease_in_cubic}
 

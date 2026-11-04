@@ -118,7 +118,8 @@ def instrucao_motion(agente: str, empresa: str) -> str:
         "fonte errada ou área da interface (o motion.py avisa) antes de entregar. Uma animação de entrada por "
         "elemento, elegante e lenta (0,5 a 0,9 s), sem giro, quique ou brilho.\n"
         "VINHETA DO LOGO: logo antes do fechamento/CTA (ou do quadro de CTA), coloque a vinheta animada do logo DESTA "
-        f"empresa ({empresa}), ~3 s em fundo Verde. Se ainda não houver vinheta.mp4 nesta pasta, no formato do vídeo, "
+        f"empresa ({empresa}): ~6 s, uma história em ícones que vira o logo e termina com o logo parado ~1,2 s "
+        "(fundo da marca: Verde; Creme na Vero; não acelere nem corte o fim). Se ainda não houver vinheta.mp4 nesta pasta, no formato do vídeo, "
         "gere-a com:\n"
         f'  python "{MOTION}" vinheta --empresa {empresa} --formato 1080x1920 --saida vinheta.mp4\n'
         "(formatos 1080x1920, 1080x1350 e 1920x1080). Nunca use a vinheta ou o logo de outra empresa.")
