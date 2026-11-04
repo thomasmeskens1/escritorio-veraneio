@@ -35,6 +35,12 @@ CIDADES_PADRAO = ["São Paulo / SP"]
 REGIONAIS = {
     "SP": [(7, 9, "Revolução Constitucionalista")],
     "São Paulo / SP": [(1, 25, "Aniversário de São Paulo"), ("pascoa", 60, "Corpus Christi")],
+    # Campinas e Jundiaí (Thomas, 04/11/2026: público também dessas regiões). Campinas: Imaculada Conceição (Lei
+    # 3.902/1970) e Dia do Evangélico (Lei 16.785/2025). Jundiaí: decreto 36.753/2026 (feriados locais de 2027):
+    # Corpus Christi e Nossa Senhora do Desterro; a Paixão já é nacional. Aniversário de Jundiaí (14/12) não é feriado.
+    "Campinas / SP": [("pascoa", 60, "Corpus Christi"), (8, 12, "Dia do Evangélico"),
+                      (12, 8, "Imaculada Conceição (padroeira de Campinas)")],
+    "Jundiaí / SP": [("pascoa", 60, "Corpus Christi"), (8, 15, "Nossa Senhora do Desterro (padroeira de Jundiaí)")],
     "BA": [(7, 2, "Independência da Bahia")],
     "RJ": [(4, 23, "Dia de São Jorge")],
     "Rio de Janeiro / RJ": [(1, 20, "Dia de São Sebastião")],
@@ -143,6 +149,10 @@ def regionais(ano: int, lista_cidades: list[str]) -> list[dict]:
                                                   if isinstance(e, dict) and {"mes", "dia", "nome"} <= set(e)]
         for a, b, nome in datas:
             dia = ce.pascoa(ano) + timedelta(days=b) if a == "pascoa" else date(ano, int(a), int(b))
+            # Mesmo feriado em várias cidades (Corpus Christi em SP, Campinas e Jundiaí): uma linha só.
+            if (igual := next((f for f in lista if f["data"] == dia and f["nome"] == nome), None)):
+                igual["tipo"] = igual["tipo"].replace(")", f", {chave})", 1) if "municipal" in tipo else igual["tipo"]
+                continue
             lista.append({"nome": nome, "data": dia, "tipo": tipo, "regional": True})
     return lista
 
