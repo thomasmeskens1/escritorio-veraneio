@@ -168,6 +168,50 @@ def _chale(p: _Pincel):
     p.linha([(0.37, 0.69), (0.63, 0.69)], CARAMELO, 0.022)
 
 
+def _mar(p: _Pincel):
+    """Mar (Casa Veraneio na praia): linhas de onda de traço constante, mais largas perto e mais curtas no fundo
+    (perspectiva), alternando Caramelo e Creme (no lugar das montanhas)."""
+    for y, largura, ondas, cor in ((0.82, 0.92, 3.5, CARAMELO), (0.73, 0.76, 3.0, CREME), (0.64, 0.60, 2.5, CARAMELO),
+                                   (0.555, 0.42, 2.0, CREME)):
+        x0 = 0.5 - largura / 2
+        p.linha([(x0 + largura * k / 60, y - 0.022 * math.sin(2 * math.pi * ondas * k / 60)) for k in range(61)],
+                cor, 0.034)
+
+
+def _folha(p: _Pincel, x0, y0, angulo, comprimento, cair, cor, largura=0.065):
+    """Folha de coqueiro: sai do topo do tronco em `angulo` (graus, 0 = direita) e cai na ponta (`cair`)."""
+    a = math.radians(angulo)
+    lado_a, lado_b = [], []
+    for k in range(21):
+        f = k / 20
+        x = x0 + comprimento * f * math.cos(a)
+        y = y0 - comprimento * f * math.sin(a) + cair * f * f
+        meia = largura * math.sin(math.pi * min(1.0, f * 1.15)) / 2
+        lado_a.append((x, y - meia))
+        lado_b.append((x, y + meia))
+    p.poligono(lado_a + lado_b[::-1], cor)
+
+
+def _casa_praia(p: _Pincel):
+    """Casa de praia de alto padrão: dois volumes de vidro Creme com lajes Caramelo, o de cima em balanço, e um
+    coqueiro ao lado (sombra Caramelo, atrás)."""
+    tronco = [(0.13 + 0.05 * (k / 12) ** 1.6, 0.86 - 0.52 * k / 12) for k in range(13)]
+    p.linha(tronco, CARAMELO_SOMBRA, 0.026)
+    topo = tronco[-1]
+    for angulo, comprimento, cair in ((160, 0.17, 0.08), (125, 0.13, 0.04), (90, 0.08, 0.02), (55, 0.15, 0.05),
+                                     (20, 0.19, 0.09), (-10, 0.14, 0.09)):
+        _folha(p, *topo, angulo, comprimento, cair, CARAMELO_SOMBRA)
+    p.caixa(0.24, 0.64, 0.80, 0.86, CREME)                       # térreo de vidro
+    p.caixa(0.36, 0.44, 0.94, 0.61, CREME)                       # andar de cima, em balanço
+    for x in (0.38, 0.52, 0.66):
+        p.caixa(x - 0.008, 0.64, x + 0.008, 0.86, CARAMELO)
+    for x in (0.52, 0.66, 0.80):
+        p.caixa(x - 0.008, 0.44, x + 0.008, 0.61, CARAMELO)
+    p.caixa(0.20, 0.60, 0.84, 0.645, CARAMELO)                   # laje entre os andares
+    p.caixa(0.32, 0.395, 0.98, 0.44, CARAMELO)                   # cobertura plana
+    p.caixa(0.20, 0.845, 0.86, 0.86, CARAMELO)                   # deque
+
+
 def _piscina(p: _Pincel, fase=0.0):
     p.caixa(0.08, 0.30, 0.92, 0.70, None, raio=0.2, contorno=CREME, espessura=0.03)
     for n, y in enumerate((0.45, 0.56)):
@@ -267,7 +311,7 @@ def _faisca(p: _Pincel, cor=BRANCO):
 
 
 DESENHOS = {"lupa": _lupa, "pino_vero": _pino_vero, "chave": _chave, "casa_vero": _casa_vero, "sol": _sol,
-            "montanhas": _montanhas, "chale": _chale, "piscina": _piscina, "mala": _mala,
+            "montanhas": _montanhas, "chale": _chale, "mar": _mar, "casa_praia": _casa_praia, "piscina": _piscina, "mala": _mala,
             "calendario": _calendario, "holofote": _holofote, "feixe": _feixe, "palco": _palco, "taca": _taca,
             "brilho": _brilho, "faisca": _faisca}
 # Opções B, C e D da vinheta (Thomas, 04/11/2026): ícones extras em arquivo próprio (limite de 500 linhas).

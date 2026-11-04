@@ -4,8 +4,8 @@ quadro, como lista de camadas. As batidas (início, fim em segundos) ficam em RO
 - casa_vero (imobiliária de alto padrão): a referência profissional adaptada fielmente: lupa com casa (busca) que
   encolhe e vira pino, o pino gira e vira chave, a casa nasce, a chave dá a volta e gira na porta, a casa acende,
   faíscas, a casa encolhe até um ponto, onda em anel e o logo se forma (pino saindo do desfoque, chave subindo).
-- casa_veraneio (casas de alto padrão para grupos, natureza): sol nascendo atrás das montanhas, chalé em A com
-  piscina, a mala chega balançando, tudo converge num ponto, o pino cai do topo da tela, toca no anel e quica
+- casa_veraneio (casas de alto padrão para grupos): sol nascendo atrás do mar, casa de praia de alto padrão
+  (vidro, lajes, coqueiro) com piscina (Thomas, 04/11/2026: praia e casa de luxo no lugar de montanhas e chalé), a mala chega balançando, tudo converge num ponto, o pino cai do topo da tela, toca no anel e quica
   curto como mola (versão definitiva, Thomas 04/11/2026), e a seta orbital se desenha em volta dele.
 - cv_corporativo (produtora 360° de eventos): calendário com o dia marcado, palco com refletores cruzando os
   feixes, duas taças brindam com faíscas, tudo converge, anel, pino e seta orbital, "CORP." por último.
@@ -250,28 +250,29 @@ def _veraneio(t: float, p: Palco) -> list:
         x, y2, esc, _ = _converge(t, *conv, cx, hy, cx, cy, 0)
         camadas.append(_c("horizonte", x, y2, icone="faisca", lado=1.5 * s * linha, esticar=(1.0, 0.11),
                           params={"cor": CREME}, opacidade=0.9, escala=esc))
-        # o sol nasce atrás das montanhas (abaixo do horizonte não aparece) e depois fica atrás do chalé
+        # o sol nasce atrás do mar (abaixo da onda do fundo não aparece) e depois fica atrás da casa de praia
         vira = ease_in_out_cubic(trecho(t, 1.05, 1.45))
+        mont_lado = 1.3 * s
+        mont_y = hy - 0.36 * mont_lado + 0.6 * mont_lado * (1 - ease_out_back(trecho(t, 0.1, 0.7), 1.0))
+        corte_sol = min(hy, mont_y + 0.03 * mont_lado) if t < 1.05 else hy  # a onda do fundo (mar em linhas)
         sol_lado = 0.8 * s * (1 - 0.25 * vira)
         sol_x = cx - 0.05 * s + 0.4 * s * vira
         sol_y = hy + 0.45 * s - 1.33 * s * ease_out_cubic(trecho(t, 0.3, 1.15)) + 0.1 * s * vira
-        visivel = (hy - (sol_y - sol_lado / 2)) / sol_lado
+        visivel = (corte_sol - (sol_y - sol_lado / 2)) / sol_lado
         if visivel > 0:
             x, y2, esc, g = _converge(t, *conv, sol_x, sol_y, cx, cy, -30)
             camadas.append(_c("sol", x, y2, icone="sol", lado=sol_lado, escala=esc, giro=18 * t + g,
                               revela=("baixo", min(1.0, visivel), 2 * u) if visivel < 1 else None))
-        if t < 1.45:  # montanhas sobem do horizonte e depois encolhem para dentro do chalé
-            mont_lado = 1.3 * s
-            mont_y = hy - 0.36 * mont_lado + 0.6 * mont_lado * (1 - ease_out_back(trecho(t, 0.1, 0.7), 1.0))
+        if t < 1.45:  # o mar sobe do horizonte e depois encolhe para dentro da casa de praia
             visivel = (hy - (mont_y - mont_lado / 2)) / mont_lado
             if visivel > 0:
-                camadas.append(_c("montanhas", cx, mont_y + 0.25 * s * vira, icone="montanhas", lado=mont_lado,
+                camadas.append(_c("mar", cx, mont_y + 0.25 * s * vira, icone="mar", lado=mont_lado,
                                   escala=1 - 0.55 * vira, opacidade=1 - ease_in_cubic(trecho(t, 1.1, 1.42)),
                                   revela=("baixo", min(1.0, visivel), 2 * u) if visivel < 1 else None))
         if t >= 1.15:
             q = trecho(t, 1.15, 1.6)
             x, y2, esc, g = _converge(t, *conv, cx, hy - 0.012 * s, cx, cy, 20)
-            camadas.append(_c("chale", x, y2, icone="chale", lado=1.0 * s, pivo=(0.5, 0.885),
+            camadas.append(_c("casa", x, y2, icone="casa_praia", lado=1.0 * s, pivo=(0.5, 0.885),
                               escala=ease_out_back(q, 1.3) * esc, giro=g, opacidade=min(1.0, q * 4)))
         if t >= 1.45:
             q = trecho(t, 1.45, 1.85)
