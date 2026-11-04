@@ -88,7 +88,9 @@ def sigilosa(agente_id: str, pedido: str = "", contexto: str = "", tarefa_id: in
         if tarefa_id:
             import cerebro  # import tardio: o Cérebro carrega o índice
 
-            if cerebro._consultou_financeiro(tarefa_id):
+            # Financeiro ou carteira (manual 14, ":carteira"): a decisão 11 abriu a carteira aos usuários, não aos
+            # gratuitos de fora (Thomas, 04/11/2026).
+            if cerebro._consultou_sigiloso(tarefa_id):
                 return True
         if contexto:
             import carteira

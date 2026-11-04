@@ -82,15 +82,10 @@ class RotaSigilosa(LocalOcupado):
 
 
 def _diretrizes(agente_id: str, tarefa_id: int, compacto: bool = False) -> str:
-    """Diretrizes do agente; a persona do Corporativo vai sem nomes de clientes para quem não é da Diretoria."""
-    empresa = cerebro.empresa_da_tarefa(tarefa_id)
-    extras = diretrizes.para(agente_id, compacto=compacto, empresa=empresa)
-    linha = tarefas.obter(tarefa_id) if tarefa_id else None
-    if extras and empresa == "cv_corporativo" and not (linha and auth.ve_financeiro(linha["usuario"])):
-        import carteira  # import tardio: lê os clientes do Monday (cache)
-
-        extras = carteira.ocultar(extras)
-    return extras
+    """Diretrizes do agente. A persona do Corporativo ia sem nomes de clientes para quem não é da Diretoria; desde a
+    decisão 11 (Thomas, 04/11/2026: leads e projetos são de todos) vai inteira. O nome de cliente continua fora dos
+    gratuitos de fora (rota sigilosa em _rodar) e da web (estudos, comercial)."""
+    return diretrizes.para(agente_id, compacto=compacto, empresa=cerebro.empresa_da_tarefa(tarefa_id))
 
 
 ORCAMENTO_GROQ = 3500  # tokens estimados de persona + diretrizes + pedido (sobra para o CrewAI, Cérebro e resposta)

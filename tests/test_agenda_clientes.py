@@ -47,6 +47,8 @@ BASE = {
 
 @pytest.fixture
 def sem_diretoria(monkeypatch):
+    # Desde a decisão 11 (04/11/2026) todo usuário logado vê os nomes; o caminho "só contagens" segue para quem não
+    # tem login identificado.
     monkeypatch.setattr(a, "ve_nomes", lambda login: False)
     monkeypatch.setattr(a, "ve_valores", lambda login: False)
 
@@ -135,17 +137,15 @@ def test_diretoria_ve_nomes_e_valores(diretoria):
     assert "quem volta R$ 6.000 (55%), uma compra R$ 5.000" in texto
 
 
-def test_lista_nominal_configuravel_sem_ser_diretoria(tmp_path, monkeypatch):
+def test_nomes_para_todos_e_valores_so_da_diretoria(monkeypatch):
+    # Antes: nomes só da Diretoria e da lista "veem_nomes" de dados/agenda_clientes.json. Decisão 11 (Thomas,
+    # 04/11/2026): leads e clientes são de todos; a receita somada da recorrência segue só da Diretoria.
     import auth
 
     monkeypatch.setattr(auth, "ve_financeiro", lambda login: False)
-    monkeypatch.setattr(a, "ARQUIVO_CONFIG", tmp_path / "agenda_clientes.json")
-    assert not a.ve_nomes("usuario.teste@exemplo.com")  # sem arquivo: ninguém além da Diretoria
-    a.ARQUIVO_CONFIG.write_text(json.dumps({"veem_nomes": ["usuario.teste@exemplo.com"]}), encoding="utf-8")
-    assert a.ve_nomes("usuario.teste@exemplo.com") and not a.ve_nomes("outro.teste@exemplo.com")
-    assert not a.ve_valores("usuario.teste@exemplo.com")  # valores continuam só da Diretoria
-    a.ARQUIVO_CONFIG.write_text("{quebrado", encoding="utf-8")
-    assert not a.ve_nomes("usuario.teste@exemplo.com")
+    assert a.ve_nomes("usuario.teste@exemplo.com") and a.ve_nomes("outro.teste@exemplo.com")
+    assert not a.ve_nomes("")  # sem usuário identificado: só contagens
+    assert not a.ve_valores("usuario.teste@exemplo.com")
 
 
 def test_recorrencia_junta_aditivos_e_conta_quem_sumiu():

@@ -152,7 +152,9 @@ def test_trabalhador_sem_web_nao_libera_ferramentas(monkeypatch):
     assert "WebSearch,WebFetch" in comandos[1]
 
 
-def test_prospectador_e_estrategista_so_diretoria_ou_liberados(monkeypatch):
+def test_prospectador_e_estrategista_para_todos_desde_a_decisao_11(monkeypatch):
+    # Antes (prospectador-15) eram só da Diretoria ou de quem o master liberasse. Decisão 11 (Thomas, 04/11/2026):
+    # leads e projetos são de todos; a lista nominal do master continua valendo para restringir.
     usuarios = {"func@exemplo.com": {"role": "funcionario", "agentes": "*"},
                 "comercial@exemplo.com": {"role": "funcionario", "agentes": ["comercial/prospectador"]},
                 "dir@exemplo.com": {"role": "diretoria", "agentes": "*"}}
@@ -160,7 +162,7 @@ def test_prospectador_e_estrategista_so_diretoria_ou_liberados(monkeypatch):
     monkeypatch.setattr(acesso, "e_master", lambda login: False)
     monkeypatch.setattr(acesso, "ve_financeiro", lambda login: usuarios[login]["role"] == "diretoria")
     pode = lambda login, agente: acesso.pode_usar({"sub": login}, "comercial", agente)  # noqa: E731
-    assert not pode("func@exemplo.com", "prospectador") and not pode("func@exemplo.com", "estrategista")
+    assert pode("func@exemplo.com", "prospectador") and pode("func@exemplo.com", "estrategista")
     assert acesso.pode_usar({"sub": "func@exemplo.com"}, "marketing", "copywriter")
     assert pode("comercial@exemplo.com", "prospectador") and not pode("comercial@exemplo.com", "estrategista")
     assert pode("dir@exemplo.com", "prospectador") and pode("dir@exemplo.com", "estrategista")

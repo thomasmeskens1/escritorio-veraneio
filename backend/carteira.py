@@ -1,7 +1,9 @@
 """Carteira de clientes do Corporativo em sigilo (prospectador-15, estrategista-29, despachante-26).
 
 Os nomes dos clientes (contas ativas e eventos ganhos no Monday) são segredo comercial:
-  - só a Diretoria os vê no contexto do agente (persona, Cérebro); para os demais saem como "[cliente]";
+  - todos os usuários os veem no contexto do agente (persona, Cérebro) desde a decisão 11 (Thomas, 04/11/2026: leads
+    e projetos são de todos); antes, só a Diretoria;
+  - nunca vão a um gratuito de fora (roteamento.sigilosa usa tem_nomes);
   - nunca vão no pedido que o Max executa com pesquisa na web (uma página pode pedir a lista numa URL); no lugar,
     o perfil agregado (segmentos, cidades, tipos de evento e faixas de pax, só contagens);
   - a checagem de "já é cliente" continua só no backend (comercial.ja_conhecidos).

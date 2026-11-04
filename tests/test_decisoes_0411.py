@@ -20,9 +20,8 @@ def test_reveillon_2026_27_vira_aviso_e_2027_nao():
     assert "nome do período" not in " ".join(conferente.conferir("Garanta o seu Réveillon 2027.", "casa_veraneio"))
 
 
-def test_asterisco_libera_os_nomes_para_todos(monkeypatch, tmp_path):
-    monkeypatch.setattr(a, "ARQUIVO_CONFIG", tmp_path / "agenda_clientes.json")
-    a.ARQUIVO_CONFIG.write_text(json.dumps({"veem_nomes": ["*"]}), encoding="utf-8")
+def test_nomes_da_agenda_para_todos():
+    # Era o "*" em dados/agenda_clientes.json; desde a decisão 11 (04/11/2026) vale sem arquivo.
     assert a.ve_nomes("qualquer.pessoa@exemplo.com")
 
 
