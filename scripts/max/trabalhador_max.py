@@ -74,9 +74,14 @@ PASTA_DIRETRIZES = comum.DADOS / "conhecimento"   # manuais da Casa Veraneio (fo
 DIRETRIZES = {"criador_imagens": ("00", "01", "08", "09", "10", "04", "03"),
               "editor_video": ("00", "01", "08", "09", "10", "06", "05")}
 
-# Ritmo dos vídeos (Thomas, 27/10/2026): explorar a casa com calma.
-RITMO_VIDEO = (" VÍDEOS: clipes na velocidade natural (1x); nada de acelerar, a menos que o pedido diga. Página de vídeo "
-               "num carrossel: pelo menos 3 cenas diferentes da casa, ~4 s cada, salvo pedido diferente.")
+# Ritmo dos vídeos (Thomas, 27/10/2026: explorar a casa com calma; 04/11/2026: "poucos takes, mais lentos" e corte
+# na batida só quando o pedido pedir, porque ritmo rápido vai contra o luxo e o público quer ver os detalhes da casa).
+RITMO_VIDEO = (" VÍDEOS: poucos takes e longos, de 3,5 a 6 s cada (5 a 7 takes num reels de 25 a 30 s; na dúvida, "
+               "um take mais longo em vez de mais um corte). Velocidade natural (1x) ou câmera lenta suave (0,8 a 0,9x) "
+               "nos takes com movimento de câmera; NUNCA acelerar. Cortar na batida da música NÃO é padrão: só quando o "
+               "pedido deste projeto pedir. Página de vídeo num carrossel: pelo menos 3 cenas diferentes da casa, ~4 s "
+               "cada, salvo pedido diferente.")
+MOTION = Path(__file__).with_name("motion.py").as_posix()
 INSTRUCOES = {
     "criador_imagens": (
         "Você é o Criador de Imagens. Entregue as artes em PNG. Monte cada arte como um arquivo .html "
@@ -88,10 +93,35 @@ INSTRUCOES = {
     "editor_video": (
         "Você é o Editor de Vídeo. Entregue o vídeo final em MP4 (H.264 + AAC), vertical 1080x1920 "
         "salvo pedido diferente, usando ffmpeg/ffprobe (já no PATH), sempre chamados pelo python com "
-        "subprocess.run([\"ffmpeg\", ...]) e arquivos desta pasta (o Bash só aceita python). Para telas de texto, "
-        f'monte PNGs com: python "{RENDERIZADOR}" tela.html tela.png 1080x1920 e use-os no ffmpeg.' + RITMO_VIDEO
+        "subprocess.run([\"ffmpeg\", ...]) e arquivos desta pasta (o Bash só aceita python). Textos, formas e logo "
+        "entram animados pelo motion.py (abaixo); PNG de HTML (python \"" + RENDERIZADOR + "\" tela.html tela.png "
+        "1080x1920) só para o que o motion.py não desenha, e mesmo assim como imagem animada no motion.json."
+        + RITMO_VIDEO
     ),
 }
+
+
+def instrucao_motion(agente: str, empresa: str) -> str:
+    """Motion graphics e vinheta do logo (Thomas, 04/11/2026): texto e forma animados em todo vídeo, pelo motion.py."""
+    if agente != "editor_video":
+        return ""
+    return (
+        "MOTION GRAPHICS (obrigatório em todo vídeo; manual 06 §2): TODA camada de texto, caixa, filete, degradê, selo, "
+        "contagem e logo entra animada pelo motion.py, nunca como PNG parado com fade. Descreva as cenas num "
+        "motion.json NA RAIZ desta pasta (clipe de cada cena, \"de\", \"duracao\", \"velocidade\" 0,8 a 1, \"saida\" e "
+        "os \"elementos\" com posição, estilo e \"entrada\": sobe, revela, desenha, palavra, letras, escala, contagem "
+        "ou aparece; cascata e saída suave antes do corte já vêm prontas) e renderize com:\n"
+        f'  python "{MOTION}" motion.json --previa\n'
+        "O formato do JSON e um exemplo estão no início do motion.py (abra com Read). As cenas saem normalizadas "
+        "(30 fps, H.264, AAC silencioso) e \"juntar\" faz a montagem com corte seco; fades/xfade entre cenas, se o "
+        "roteiro pedir, você faz depois no ffmpeg. Abra com Read as prévias (previas/*.png) e corrija texto cortado, "
+        "fonte errada ou área da interface (o motion.py avisa) antes de entregar. Uma animação de entrada por "
+        "elemento, elegante e lenta (0,5 a 0,9 s), sem giro, quique ou brilho.\n"
+        "VINHETA DO LOGO: logo antes do fechamento/CTA (ou do quadro de CTA), coloque a vinheta animada do logo DESTA "
+        f"empresa ({empresa}), ~3 s em fundo Verde. Se ainda não houver vinheta.mp4 nesta pasta, no formato do vídeo, "
+        "gere-a com:\n"
+        f'  python "{MOTION}" vinheta --empresa {empresa} --formato 1080x1920 --saida vinheta.mp4\n'
+        "(formatos 1080x1920, 1080x1350 e 1920x1080). Nunca use a vinheta ou o logo de outra empresa.")
 
 
 def ffmpeg_dir() -> str | None:
@@ -388,6 +418,8 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
         SEGURANCA,
         aviso,
         INSTRUCOES.get(producao["agente"], "Entregue o resultado como arquivo."),
+        # Motion graphics e vinheta do logo (Thomas, 04/11/2026): só no Editor de Vídeo.
+        instrucao_motion(producao["agente"], producao.get("empresa") or "casa_veraneio"),
         entrega,
         # Moldes prontos da Casa Veraneio (Onda 3, item 1): o Max preenche o molde.json em vez de desenhar do zero.
         molde.instrucao(producao["agente"], producao.get("empresa") or "casa_veraneio", producao.get("entrega") or ""),
