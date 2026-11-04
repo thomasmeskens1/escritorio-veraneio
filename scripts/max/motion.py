@@ -13,7 +13,7 @@ Uso: python motion.py motion.json [--previa]
 motion.json (caminhos relativos à pasta dele, sempre dentro dela; fontes e logos vêm de _referencias/):
 {"formato": "1080x1920", "cascata": 0.15, "inicio": 0.3, "sai": true,
  "cenas": [
-  {"video": "acervo/drone.mp4", "de": 2.0, "duracao": 5.5, "velocidade": 0.85, "foco": 0.5,
+  {"video": "acervo/drone.mp4", "de": 2.0, "duracao": 5.5, "velocidade": 0.75, "foco": 0.5,
    "saida": "trabalho/cena01.mp4", "elementos": [
      {"tipo": "degrade", "cor": "preto", "opacidade": 0.25},
      {"tipo": "texto", "texto": "RÉVEILLON 2027", "fonte": "muli", "peso": 700, "tamanho": 28,
@@ -43,6 +43,9 @@ import re
 import sys
 import time
 from pathlib import Path
+
+# Velocidade do clipe quando a cena não diz outra (Thomas, 04/11/2026: vídeo em 0,75x; 1x só a pedido).
+VELOCIDADE_PADRAO = 0.75
 
 # Na caixa de areia o python não grava em scripts/max: sem isso, gravar o .pyc dos módulos abaixo viraria um
 # "bloqueio" no painel da Diretoria a cada vídeo.
@@ -149,11 +152,11 @@ def validar(spec: dict) -> dict:
             cor(cena["fundo"])
             if not cena.get("duracao"):
                 raise ValueError(f"cena {c}: cena de fundo precisa de \"duracao\"")
-        velocidade = float(cena.get("velocidade", 1.0))
+        velocidade = float(cena.get("velocidade", VELOCIDADE_PADRAO))
         if velocidade > 1.0:
             raise ValueError(f"cena {c}: velocidade {velocidade} acelera o vídeo (nunca acelerar; manual 05 §5)")
         if velocidade < 0.5:
-            raise ValueError(f"cena {c}: velocidade {velocidade} lenta demais (câmera lenta suave: 0,8 a 0,9)")
+            raise ValueError(f"cena {c}: velocidade {velocidade} lenta demais (padrão: 0,75)")
         if not cena.get("saida"):
             raise ValueError(f"cena {c}: falta \"saida\" (MP4 da cena com o motion)")
         elementos = cena.get("elementos") or []
@@ -432,7 +435,7 @@ def renderizar(arquivo: Path, com_previa: bool = False) -> list[dict]:
         if video and not video.is_file():
             raise ValueError(f"cena {c}: vídeo não encontrado: {cena['video']}")
         resultado = aplicar(video, _dentro(base, cena["saida"], "saida"), cena.get("elementos") or [], formato,
-                            cena.get("duracao"), float(cena.get("de", 0)), float(cena.get("velocidade", 1.0)),
+                            cena.get("duracao"), float(cena.get("de", 0)), float(cena.get("velocidade", VELOCIDADE_PADRAO)),
                             float(cena.get("foco", 0.5)), cena.get("fundo"), base, **_ritmo(spec, cena))
         if com_previa:
             fim = max([t["fim_entrada"] for t in resultado["cena"].tempos] or [0.5])

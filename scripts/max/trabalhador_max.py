@@ -77,8 +77,8 @@ DIRETRIZES = {"criador_imagens": ("00", "01", "08", "09", "10", "04", "03"),
 # Ritmo dos vídeos (Thomas, 27/10/2026: explorar a casa com calma; 04/11/2026: "poucos takes, mais lentos" e corte
 # na batida só quando o pedido pedir, porque ritmo rápido vai contra o luxo e o público quer ver os detalhes da casa).
 RITMO_VIDEO = (" VÍDEOS: poucos takes e longos, de 3,5 a 6 s cada (5 a 7 takes num reels de 25 a 30 s; na dúvida, "
-               "um take mais longo em vez de mais um corte). Velocidade natural (1x) ou câmera lenta suave (0,8 a 0,9x) "
-               "nos takes com movimento de câmera; NUNCA acelerar. Cortar na batida da música NÃO é padrão: só quando o "
+               "um take mais longo em vez de mais um corte). Reprodução PADRÃO em 0,75x em todos os takes de vídeo (demonstração aprovada em 04/11/2026: \"ainda está muito "
+               "rápido\"); 1x só se o pedido disser; NUNCA acelerar. Cortar na batida da música NÃO é padrão: só quando o "
                "pedido deste projeto pedir. Página de vídeo num carrossel: pelo menos 3 cenas diferentes da casa, ~4 s "
                "cada, salvo pedido diferente.")
 MOTION = Path(__file__).with_name("motion.py").as_posix()
@@ -108,7 +108,7 @@ def instrucao_motion(agente: str, empresa: str) -> str:
     return (
         "MOTION GRAPHICS (obrigatório em todo vídeo; manual 06 §2): TODA camada de texto, caixa, filete, degradê, selo, "
         "contagem e logo entra animada pelo motion.py, nunca como PNG parado com fade. Descreva as cenas num "
-        "motion.json NA RAIZ desta pasta (clipe de cada cena, \"de\", \"duracao\", \"velocidade\" 0,8 a 1, \"saida\" e "
+        "motion.json NA RAIZ desta pasta (clipe de cada cena, \"de\", \"duracao\", \"velocidade\" 0,75 por padrão, \"saida\" e "
         "os \"elementos\" com posição, estilo e \"entrada\": sobe, revela, desenha, palavra, letras, escala, contagem "
         "ou aparece; cascata e saída suave antes do corte já vêm prontas) e renderize com:\n"
         f'  python "{MOTION}" motion.json --previa\n'
