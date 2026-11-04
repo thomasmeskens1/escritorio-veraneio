@@ -4,8 +4,8 @@ Rotina de segunda criada pelo botão "Agendar tarefa" do Gestor (mecanismo de ro
 "Pauta da semana". No horário, o sistema LÊ o quadro de Social Media do Monday (monday.BOARD; só leitura, nenhum
 outro quadro) e compara, por empresa, as peças da semana com a grade do manual 15. A pauta chega no chat do Gestor:
 o que falta, o que sobra, itens sem Conta ou sem TIPO, entregas vencendo em 48 h e contagens "N NOITES" que não batem
-com a Data Postagem. Sem IA e sem Max: é conta em código. Fase 1: nada é criado, alterado nem enfileirado; o botão
-"Produzir a semana" e a produção à noite dependem da decisão 4 (PC ligado à noite), em aberto.
+com a Data Postagem. Sem IA e sem Max: é conta em código. A pauta em si não cria, altera nem enfileira nada; a fase 2
+(decisões 4 e 5, 04/11/2026) é o botão "Produzir a semana" de cada empresa, em producao_semana.py.
 """
 
 import asyncio
@@ -198,8 +198,9 @@ def montar(empresa: str | None, hoje: date | None = None, quadro: dict | None = 
     if sem_conta:
         partes.append("Itens da semana sem Conta (não contam para nenhuma empresa; defina a Conta no Monday): "
                       + "; ".join(sem_conta))
-    partes.append("Fase 1: só li o quadro; nada foi criado, alterado ou enfileirado no Monday. Para preencher um "
-                  "buraco, peça aqui o planejamento das peças que faltam.")
+    partes.append("Só li o quadro; nada foi criado, alterado ou enfileirado no Monday. Para preencher um buraco, peça "
+                  "aqui o planejamento das peças que faltam. Para produzir as peças à espera dos próximos 7 dias, use "
+                  "\"Produzir a semana\" de cada empresa abaixo (ou escreva \"Produzir a semana da Casa Veraneio\").")
     return "\n\n".join(partes)
 
 

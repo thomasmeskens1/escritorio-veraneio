@@ -306,6 +306,9 @@ def proximas_adiadas() -> list[sqlite3.Row]:
 ESPERAS_FILA = (timedelta(minutes=15), timedelta(minutes=30), timedelta(minutes=60))
 ESPERA_SEM_MODELO = timedelta(minutes=5)  # nenhum modelo chegou a rodar (Max ou local ocupados): não conta tentativa
 PRAZO_FILA = timedelta(hours=24)
+# Só vale para as adiadas (texto sem modelo no ar). A peça na fila do Max (status "producao") e os itens de
+# "Produzir a semana" que esperam a vez (producao_semana.py) não passam por aqui: com o PC desligado, esperam sem
+# prazo até o trabalhador voltar (decisão 4, Thomas, 04/11/2026).
 
 
 def reagendar(tarefa_id: int, rodou_modelo: bool = True) -> bool:
