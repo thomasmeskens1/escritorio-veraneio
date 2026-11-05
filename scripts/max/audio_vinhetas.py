@@ -194,13 +194,16 @@ def trilha(empresa: str) -> tuple[list, float]:
 
 
 def montar(empresa: str, video: Path, saida: Path) -> Path:
-    """Põe a trilha no MP4 da vinheta (vídeo copiado, áudio AAC 256k), do tamanho do vídeo."""
+    """Põe a trilha na vinheta (vídeo copiado), do tamanho do vídeo: AAC 256k no MP4; PCM 24 bits no MOV sem fundo
+    (o de edição)."""
     sinal, reverb = trilha(empresa)
     saida = Path(saida)
     mp3 = salvar(sinal, saida.with_name(saida.stem + "_trilha"), reverb=reverb, cauda=0.0, manter_wav=False)
     from motion_video import achar_ffmpeg
     subprocess.run([achar_ffmpeg() or "ffmpeg", "-y", "-loglevel", "error", "-i", str(video), "-i", str(mp3),
-                    "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-ar", "48000",
+                    "-map", "0:v", "-map", "1:a", "-c:v", "copy",
+                    *(["-c:a", "pcm_s24le"] if saida.suffix.lower() == ".mov" else ["-c:a", "aac", "-b:a", "256k"]),
+                    "-ar", "48000",
                     "-af", "apad", "-shortest", str(saida)], check=True)
     mp3.unlink()
     return saida

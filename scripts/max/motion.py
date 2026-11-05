@@ -457,10 +457,16 @@ def main_vinheta(argumentos: list[str]) -> None:
     args.add_argument("--variante", default="A", type=str.upper, choices=motion_vinheta.motion_opcoes.VARIANTES,
                       help="opção da vinheta: A (aprovada, padrão de produção), B, C ou D (alternativas)")
     args.add_argument("--sem-fundo", action="store_true", help="MOV ProRes 4444 com transparência, para edição")
+    args.add_argument("--com-som", action="store_true",
+                      help="também a versão com a trilha aprovada (assinatura sonora + efeitos): <saida>_com_som")
     opcoes = args.parse_args(argumentos)
     gerar = motion_vinheta.vinheta_sem_fundo if opcoes.sem_fundo else motion_vinheta.vinheta
     r = gerar(opcoes.empresa, opcoes.formato, Path(opcoes.saida), Path.cwd(), opcoes.variante)
     print(f"Vinheta: {r['saida']} ({r['quadros']} quadros em {r['segundos']} s)")
+    if opcoes.com_som:  # as duas saídas, com e sem áudio (Thomas, 05/11/2026)
+        import audio_vinhetas
+        saida = Path(r["saida"])
+        print("Com som:", audio_vinhetas.montar(opcoes.empresa, saida, saida.with_name(f"{saida.stem}_com_som{saida.suffix}")))
 
 
 def main() -> None:
