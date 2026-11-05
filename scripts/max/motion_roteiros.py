@@ -5,7 +5,7 @@ quadro, como lista de camadas. As batidas (início, fim em segundos) ficam em RO
   encolhe e vira pino, o pino gira e vira chave, a casa nasce, a chave dá a volta e gira na porta, a casa acende,
   faíscas, a casa encolhe até um ponto, onda em anel e o logo se forma (pino saindo do desfoque, chave subindo).
 - casa_veraneio (casas de alto padrão para grupos): sol nascendo atrás do mar, casa de praia de alto padrão
-  (vidro, lajes, coqueiro) com piscina (Thomas, 04/11/2026: praia e casa de luxo no lugar de montanhas e chalé), a mala chega balançando, tudo converge num ponto, o pino cai do topo da tela, toca no anel e quica
+  (vidro, lajes, coqueiro) com piscina (Thomas, 04/11/2026: praia e casa de luxo no lugar de montanhas e chalé), um carro chega e freia (05/11/2026: no lugar da mala), tudo converge num ponto, o pino cai do topo da tela, toca no anel e quica
   curto como mola (versão definitiva, Thomas 04/11/2026), e a seta orbital se desenha em volta dele.
 - cv_corporativo (produtora 360° de eventos): calendário com o dia marcado, palco com refletores cruzando os
   feixes, duas taças brindam com faíscas, tudo converge, anel, pino e seta orbital, "CORP." por último.
@@ -227,7 +227,7 @@ def _vero(t: float, p: Palco) -> list:
 
 # "queda" (início, toque): o pino cai do topo enquanto a história converge e toca o centro junto do lampejo, das
 # faíscas e do anel; quica ~0,53 s (motion_opcoes_comum.QUIQUE) e só então a seta se desenha.
-BATIDAS_VERANEIO = {"paisagem": (0.0, 3.25), "chale": (1.2, 3.25), "piscina": (1.45, 3.25), "mala": (1.95, 3.25),
+BATIDAS_VERANEIO = {"paisagem": (0.0, 3.25), "chale": (1.2, 3.25), "piscina": (1.45, 3.25), "carro": (1.95, 3.25),
                     "converge": (2.85, 3.25), "queda": (2.86, 3.28), "surge": (2.86, 3.81), "faiscas": (3.25, 3.8),
                     "anel": (3.27, 4.05), "rastro": (3.84, 4.42), "desliza": (4.42, 4.97), "nome1": (4.59, 5.07),
                     "nome2": (4.69, 5.17)}
@@ -280,15 +280,15 @@ def _veraneio(t: float, p: Palco) -> list:
             camadas.append(_c("piscina", x, y2, icone="piscina", lado=0.85 * s,
                               escala=(0.7 + 0.3 * ease_out_cubic(q)) * esc, esticar=(1.0, 0.62), giro=g,
                               opacidade=ease_out_cubic(q), params={"fase": (t * 0.7) % 1.0}))
-        if t >= 1.95:  # a mala chega voando (desfoque de movimento), pousa no chão e balança até assentar
-            q = trecho(t, 1.95, 2.38)
-            voo = ease_out_cubic(q)
-            mx = cx + 0.66 * s + (p.largura * 0.62) * (1 - voo)
-            my = hy - 0.31 * s - 0.5 * s * math.sin(math.pi * min(1.0, q * 0.9)) * (1 - voo)
-            giro = -32 * (1 - mola(t - 2.3, 1.7, 4.5)) if t > 2.3 else -32.0
-            x, y2, esc, g = _converge(t, *conv, mx, my, cx, cy, 35)
-            camadas.append(_c("mala", x, y2, icone="mala", lado=0.42 * s, pivo=(0.5, 0.2), giro=giro + g,
-                              escala=esc))
+        if t >= 1.95:  # o carro chega pela direita (Thomas, 05/11/2026: no lugar da mala), freia e balança na
+            q = trecho(t, 1.95, 2.42)  # suspensão até assentar; as rodas giram com a distância andada
+            falta = (p.largura * 0.62 + 0.1 * s) * (1 - ease_out_cubic(q))
+            lado = 0.5 * s
+            freio = t - 2.3
+            giro = 5 * math.exp(-5 * freio) * math.sin(2 * math.pi * 1.8 * freio) if freio > 0 else 0.0
+            x, y2, esc, g = _converge(t, *conv, cx + 0.62 * s + falta, hy - 0.012 * s, cx, cy, 35)
+            camadas.append(_c("carro", x, y2, icone="carro", lado=lado, pivo=(0.5, 0.8), giro=giro + g, escala=esc,
+                              params={"roda": (falta / (2 * math.pi * 0.09 * lado) * 5) % 1.0}))
     camadas += lampejo("lampejo", t, 3.2, cx, cy, 0.34 * s, CREME)
     camadas += faiscas("f", t, b["faiscas"][0], 0.55, cx, cy, 9, 0.35 * s, 1.0 * s, 46 * u,
                        [CREME, CARAMELO, CREME], 11)

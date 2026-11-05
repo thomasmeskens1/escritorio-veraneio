@@ -231,6 +231,25 @@ def _mala(p: _Pincel):
         p.disco(x, 0.90, 0.035, CREME)
 
 
+def _carro(p: _Pincel, roda=0.0):
+    """Carro de alto padrão de perfil, de frente para a esquerda (chega à casa de praia): carroceria Caramelo,
+    vidros Creme e rodas com cinco raios (`roda` = fração da volta entre dois raios, para girar andando)."""
+    p.poligono([(0.30, 0.56), (0.45, 0.455), (0.70, 0.455), (0.86, 0.56)], CARAMELO)     # cabine baixa, capô longo
+    p.caixa(0.02, 0.545, 0.98, 0.70, CARAMELO, raio=0.06)                               # carroceria
+    p.poligono([(0.355, 0.555), (0.465, 0.48), (0.585, 0.48), (0.585, 0.555)], CREME)   # vidro da frente
+    p.poligono([(0.61, 0.555), (0.61, 0.48), (0.69, 0.48), (0.80, 0.555)], CREME)       # vidro de trás
+    p.linha([(0.24, 0.615), (0.80, 0.615)], CARAMELO_SOMBRA, 0.01)                     # vinco da lateral
+    p.caixa(0.02, 0.575, 0.10, 0.605, LUZ_QUENTE, raio=0.015)                          # farol
+    p.caixa(0.95, 0.575, 0.98, 0.625, CREME, raio=0.01)                                # lanterna
+    for x in (0.20, 0.79):
+        p.furo(x, 0.71, 0.11)                                                          # caixa de roda
+        p.disco(x, 0.71, 0.09, CARAMELO_SOMBRA)
+        p.arco(x, 0.71, 0.052, 0, 360, CREME, 0.02, pontas=False)
+        for k in range(5):
+            a = math.radians(-72 * roda + 72 * k)
+            p.linha([(x, 0.71), (x + 0.045 * math.cos(a), 0.71 + 0.045 * math.sin(a))], CREME, 0.013)
+
+
 # ---------------------------------------------------------------- Casa Veraneio CORP. (eventos)
 
 def _calendario(p: _Pincel, grade=1.0, marca=1.0):
@@ -312,6 +331,7 @@ def _faisca(p: _Pincel, cor=BRANCO):
 
 DESENHOS = {"lupa": _lupa, "pino_vero": _pino_vero, "chave": _chave, "casa_vero": _casa_vero, "sol": _sol,
             "montanhas": _montanhas, "chale": _chale, "mar": _mar, "casa_praia": _casa_praia, "piscina": _piscina, "mala": _mala,
+            "carro": _carro,
             "calendario": _calendario, "holofote": _holofote, "feixe": _feixe, "palco": _palco, "taca": _taca,
             "brilho": _brilho, "faisca": _faisca}
 # Opções B, C e D da vinheta (Thomas, 04/11/2026): ícones extras em arquivo próprio (limite de 500 linhas).
