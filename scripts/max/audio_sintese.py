@@ -145,6 +145,55 @@ def colchao(freqs: list, dur: float, ataque: float = 0.25, queda: float = 1.2) -
     return som
 
 
+def vibrafone(freq: float, dur: float = 2.2, tremolo: float = 5.0) -> list:
+    """Vibrafone: barra de metal redonda com ataque de baqueta e o tremolo do motor (mais nobre que a marimba)."""
+    corpo = sino_fm(freq, dur, razao=1.0, indice=0.9, queda=dur, queda_indice=0.12, ataque=0.002)
+    brilho = sino_fm(freq * 4, 0.25, razao=1.0, indice=0.0, queda=0.2)
+    return [v * (1 - 0.22 * (1 - math.cos(2 * math.pi * tremolo * k / TAXA)) / 2) + 0.12 * (brilho[k] if k < len(brilho) else 0)
+            for k, v in enumerate(corpo)]
+
+
+def saturar(sinal: list, drive: float = 2.0) -> list:
+    """Saturação suave (válvula): engorda pancadas graves com harmônicos, sem estourar."""
+    return [math.tanh(drive * v) / math.tanh(drive) for v in sinal]
+
+
+def ressoar(excitacao: list, modos: list) -> list:
+    """Síntese modal (som físico): a excitação (pancada, raspão) faz vibrar cada modo (freq Hz, tau s, ganho) do
+    objeto, um ressonador de dois polos por modo. É o que dá o som de metal, vidro e madeira de verdade."""
+    saida = [0.0] * len(excitacao)
+    for freq, tau, ganho in modos:
+        r = math.exp(-1 / (tau * TAXA))
+        c, r2, b = 2 * r * math.cos(2 * math.pi * freq / TAXA), r * r, (1 - r) * ganho
+        y1 = y2 = 0.0
+        for k, x in enumerate(excitacao):
+            y = b * x + c * y1 - r2 * y2
+            y2, y1 = y1, y
+            saida[k] += y
+    return saida
+
+
+def toques(dur: float, eventos: list, semente: int = 9) -> list:
+    """Excitação: rajadas curtíssimas de ruído em (início s, amplitude, largura s); a matéria-prima dos cliques."""
+    rnd = random.Random(semente)
+    sinal = [0.0] * _n(dur)
+    for inicio, amplitude, largura in eventos:
+        i0, n = int(inicio * TAXA), _n(largura)
+        for k in range(min(n, len(sinal) - i0)):
+            sinal[i0 + k] += amplitude * rnd.uniform(-1, 1) * (1 - k / n)
+    return sinal
+
+
+def raspar(dur: float, inicio: float, fim: float, amplitude: float, grao: float = 0.005, semente: int = 10) -> list:
+    """Atrito (chave girando, entrando no cilindro): grãos irregulares e densos entre `inicio` e `fim`."""
+    rnd = random.Random(semente)
+    eventos, t = [], inicio
+    while t < fim:
+        eventos.append((t, amplitude * rnd.uniform(0.3, 1.0), 0.0008))
+        t += grao * rnd.uniform(0.5, 1.5)
+    return toques(dur, eventos, semente)
+
+
 # ---------------------------------------------------------------- reverb e gravação
 
 _PENTES = (1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617)  # Freeverb (atrasos para 44,1 kHz, escalados)
@@ -176,8 +225,10 @@ def _freeverb(sinal: list, sala: float, abafar: float, desvio: int) -> list:
     return saida
 
 
-def salvar(sinal: list, destino: Path, reverb: float = 0.3, sala: float = 0.84, cauda: float = 1.8) -> Path:
-    """Normaliza (pico -1 dBFS), soma o reverb estéreo e grava `destino`.wav (24 bits, 48 kHz) e .mp3 (320k)."""
+def salvar(sinal: list, destino: Path, reverb: float = 0.3, sala: float = 0.84, cauda: float = 1.8,
+           manter_wav: bool = True) -> Path:
+    """Normaliza (pico -1 dBFS), soma o reverb estéreo e grava `destino`.wav (24 bits, 48 kHz) e .mp3 (320k).
+    Sem `manter_wav` (rodadas de aprovação: Thomas, 05/11/2026), fica só o MP3 e devolve o caminho dele."""
     seco = list(sinal) + [0.0] * _n(cauda)
     pico = max(abs(v) for v in seco) or 1.0
     seco = [v / pico for v in seco]
@@ -208,4 +259,7 @@ def salvar(sinal: list, destino: Path, reverb: float = 0.3, sala: float = 0.84, 
     from motion_video import achar_ffmpeg
     subprocess.run([achar_ffmpeg() or "ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-codec:a", "libmp3lame",
                     "-b:a", "320k", str(destino.with_suffix(".mp3"))], check=True)
-    return wav
+    if manter_wav:
+        return wav
+    wav.unlink()
+    return destino.with_suffix(".mp3")

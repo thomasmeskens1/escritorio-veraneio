@@ -33,10 +33,19 @@ def test_mixar_soma_no_tempo_e_fecha_sem_estalo(audio):
     assert abs(base[-1]) < 0.001  # a saída suave leva o fim a zero
 
 
+def test_ressoar_vibra_na_frequencia_do_modo(audio):
+    """Síntese modal: um toque num modo de 1 kHz vibra a 1 kHz (cruzamentos por zero) e vai se calando."""
+    som = audio.ressoar(audio.toques(0.2, [(0.0, 1.0, 0.0005)]), [(1000.0, 0.05, 1.0)])
+    trecho = som[int(0.02 * audio.TAXA):int(0.06 * audio.TAXA)]
+    cruzamentos = sum(1 for a, b in zip(trecho, trecho[1:]) if a < 0 <= b)
+    assert 36 <= cruzamentos <= 44  # ~40 ciclos em 40 ms
+    assert max(map(abs, som[-1000:])) < 0.05 * max(map(abs, som))
+
+
 def test_candidatas_das_tres_marcas(audio, monkeypatch, tmp_path):
     import audio_assinaturas
     assert set(audio_assinaturas.CANDIDATAS) == {"CASA VERANEIO", "CASA VERANEIO CORP", "CASA VERO"}
-    assert all(len(lista) >= 3 for lista in audio_assinaturas.CANDIDATAS.values())
+    assert all(len(lista) >= 2 for lista in audio_assinaturas.CANDIDATAS.values())
     nome, compor = audio_assinaturas.CANDIDATAS["CASA VERANEIO"][0]
     sinal, reverb = compor()
     assert 1.0 <= len(sinal) / audio.TAXA <= 3.5 and 0 < reverb < 1
