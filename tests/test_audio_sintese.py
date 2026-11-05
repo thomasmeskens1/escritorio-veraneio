@@ -42,6 +42,23 @@ def test_ressoar_vibra_na_frequencia_do_modo(audio):
     assert max(map(abs, som[-1000:])) < 0.05 * max(map(abs, som))
 
 
+def test_trilha_das_vinhetas_segue_o_roteiro(audio):
+    """A trilha tem a duração da vinheta, os efeitos caem dentro dela e a assinatura entra no tempo validado."""
+    import audio_vinhetas
+    from motion_roteiros import ROTEIROS
+    assert set(audio_vinhetas.TRILHAS) == set(ROTEIROS)
+    for empresa, montar in audio_vinhetas.TRILHAS.items():
+        _compor, inicio, efeitos = montar()
+        duracao = ROTEIROS[empresa]["duracao"]
+        assert all(0 <= t < duracao and 0 < g <= 0.35 for t, _som, g in efeitos), empresa
+        assert 2.0 < inicio < 3.5, empresa
+    sinal, _ = audio_vinhetas.trilha("casa_vero")
+    assert len(sinal) == int(ROTEIROS["casa_vero"]["duracao"] * audio.TAXA)
+    antes = max(map(abs, sinal[int(2.85 * audio.TAXA):int(2.9 * audio.TAXA)]))
+    clique = max(map(abs, sinal[int(2.91 * audio.TAXA):int(2.95 * audio.TAXA)]))
+    assert clique > 2 * antes  # o clique da chave cai em 2,91 s, no giro
+
+
 def test_candidatas_das_tres_marcas(audio, monkeypatch, tmp_path):
     import audio_assinaturas
     assert set(audio_assinaturas.CANDIDATAS) == {"CASA VERANEIO", "CASA VERANEIO CORP", "CASA VERO"}

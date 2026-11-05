@@ -13,7 +13,7 @@ import random
 import sys
 from pathlib import Path
 
-from audio_sintese import (TAXA, batida, colchao, marimba, mixar, nota, raspar, ressoar, rhodes, salvar, saturar,
+from audio_sintese import (TAXA, batida, clique, colchao, marimba, mixar, nota, raspar, ressoar, rhodes, salvar, saturar,
                            sino_fm, sopro, toques, vibrafone)
 
 # Modos (freq Hz, tau s, ganho) medidos de objetos típicos: chave de latão pequena, trinco de aço, porta de madeira,
@@ -62,6 +62,16 @@ def _acorde_vero(s: list, inicio: float) -> list:
     for n in ("A3", "E4", "C#5"):
         mixar(s, rhodes(nota(n), 2.2), inicio, 0.33)
     return s
+
+
+def vero_chave_na_porta():
+    """APROVADA (rodada 1, testada na vinheta em 05/11/2026): "clic-clac, dum": a chave gira na fechadura (dois
+    cliques) e a casa responde com um acorde quente de piano."""
+    s = clique(3000, 0.04, 8, semente=4)
+    mixar(s, clique(1700, 0.05, 7, semente=5), 0.09, 0.9)
+    for n in ("A3", "E4", "C#5"):
+        mixar(s, rhodes(nota(n), 2.2), 0.26, 0.4)
+    return s, 0.3
 
 
 def vero_chave_com_chaveiro():
