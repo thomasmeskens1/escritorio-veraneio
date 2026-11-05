@@ -52,6 +52,11 @@ def test_trilha_das_vinhetas_segue_o_roteiro(audio):
         duracao = ROTEIROS[empresa]["duracao"]
         assert all(0 <= t < duracao and 0 < g <= 0.35 for t, _som, g in efeitos), empresa
         assert 2.0 < inicio < 3.5, empresa
+        mixados = audio_vinhetas.efeitos_antes_da_assinatura(empresa)
+        assert mixados and all(t + len(som) / audio.TAXA <= inicio for t, som, _g in mixados), empresa
+    sinal, _ = audio_vinhetas.trilha("cv_corporativo")
+    inicio = audio_vinhetas.TRILHAS["cv_corporativo"]()[1]
+    assert max(map(abs, sinal[int((inicio - 0.12) * audio.TAXA):int(inicio * audio.TAXA)])) < 0.01  # o ar das taças saiu
     sinal, _ = audio_vinhetas.trilha("casa_vero")
     assert len(sinal) == int(ROTEIROS["casa_vero"]["duracao"] * audio.TAXA)
     antes = max(map(abs, sinal[int(2.85 * audio.TAXA):int(2.9 * audio.TAXA)]))

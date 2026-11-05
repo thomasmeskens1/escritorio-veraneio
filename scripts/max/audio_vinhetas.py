@@ -2,7 +2,9 @@
 mais pequenos efeitos a cada troca de quadro ("senti falta de pequenos efeitos conforme os frames trocam").
 
 Os tempos vêm das BATIDAS de motion_roteiros (as mesmas que movem a animação), então som e imagem andam juntos se
-o roteiro mudar. Os efeitos ficam bem abaixo da assinatura (picos de 0,1 a 0,35 contra ~1,0): são acabamento.
+o roteiro mudar. Os efeitos ficam bem abaixo da assinatura (picos de 0,1 a 0,35 contra ~1,0): são acabamento, e
+só até a assinatura começar; dali em diante ela soa sozinha (efeitos depois dela ficam no roteiro, mas fora da
+mixagem: `efeitos_antes_da_assinatura`).
 
 Uso: python audio_vinhetas.py <empresa> <vinheta.mp4> <saida.mp4>   (ou só <empresa> <saida.mp3> para a trilha)
 """
@@ -173,12 +175,19 @@ def _vero():
 TRILHAS = {"casa_veraneio": _veraneio, "cv_corporativo": _corp, "casa_vero": _vero}
 
 
+def efeitos_antes_da_assinatura(empresa: str) -> list:
+    """Só os efeitos que terminam antes de a assinatura começar: quando o som característico assume, os efeitos
+    saem (Thomas, 05/11/2026: "a sobreposição não ficou agradável e poluiu o áudio")."""
+    _compor, inicio, efeitos = TRILHAS[empresa]()
+    return [(t, som, ganho) for t, som, ganho in efeitos if t + len(som) / TAXA <= inicio]
+
+
 def trilha(empresa: str) -> tuple[list, float]:
     """A trilha mono da vinheta inteira (duração do roteiro) e o reverb da assinatura."""
-    compor, inicio, efeitos = TRILHAS[empresa]()
+    compor, inicio, _efeitos = TRILHAS[empresa]()
     assinatura, reverb = compor()
     s = [0.0] * int(ROTEIROS[empresa]["duracao"] * TAXA)
-    for t, som, ganho in efeitos:
+    for t, som, ganho in efeitos_antes_da_assinatura(empresa):
         mixar(s, som, t, ganho)
     mixar(s, _pico(assinatura, 1.0), inicio)
     return s[:int(ROTEIROS[empresa]["duracao"] * TAXA)], reverb
