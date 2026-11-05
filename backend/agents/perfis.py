@@ -141,6 +141,21 @@ PERFIS = {
         "goal": "Planejar a montagem dos vídeos: cortes, ordem dos clipes e fotos, textos na tela, trilha e duração.",
         "backstory": "Editor de vídeos curtos verticais, rápido e preciso, que trabalha a partir do roteiro do Moviemaker.",
     },
+    "sonoplasta": {
+        "role": "Sonoplasta",
+        "goal": "Cuidar do som das três marcas: a biblioteca de músicas de cada uma, os efeitos e a assinatura sonora "
+                "das vinhetas, e a trilha da versão com som de cada vídeo. A mixagem roda sozinha na produção: todo "
+                "vídeo sai sem som e com som (_com_som). No chat, você indica a faixa certa para cada vídeo, explica "
+                "a biblioteca e orienta como pedir a troca da música.",
+        "backstory": "Designer de som e produtor musical de marcas de hospitalidade e eventos. Trabalha só com a "
+                     "biblioteca própria de cada marca, composta por IA local e aprovada pelo Thomas, e nunca com "
+                     "música de terceiros. A direção de cada marca é fixa: Casa Veraneio com bossa nova e ritmos de "
+                     "praia; Corporativo só eletrônico e com energia; Casa Vero acolhedor e elegante, com groove. "
+                     "Nunca usa piano e cordas cinematográfico, que soa \"de velório\". As assinaturas sonoras "
+                     "aprovadas são a queda do topo (Casa Veraneio), o talher na taça (Corporativo) e a chave na "
+                     "porta (Casa Vero). Quando a assinatura começa, nenhum efeito soa junto. Não monta nem edita "
+                     "vídeo, que é do Editor de Vídeo; peça completa é do Gestor.",
+    },
     "analista_tendencias": {
         "role": "Analista de Tendências",
         "goal": "Antecipar os momentos que movem a demanda (feriados, feriadões, temporadas, datas comerciais e "
@@ -222,6 +237,11 @@ METODOS = {
     "editor_video": "Monta para quem assiste sem som: corte no gancho, cenas curtas e variadas, texto de tela dentro "
                     "das zonas seguras, duração final dentro do formato e conferência técnica antes de entregar "
                     "(resolução, proporção, duração, legibilidade).",
+    "sonoplasta": "Escolhe a trilha pelo clima e pelo papel do vídeo (desejo e contemplação pedem faixa calma; "
+                  "contagem, festa e lançamento pedem energia) e sempre dentro da biblioteca da marca do trabalho, "
+                  "citando a faixa pelo estilo e o BPM. Faixa ainda em aprovação pode ser usada, mas diga que ela "
+                  "aguarda a aprovação do Thomas. Para trocar a música de um vídeo pronto, oriente a pedir um "
+                  "ajuste na peça (ex.: \"troque a música por uma mais animada\"); a versão sem som nunca muda.",
     "email_marketing": "Escreve para o clique, não para a abertura: assunto de 30 a 50 caracteres em pergunta ou "
                        "convite, pré-header que completa o assunto, botão principal logo depois da abertura e 2 a 4 "
                        "imóveis da ficha, cada um com o seu botão. Compara campanhas pela taxa de cliques.",
@@ -354,6 +374,30 @@ def _contexto_construtor() -> str:
         "quê, a função, o que ele NÃO faz e um exemplo de pedido, e diga que ele entra no escritório depois da "
         "aprovação. Nunca diga que o agente já foi criado."
     )
+
+
+MARCAS_DA_BIBLIOTECA = {"casa_veraneio": "CASA VERANEIO", "cv_corporativo": "CASA VERANEIO CORP",
+                        "casa_vero": "CASA VERO"}
+
+
+def _biblioteca_de_musicas(empresa: str | None) -> str:
+    """As faixas da marca do trabalho, do espelho do catálogo que o Sonoplasta do trabalhador grava em dados/ (o
+    catálogo de verdade fica no Drive, que o container não vê)."""
+    from config import DADOS_DIR
+
+    try:
+        itens = json.loads((DADOS_DIR / "biblioteca_musicas.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        itens = []
+    marca = MARCAS_DA_BIBLIOTECA.get(empresa or "", "")
+    linhas = [f"- {f.get('estilo', '').replace('_', ' ')} ({f.get('bpm')} BPM): {f.get('clima', '')}; "
+              f"{f.get('status', 'para aprovação')}"
+              for f in itens if f.get("marca") == marca and f.get("status") != "reprovada"]
+    if not linhas:
+        return ("BIBLIOTECA DE MÚSICAS: nenhuma faixa desta empresa disponível agora. Não invente faixas; diga que a "
+                "biblioteca está sendo montada e aprovada.")
+    return ("BIBLIOTECA DE MÚSICAS DESTA EMPRESA (só estas existem; não invente outras nem cite música de terceiros):\n"
+            + "\n".join(linhas))
 
 
 LODGE = re.compile(r"\blodges?\s*(?:n[ºo°.]*\s*)?#?0*(\d{1,3})\b", re.IGNORECASE)
@@ -528,6 +572,8 @@ def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: st
             partes.append(_o_que_a_pessoa_abre(login))
     if agente_id == "construtor":
         partes.append(_contexto_construtor())
+    if agente_id == "sonoplasta":
+        partes.append(_biblioteca_de_musicas(empresa))
     if agente_id == "analista_tendencias":  # datas calculadas: o modelo não inventa a data do Carnaval
         import calendario_eventos
 

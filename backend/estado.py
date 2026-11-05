@@ -122,6 +122,13 @@ ANDARES: dict[str, dict[str, Agente]] = {
                descricao="Monta os vídeos finais com as fotos e clipes reais, textos e transições.",
                exemplo="Monte o reels do roteiro de verão com os vídeos da pasta da piscina.",
                aparencia=_ap("#8d5524", "cacheado", "#1b1b1b", "moletom", "#264653", "#111111", "bone")),
+        Agente(id="sonoplasta", nome="Sonoplasta", funcao="Música, efeitos e assinatura sonora dos vídeos",
+               setor="video",
+               descricao="Cuida do som das três marcas: a biblioteca de músicas, os efeitos e a assinatura sonora "
+                         "das vinhetas. Todo vídeo sai em duas versões, sem som e com som, com a trilha que ele "
+                         "escolhe pelo clima do pedido.",
+               exemplo="Qual música da biblioteca combina com um reels de pôr do sol do Lodge 20?",
+               aparencia=_ap("#a0522d", "longo", "#2b1d0e", "camiseta", "#e76f51", "#1b263b", "fone")),
         Agente(id="gestor_trafego", nome="Gestor de Tráfego", funcao="Mídia paga e campanhas", setor="performance",
                descricao="Planeja campanhas pagas: público, orçamento, canais e metas.",
                exemplo="Planeje uma campanha de R$ 2.000 para o feriado.",

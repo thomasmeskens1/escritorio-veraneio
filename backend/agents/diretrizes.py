@@ -17,7 +17,7 @@ import config
 
 TODOS = "*"
 MARKETING = ("gestor", "designer", "criador_imagens", "copywriter", "social_media", "email_marketing", "moviemaker",
-             "editor_video", "gestor_trafego", "analista_metricas", "analista_tendencias")
+             "editor_video", "sonoplasta", "gestor_trafego", "analista_metricas", "analista_tendencias")
 VISUAL = ("gestor", "designer", "criador_imagens", "moviemaker", "editor_video")
 TEXTO = ("gestor", "copywriter", "social_media", "email_marketing", "moviemaker", "gestor_trafego")
 PRODUZEM = ("gestor", "designer", "criador_imagens", "copywriter", "moviemaker", "editor_video")
@@ -36,9 +36,9 @@ SECOES = {
            "4": ("gestor", "social_media"), "5": ("social_media",), "6": ("gestor_trafego", "analista_metricas"),
            "7": ("social_media", "designer"), "8": ("social_media",), "9": ESTRATEGIA,
            "10": ("gestor", "social_media", "copywriter", "designer", "analista_metricas")},  # método Instagram
-    "05": {"1": ("moviemaker",), "2": ("moviemaker", "editor_video"), "3": ("moviemaker",),
+    "05": {"1": ("moviemaker",), "2": ("moviemaker", "editor_video", "sonoplasta"), "3": ("moviemaker",),
            "4": ("moviemaker", "editor_video"), "5": ("moviemaker", "editor_video"), "6": ("moviemaker",),
-           "7": ("moviemaker", "editor_video"), "8": ("moviemaker", "editor_video")},
+           "7": ("moviemaker", "editor_video"), "8": ("moviemaker", "editor_video", "sonoplasta")},
     "08": {"1": TODOS, "2": TODOS, "3": TODOS, "4": ("designer", "social_media"), "5": TODOS},
     "09": {"1": TODOS, "2": ("gestor", "social_media"), "3": ("gestor", "social_media"),
            "4": ("gestor", "social_media")},

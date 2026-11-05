@@ -27,7 +27,8 @@ const MODELOS_PEDIDO = [
       { nome: 'momento', rotulo: 'Momento', tipo: 'opcoes', opcoes: ['Réveillon', 'Carnaval', 'Feriado'], obrigatorio: true },
       { nome: 'data', rotulo: 'Data de postagem (a contagem depende dela)', tipo: 'data', obrigatorio: true },
       { nome: 'lodges', rotulo: 'Lodges pelo número', tipo: 'texto' },
-      { nome: 'musica', rotulo: 'Música', tipo: 'opcoes', opcoes: ['Sem música', 'Com música'] },
+      // Todo vídeo sai sem som e com som (Sonoplasta, 05/11/2026): aqui só o clima da trilha da versão com som.
+      { nome: 'musica', rotulo: 'Clima da música (o vídeo sai com e sem som)', tipo: 'opcoes', opcoes: ['O Sonoplasta escolhe', 'Mais calma', 'Mais animada'] },
       { nome: 'valores', rotulo: 'Valores na arte', tipo: 'opcoes', opcoes: VALORES_ARTE },
       REFERENCIAS,
     ],

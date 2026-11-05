@@ -35,6 +35,7 @@ import planilha_lodges
 import redes_empresas
 import site_casaveraneio
 import sites_empresas
+import sonoplasta
 import trabalhos_max
 from comum import DRIVE, log
 
@@ -122,7 +123,14 @@ def instrucao_motion(agente: str, empresa: str) -> str:
         "(fundo da marca: Verde; Creme na Vero; não acelere nem corte o fim). Se ainda não houver vinheta.mp4 nesta pasta, no formato do vídeo, "
         "gere-a com:\n"
         f'  python "{MOTION}" vinheta --empresa {empresa} --formato 1080x1920 --saida vinheta.mp4\n'
-        "(formatos 1080x1920, 1080x1350 e 1920x1080). Nunca use a vinheta ou o logo de outra empresa.")
+        "(formatos 1080x1920, 1080x1350 e 1920x1080). Nunca use a vinheta ou o logo de outra empresa.\n"
+        "ÁUDIO (Sonoplasta, 05/11/2026): entregue o vídeo SEM música (o áudio silencioso das cenas, ou o som original "
+        "do clipe quando o pedido quiser fala ou som ambiente). Depois da entrega, o Sonoplasta gera sozinho a versão "
+        f"<nome>{sonoplasta.SUFIXO}.mp4 com a trilha da biblioteca da marca e a assinatura sonora na vinheta: não "
+        f"coloque música nem crie arquivos {sonoplasta.SUFIXO}. Se o vídeo tem a vinheta, grave na RAIZ desta pasta "
+        f"(fora de {PASTA_FINAL}/) o {sonoplasta.MARCACOES} com o segundo em que ela começa no vídeo final, ex.: "
+        '{"reels_lodge_20.mp4": {"vinheta_em": 22.4}}. Num ajuste que só pede outra música, não refaça o vídeo: '
+        "diga isso no resumo (o Sonoplasta troca a trilha).")
 
 
 def ffmpeg_dir() -> str | None:
@@ -636,6 +644,21 @@ def finais_novos(rascunho: Path, antes: dict, ambiente: dict) -> tuple[list[str]
     return [n for n in novos if n not in estragados], estragados
 
 
+def versoes_com_som(producao: dict, rascunho: Path, novos: list[str]) -> tuple[list[str], str]:
+    """Sonoplasta (Thomas, 05/11/2026): cada vídeo novo ganha a versão _com_som ao lado da sem som. Nunca derruba a
+    entrega: sem trilha, o vídeo sem som segue e o resumo avisa."""
+    try:
+        gerados, linha = sonoplasta.na_producao(rascunho, rascunho / PASTA_FINAL, novos,
+                                                producao.get("empresa") or "casa_veraneio", producao["texto"],
+                                                ajuste=bool(producao.get("base")))
+    except Exception as erro:  # noqa: BLE001
+        log(f"   Sonoplasta falhou ({erro})")
+        return [], f"⚠ Sonoplasta: versão com som não gerada ({erro}). O vídeo sem som segue normal."
+    if gerados:
+        log(f"   Sonoplasta: {', '.join(gerados)}")
+    return gerados, linha
+
+
 def enviar_bloqueios(producao: dict, rascunho: Path) -> None:
     """Tentativas barradas pela caixa de areia nesta peça vão ao painel da Diretoria (brainstorm de 31/10/2026,
     despachante-27). Por enquanto só avisa: não segura a entrega."""
@@ -690,7 +713,7 @@ def produzir(producao: dict) -> None:
         referencias = baixar_referencias(producao, rascunho, faltaram)
         antes = entregaveis(rascunho)
         comum.ler_bloqueios(rascunho)  # sobra de uma rodada anterior não conta nesta
-        resumo, novos, aviso = "", [], ""
+        resumo, novos, aviso, linha_som = "", [], "", ""
         for tentativa in (1, 2):
             inicio = time.monotonic()
             try:
@@ -701,6 +724,9 @@ def produzir(producao: dict) -> None:
                     raise
                 raise SemArquivo(f"{resumo}\n\n(A segunda tentativa também parou: {parada})") from parada
             novos, estragados = finais_novos(rascunho, antes, ambiente)
+            if producao["agente"] == "editor_video":  # dentro da rodada: "só troque a música" já sai com arquivo
+                com_som, linha_som = versoes_com_som(producao, rascunho, novos)
+                novos = sorted({*novos, *com_som})
             if estragados:
                 resumo = f"{resumo}\n\n⚠ Ficaram de fora por estarem incompletos ou corrompidos: {', '.join(estragados)}."
             if entrega_aceita(producao, novos) or (producao.get("entrega") == "texto" and resumo.strip()):
@@ -715,6 +741,8 @@ def produzir(producao: dict) -> None:
             if producao.get("entrega") != "texto" or not resumo.strip():
                 raise SemArquivo(resumo)
             so_texto = True  # pedido só de texto: o texto do Max é a entrega
+        if linha_som:
+            resumo = f"{resumo}\n\n{linha_som}"
         if faltaram:
             resumo = (f"{resumo}\n\n⚠ Referência(s) do Monday que não chegaram ao Max: {'; '.join(faltaram)}. Se "
                       "eram necessárias, envie o arquivo por uma pasta do Drive e peça um ajuste.")

@@ -31,6 +31,7 @@ const ANDARES = {
       { id: 'analista_tendencias', nome: 'Analista de Tendências', setor: 'reuniao', estacao: 'nenhuma' },
       { id: 'moviemaker', nome: 'Moviemaker', setor: 'video', estacao: 'video' },
       { id: 'editor_video', nome: 'Editor de Vídeo', setor: 'video', estacao: 'edicao' },
+      { id: 'sonoplasta', nome: 'Sonoplasta', setor: 'video', estacao: 'som' },
       { id: 'gestor_trafego', nome: 'Gestor de Tráfego', setor: 'performance', estacao: 'graficos' },
       { id: 'analista_metricas', nome: 'Analista de Métricas', setor: 'performance', estacao: 'metricas' },
     ],

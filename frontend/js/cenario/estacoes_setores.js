@@ -86,6 +86,31 @@ Object.assign(ESTACOES, {
     },
   },
 
+  // Sonoplasta: mesa de som com faders, monitor com a forma de onda e caixas de som.
+  som: {
+    atras: cadeiraAtras(0xe76f51),
+    frente(g, x, y) {
+      const z = mesaPadrao(g, x, y, 0x2b2d42);
+      desenharMonitor(g, x + 0.56, x + 0.9, y + 0.5, z, 0x111317, (gg, x0, x1, ty, z0, z1) => {
+        gg.fillStyle(0x69db7c);
+        const meio = (z0 + z1) / 2;
+        for (let i = 0; i < 9; i += 1) {
+          const a = x0 + 0.03 + i * ((x1 - x0 - 0.06) / 9), h = [2, 4, 6, 3, 7, 5, 2, 4, 3][i];
+          gg.fillPoints([pIso(a, ty, meio - h), pIso(a + 0.015, ty, meio - h), pIso(a + 0.015, ty, meio + h), pIso(a, ty, meio + h)], true);
+        }
+      });
+      caixaIso(g, x + 0.46, y + 0.72, x + 0.82, y + 0.92, z, z + 2, 0x212529, false);
+      [0.5, 0.57, 0.64, 0.71, 0.78].forEach((fx, i) => {
+        const fy = y + 0.76 + ((i * 3) % 4) * 0.03;
+        caixaIso(g, x + fx, fy, x + fx + 0.03, fy + 0.03, z + 2, z + 4, 0xe9c46a, false);
+      });
+      caixaIso(g, x + 0.92, y + 0.52, x + 0.99, y + 0.62, z, z + 16, 0x111111, false);
+      const cone = pIso(x + 0.955, y + 0.62, z + 8);
+      g.fillStyle(0x495057);
+      g.fillEllipse(cone.x, cone.y, 4, 4);
+    },
+  },
+
   // Analista de Métricas: painel com pizza e linha de tendência.
   metricas: {
     atras: cadeiraAtras(0x90be6d),

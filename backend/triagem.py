@@ -37,6 +37,8 @@ EXTRA = {
     "criador_imagens": r"arte final|png|capas?|thumbnails?|banners?|montar? (a |uma )?(arte|imagem)",
     "moviemaker": r"roteiros?|storyboard|capta[cç][aã]o|plano de grava[cç][aã]o",
     "editor_video": r"v[ií]deo final|mont\w+ (o |um )?v[ií]deo|mp4",
+    "sonoplasta": r"m[uú]sicas?|trilhas? sonoras?|sonoplast\w*|efeitos? sonoros?|assinatura sonora|"
+                  r"biblioteca de m[uú]sicas|vinheta sonora",
     "copywriter": r"escrev\w+|reda[cç][aã]o|tom de voz",
     "social_media": r"grade|agend\w+ (o |os )?posts?|frequ[eê]ncia de posts?",
     "gestor_trafego": r"meta ads|google ads|or[cç]amento de m[ií]dia|impulsion\w+|tr[aá]fego pago",
