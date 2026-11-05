@@ -3,7 +3,8 @@ Thomas aprovar (Sonoplasta, passo 3; 05/11/2026). Roda com o Python do ACE-Step,
 usável), ~4,5 min por 30 s de música no processador.
 
 Direção aprovada: Casa Veraneio parte da bossa (aprovada) e explora outros ritmos de praia; Corporativo só
-eletrônico, com energia; NUNCA piano + cordas cinematográfico (a amostra "de velório" do Corp). Casa Vero: a definir.
+eletrônico, com energia; Casa Vero acolhedor e elegante, com groove (nada monótono); NUNCA piano + cordas
+cinematográfico (a amostra "de velório" do Corp).
 
 Cada faixa sai em MP3 na pasta de aprovação e entra em `catalogo.json` (marca, estilo, BPM, clima, arquivo,
 status), que o Sonoplasta vai ler para escolher a trilha de cada vídeo.
@@ -59,6 +60,27 @@ FAIXAS = {
          "118 bpm, no vocals"),
         ("future_house", 124, "virada, energia alta",
          "instrumental future house, bouncy metallic bass, bright plucks, energetic build and drop, 124 bpm"),
+    ],
+    # Acolhedor e elegante, mas com groove e movimento: nada monótono nem "de velório" (Thomas, 05/11/2026).
+    "CASA VERO": [
+        ("lofi_groove", 90, "casa aconchegante, leve",
+         "instrumental lofi hip hop, groovy boom bap drums, warm rhodes chords, mellow bass, vinyl texture, cozy "
+         "home, uplifting, head nodding, 90 bpm"),
+        ("violao_acustico_quente", 105, "manhã de sol em casa, acolhedor",
+         "instrumental upbeat acoustic folk pop, warm strummed acoustic guitar, hand claps, light percussion, "
+         "glockenspiel, bright and welcoming, feel good, 105 bpm"),
+        ("neo_soul_groove", 95, "elegante, caloroso",
+         "instrumental neo soul, groovy drums, warm electric bass, rhodes, clean electric guitar licks, elegant, "
+         "warm, smooth groove, 95 bpm"),
+        ("jazz_hop", 88, "sofisticado, descontraído",
+         "instrumental jazz hop, swinging drums, upright bass, muted trumpet, warm keys, sophisticated, relaxed but "
+         "lively, 88 bpm"),
+        ("acoustic_funk", 108, "nova casa, alegria",
+         "instrumental light acoustic funk, funky acoustic guitar, slap bass, tight drums, shaker, joyful, new "
+         "home, positive energy, 108 bpm"),
+        ("chill_pop_elegante", 100, "imóvel exclusivo, moderno",
+         "instrumental chill pop, soft punchy drums, warm synth bass, airy plucks, electric piano, modern and "
+         "elegant, optimistic, 100 bpm, no vocals"),
     ],
 }
 
