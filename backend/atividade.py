@@ -46,6 +46,25 @@ async def liberar(agente_id: str) -> None:
         await transmitir_estado()
 
 
+def _tem_tarefa_ativa(agente_id: str) -> bool:
+    return tarefas._db().execute(
+        "SELECT 1 FROM tarefas WHERE status IN ('executando', 'adiada', 'producao', 'produzindo') "
+        "AND agente IN (?, 'gestor') LIMIT 1", (agente_id,)).fetchone() is not None
+
+
+async def destravar_se_ocioso(agente_id: str) -> bool:
+    """Agente "trabalhando" sem nenhuma tarefa ativa no banco (dele ou de um projeto do Gestor, que ocupa outros
+    agentes) é ocupação que vazou: zera e libera. Caso real (06–10/11/2026): o Gestor ficou preso em "trabalhando"
+    por 4 dias e recusava todo pedido com "já está trabalhando em outra tarefa"."""
+    agente = _agente(agente_id)
+    if not agente or _tem_tarefa_ativa(agente_id):
+        return False
+    _ocupacao[agente_id] = 0
+    agente.status = Status.disponivel
+    await transmitir_estado()
+    return True
+
+
 def _no_loop(corrotina) -> None:
     if _loop:
         asyncio.run_coroutine_threadsafe(corrotina, _loop)

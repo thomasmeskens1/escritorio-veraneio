@@ -583,11 +583,13 @@ async def _enviar_ao_gestor_unico(item_id: int, usuario: int | None) -> None:
     gestor = buscar_agente("marketing", "gestor")
     if not gestor:
         return
+    import atividade
+
     if gestor.status == Status.trabalhando or _vez_do_gestor.locked():
         await _seguro(mudar_status, item_id, NA_FILA)
     async with _vez_do_gestor:  # um item por vez: a checagem do Gestor e a criação da tarefa juntas
         for _ in range(ESPERA_MAXIMA_S // ESPERA_GESTOR_S):  # espera o Gestor terminar o que está fazendo
-            if gestor.status != Status.trabalhando:
+            if gestor.status != Status.trabalhando or await atividade.destravar_se_ocioso(gestor.id):
                 break
             await asyncio.sleep(ESPERA_GESTOR_S)
         await _seguro(mudar_status, item_id, EM_PRODUCAO)

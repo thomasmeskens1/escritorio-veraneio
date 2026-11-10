@@ -527,7 +527,8 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
             agente = especialista
     # Erros e avisos imediatos ficam no chat onde o usuário escreveu (alvo não muda).
     # Produção (Criador de Imagens, Editor de Vídeo) tem fila: ocupado não impede pedir outra peça ou ajuste.
-    if agente.status == Status.trabalhando and agente.id not in AGENTES_PRODUCAO:
+    if agente.status == Status.trabalhando and agente.id not in AGENTES_PRODUCAO \
+            and not await atividade.destravar_se_ocioso(agente.id):
         return await erro(f"{agente.nome} já está trabalhando em outra tarefa.", **alvo)
     if not orquestrador.ha_modelo_disponivel():
         return await erro("Nenhum modelo de IA configurado no servidor.", **alvo)
