@@ -27,19 +27,26 @@ const rotuloObservacao = (tipo) => ({ elogio: '👍 Elogio', aprendizado: '🧠 
 
 // Pergunta da semana (backend/cerebro_lacunas.py): a resposta do Thomas vira conhecimento ensinado na empresa da
 // pergunta; "Fora do alcance" tira da lista sem ensinar nada.
+// Devolve '' quando salvou, ou o motivo (a janela fica aberta e mostra; antes ela fechava e o erro sumia —
+// teste real de 10/11/2026: "Ensinar" com a resposta vazia parecia ter funcionado).
 async function responderPergunta(o, corpoPedido) {
   const { andar, agente } = chatAberto || {};
+  let falha = '';
   try {
     const resposta = await fetch(`/api/cerebro/lacunas/${o.id}/responder`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${sessao.token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(corpoPedido),
     });
-    if (!resposta.ok) throw new Error((await resposta.json().catch(() => ({}))).detail || resposta.status);
+    if (!resposta.ok) {
+      const detalhe = (await resposta.json().catch(() => ({}))).detail;
+      throw new Error(Array.isArray(detalhe) ? detalhe.map((d) => d.msg).join('; ') : detalhe || resposta.status);
+    }
   } catch (erro) {
-    correcoes.erro = `Não foi possível salvar: ${erro.message}`;
+    falha = `Não foi possível salvar: ${erro.message}`;
   }
   if (andar) carregarCorrecoes(andar, agente);
+  return falha;
 }
 
 async function decidirCorrecao(caminho, corpo) {
@@ -199,23 +206,33 @@ function abrirPergunta(o, fundo, janela, barra, corpo) {
   campo.id = `pergunta-resposta-${o.id}`;
   rotulo.htmlFor = campo.id;
   campo.rows = 4;
+  campo.placeholder = 'Escreva aqui a informação que falta (ex.: o que o imóvel tem de wellness).';
+  const aviso = novoEl('p', 'usuarios-nota erro');
+  aviso.hidden = true;
   const acoes = novoEl('div', 'usuario-acoes');
   const botao = (texto, classe, acao) => {
     const b = novoEl('button', classe, texto);
     b.type = 'button';
     b.addEventListener('click', async () => {
       acoes.querySelectorAll('button').forEach((x) => { x.disabled = true; });
-      await acao();
-      fecharFormularioPopup();
+      const falha = await acao();
+      if (!falha) return fecharFormularioPopup();
+      aviso.textContent = falha;
+      aviso.hidden = false;
+      acoes.querySelectorAll('button').forEach((x) => { x.disabled = false; });
     });
     return b;
   };
+  const ensinar = () => (campo.value.trim().length < 3
+    ? Promise.resolve('Escreva a resposta que o Cérebro deve aprender antes de ensinar.')
+    : responderPergunta(o, { resposta: campo.value }));
+  const descartar = async () => ((await decidirCorrecao(`${o.id}/descartar`)) ? '' : correcoes.erro || 'Não foi possível salvar.');
   acoes.append(
-    botao('Ensinar ao Cérebro', 'botao-primario', () => responderPergunta(o, { resposta: campo.value })),
+    botao('Ensinar ao Cérebro', 'botao-primario', ensinar),
     botao('Fora do alcance', 'botao-secundario', () => responderPergunta(o, { fora_do_alcance: true })),
-    botao('Descartar', 'botao-secundario botao-perigo', () => decidirCorrecao(`${o.id}/descartar`)),
+    botao('Descartar', 'botao-secundario botao-perigo', descartar),
   );
-  corpo.append(rotulo, campo, acoes);
+  corpo.append(rotulo, campo, aviso, acoes);
   janela.append(barra, corpo);
   fundo.append(janela);
   fundo.addEventListener('click', (e) => { if (e.target === fundo) fecharFormularioPopup(); });
