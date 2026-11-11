@@ -183,13 +183,16 @@ function abrirCorrecao(o) {
   };
   acoes.append(
     botao(`Aprovar para o ${o.agente_nome}`, 'botao-primario',
-      decidir(`${o.id}/aprovar`, () => ({ regra: regra.value, escopo: 'agente', todas_as_empresas: caixaTodas.checked }))),
+      decidir(`${o.id}/aprovar`, () => ({ regra: regra.value, escopo: 'agente', todas_as_empresas: caixaTodas.checked,
+        substituir: Number(regra.dataset.substituir) || null }))),
     botao('Aprovar para o Cérebro (todos os agentes)', 'botao-secundario',
-      decidir(`${o.id}/aprovar`, () => ({ regra: regra.value, escopo: 'todos', todas_as_empresas: caixaTodas.checked }))),
+      decidir(`${o.id}/aprovar`, () => ({ regra: regra.value, escopo: 'todos', todas_as_empresas: caixaTodas.checked,
+        substituir: Number(regra.dataset.substituir) || null }))),
     botao('Descartar', 'botao-secundario botao-perigo', decidir(`${o.id}/descartar`)),
   );
   if (o.tipo === 'elogio') acoes.append(botaoGuardarModelo(o.id)); // texto inteiro como modelo (js/referencias.js)
   corpo.append(rotulo, regra, todas, aviso, acoes);
+  if (typeof avisoRegrasParecidas === 'function') avisoRegrasParecidas(o, regra, todas); // js/regras_parecidas.js
   janela.append(barra, corpo);
   fundo.append(janela);
   fundo.addEventListener('click', (e) => { if (e.target === fundo) fecharFormularioPopup(); });

@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 import atividade
 import cerebro_base as base
 import correcoes
+import sinais
 import tarefas
 from auth import validar_token
 
@@ -53,13 +54,16 @@ def _trechos_usados(tarefa_id: int) -> list[int]:
 def avaliar(linha, usuario: str, valor: int, comentario: str = "") -> int:
     """Registra (ou troca, ou retira com 0) o voto; devolve quantos trechos do Cérebro foram ajustados."""
     anterior = de(linha["id"])
+    em = tarefas._agora()
     with _db() as db:
         if valor:
             db.execute("INSERT INTO avaliacoes VALUES (?, ?, ?, ?, ?) ON CONFLICT(tarefa_id) DO UPDATE SET "
                        "usuario = excluded.usuario, valor = excluded.valor, comentario = excluded.comentario, "
-                       "em = excluded.em", (linha["id"], usuario, valor, comentario or None, tarefas._agora()))
+                       "em = excluded.em", (linha["id"], usuario, valor, comentario or None, em))
         else:
             db.execute("DELETE FROM avaliacoes WHERE tarefa_id = ?", (linha["id"],))
+    if valor != anterior:  # sinal de aprendizado (cerebro-20): a troca de voto fica registrada, nada se apaga
+        sinais.registrar_voto(linha, usuario, valor, em)
     if (valor == -1) != (anterior == -1):  # resposta ruim não fica como conhecimento (revisão de 30/10, 2.15)
         base.ativar_trecho_da_tarefa(linha["id"], valor != -1)
     ids = _trechos_usados(linha["id"])

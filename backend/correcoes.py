@@ -8,6 +8,7 @@
 4. Lembrar: uma vez por semana, se houver correções pendentes, aviso no chat do Cérebro.
 """
 
+import asyncio
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -15,6 +16,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 import config
+import regras_parecidas
 import tarefas
 from auth import carregar_usuarios, validar_token
 from estado import andar_do_agente, buscar_agente
@@ -110,6 +112,9 @@ def _db():
         # Empresa da regra (revisão de 30/10/2026, item 1.7): regra de uma empresa não vale para as outras.
         if "empresa" not in {c[1] for c in db.execute("PRAGMA table_info(regras_aprendidas)")}:
             db.execute("ALTER TABLE regras_aprendidas ADD COLUMN empresa TEXT NOT NULL DEFAULT '*'")
+        # Regra parecida (Onda 2, cerebro-21): a substituída fica guardada (ativa = 0) com a que entrou no lugar.
+        if "substituida_por" not in {c[1] for c in db.execute("PRAGMA table_info(regras_aprendidas)")}:
+            db.execute("ALTER TABLE regras_aprendidas ADD COLUMN substituida_por INTEGER")
         _pronto = True
     return db
 
@@ -225,6 +230,13 @@ class Decisao(BaseModel):
     regra: str = Field(min_length=5, max_length=500)
     escopo: str = Field("agente", pattern="^(agente|todos)$")
     todas_as_empresas: bool = False  # padrão: só a empresa da tarefa que motivou a correção
+    substituir: int | None = None    # regra parecida (cerebro-21) que sai do contexto no lugar desta (fica guardada)
+
+
+class Rascunho(BaseModel):
+    regra: str = Field("", max_length=500)
+    escopo: str = Field("agente", pattern="^(agente|todos)$")
+    todas_as_empresas: bool = False
 
 # Regra que é o texto inteiro da conversa (ex.: uma legenda colada com "adorei") não é regra: vira cópia de um caso.
 REGRA_CRUA_MIN = 200
@@ -269,17 +281,49 @@ async def aprovar(observacao_id: int, decisao: Decisao, authorization: str = Hea
         raise HTTPException(status_code=422, detail="Escreva a regra em uma ou duas frases: o texto inteiro da conversa "
                                                     "não serve de regra para os próximos pedidos.")
     empresa = "*" if decisao.todas_as_empresas else empresa_da_observacao(obs)
+    if decisao.substituir and not _db().execute("SELECT 1 FROM regras_aprendidas WHERE id = ? AND ativa = 1",
+                                                (decisao.substituir,)).fetchone():
+        raise HTTPException(status_code=404, detail=f"A regra #{decisao.substituir} não está mais ativa.")
+    parecidas = await asyncio.to_thread(regras_parecidas.parecidas, regra, agente, empresa, observacao_id)
     with _db() as db:
         db.execute("UPDATE observacoes SET status = 'aprovada', regra = ?, escopo = ?, decidido_em = ? WHERE id = ?",
                    (regra, decisao.escopo, tarefas._agora(), observacao_id))
-        db.execute("INSERT INTO regras_aprendidas (agente, regra, criada_em, observacao_id, empresa) "
-                   "VALUES (?, ?, ?, ?, ?)", (agente, regra, tarefas._agora(), observacao_id, empresa))
+        nova = db.execute("INSERT INTO regras_aprendidas (agente, regra, criada_em, observacao_id, empresa) "
+                          "VALUES (?, ?, ?, ?, ?)", (agente, regra, tarefas._agora(), observacao_id, empresa)).lastrowid
+        if decisao.substituir:  # escolha de quem aprova; a antiga continua guardada
+            db.execute("UPDATE regras_aprendidas SET ativa = 0, substituida_por = ? WHERE id = ?",
+                       (nova, decisao.substituir))
     alvo = "todos os agentes" if agente == "*" else _nome(agente)
     # Pelo login do dono do Cérebro: a Diretoria aprova, mas só a conta do Thomas grava no Cérebro (antes, com João ou
     # Lucca aprovando, a regra ficava ativa sem entrar no Cérebro e a tela recebia erro 500; revisão de 30/10, 2.14).
     quem = usuario.get("nome") or usuario["sub"]
     await cerebro.ensinar(config.DONO_MAX, f"Aprenda: Regra aprovada por {quem} para {alvo}: {regra}", empresa)
-    return {"ok": True}
+    return {"ok": True, "regra_id": nova, "substituida": decisao.substituir,
+            "parecidas": [c for c in parecidas if c["id"] != decisao.substituir or c["tipo"] != "regra"]}
+
+
+@rotas.post("/{observacao_id}/parecidas")
+def ver_parecidas(observacao_id: int, rascunho: Rascunho, authorization: str = Header("")):
+    """Aviso "parecida com a regra #N" (cerebro-21) para o pop-up, antes de aprovar; por embedding ou por texto."""
+    _dono(authorization)
+    obs = _db().execute("SELECT * FROM observacoes WHERE id = ?", (observacao_id,)).fetchone()
+    if not obs:
+        raise HTTPException(status_code=404, detail="Correção não encontrada.")
+    agente = "*" if rascunho.escopo == "todos" else obs["agente"]
+    empresa = "*" if rascunho.todas_as_empresas else empresa_da_observacao(obs)
+    achadas = regras_parecidas.parecidas(rascunho.regra.strip() or obs["correcao"], agente, empresa,
+                                         ignorar_observacao=observacao_id)
+    return {"parecidas": [{**c, "agente_nome": _nome(c["agente"])} for c in achadas],
+            "aviso": regras_parecidas.aviso(achadas)}
+
+
+@rotas.get("/sinais")
+def ver_sinais(authorization: str = Header("")):
+    """Sinais de aprendizado só registrados (cerebro-20): contagem por tipo, agente e empresa; nada é treinado."""
+    import sinais
+
+    _dono(authorization)
+    return sinais.resumo()
 
 
 @rotas.post("/{observacao_id}/descartar")
