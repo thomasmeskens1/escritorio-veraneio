@@ -585,9 +585,11 @@ def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: st
         partes.append(datas)
     import direcao_visual  # roteiro com referência aprovada (social_media-18)
     import pedido_video  # vídeo pedido contra o manual 05 §5 vira pergunta (moviemaker-02)
+    import inventario  # material do Lodge lido sem IA antes do plano (Onda 2 de novembro, moviemaker-01)
 
     partes += [b for b in (direcao_visual.bloco(agente_id, empresa, pedido),
-                           pedido_video.bloco(agente_id, empresa, pedido)) if b]
+                           pedido_video.bloco(agente_id, empresa, pedido),
+                           inventario.bloco(agente_id, empresa, pedido)) if b]
     return "\n\n".join(partes)
 
 

@@ -21,7 +21,9 @@ NOME_FOLHA = "FOLHA DE APROVAÇÃO.jpg"
 ARTES = {".png", ".jpg", ".jpeg", ".mp4", ".mov", ".pdf"}
 VIDEOS = {".mp4", ".mov"}
 DOCUMENTOS = {".docx", ".pptx"}
-IGNORADAS = {PASTA.lower(), "anteriores", "cenas"}  # subpastas que não entram (cenas brutas do vídeo ficam fora)
+IGNORADAS = {PASTA.lower(), "anteriores", "cenas", "postar"}  # subpastas que não entram (cenas brutas ficam fora)
+POSTAR = "POSTAR"  # kit pronto para postar dentro da FINAL/ (kit_postar.py): refeito por ele, não aqui
+_SUBPASTA_DE_VERSAO = re.compile(r"^v\d{1,3}$", re.IGNORECASE)  # v2/, v3/: outra produção do mesmo item (pasta_da_peca.py)
 # "_v3" no fim do nome (arte_v3.png) ou antes de "_editavel" (peca_v3_editavel.pptx); "_2" de sem_sobrescrever também
 _VERSAO = re.compile(r"_v(\d{1,3})(?=(?:_\d{1,2})?(?:_editavel)?$)", re.IGNORECASE)
 _REPETIDO = re.compile(r"(?<=_v\d)_\d{1,2}$|(?<=_v\d\d)_\d{1,2}$")
@@ -41,6 +43,8 @@ def _candidatos(entrega: Path) -> list[Path]:
     achados = []
     for arquivo in entrega.rglob("*"):
         partes = [p.lower() for p in arquivo.relative_to(entrega).parts[:-1]]
+        if partes and _SUBPASTA_DE_VERSAO.match(partes[0]):
+            continue
         if not arquivo.is_file() or any(p in IGNORADAS for p in partes) or arquivo.name == NOME_FOLHA:
             continue
         if arquivo.suffix.lower() in ARTES | DOCUMENTOS:
@@ -59,16 +63,19 @@ def vigentes(entrega: Path) -> dict[str, Path]:
     return {chave: v[2] for chave, v in escolhidos.items()}
 
 
-def atualizar(entrega: Path, fora: list[str] = ()) -> list[str]:
+def atualizar(entrega: Path, fora: list[str] = (), final: Path | None = None) -> list[str]:
     """Refaz FINAL/ com a versão vigente de cada peça; devolve os nomes (relativos a FINAL/), em ordem. `fora`:
     arquivos da entrega (relativos a ela) cuja peça NÃO entra na FINAL, nem numa versão anterior (ex.: a legenda que
-    diverge do texto aprovado; conferencia_texto.py). Sai também a cópia antiga que já estava lá."""
+    diverge do texto aprovado; conferencia_texto.py). Sai também a cópia antiga que já estava lá. `final`: outra
+    FINAL/ (a da raiz da peça, quando a entrega é a subpasta v2/ de uma nova produção do mesmo item)."""
     barradas = {chave_e_versao(nome)[0] for nome in fora}
     escolhidos = {c: a for c, a in vigentes(entrega).items() if c not in barradas}
-    final = entrega / PASTA
+    final = final or entrega / PASTA
     final.mkdir(parents=True, exist_ok=True)
     for antigo in [a for a in final.rglob("*") if a.is_file()]:  # tira o que deixou de ser vigente
         relativo = antigo.relative_to(final).as_posix()
+        if relativo.split("/")[0] == POSTAR:  # o kit tem a própria limpeza (kit_postar.py)
+            continue
         if relativo != NOME_FOLHA and relativo not in escolhidos:
             antigo.unlink()
     for chave, origem in escolhidos.items():

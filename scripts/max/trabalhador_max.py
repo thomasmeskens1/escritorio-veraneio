@@ -32,8 +32,10 @@ import link_drive
 import molde
 import comum
 import emails_brevo
+import kit_postar
 import painel_analitico
 import pasta_final
+import pasta_da_peca
 import planilha_lodges
 import redes_empresas
 import site_casaveraneio
@@ -166,6 +168,8 @@ TIPO_DO_AGENTE = {"criador_imagens": "ARTE", "editor_video": "VÍDEO"}
 
 def nome_pasta(producao: dict) -> str:
     """"EMPRESA ｜ TIPO - NOME": tipo pelo item/pedido (ou pelo agente), nome = título do projeto sem o tipo."""
+    if (do_item := pasta_da_peca.nome_do_item(producao)):  # item do Monday: TIPO e descrição do item + "#<item>"
+        return do_item
     titulo = re.sub(r'[<>:"/\\|?*\n\r\t｜]', " ", producao.get("titulo") or producao["texto"])
     titulo = re.sub(r"\s+", " ", titulo).strip(" .") or f"Produção {producao['tarefa_id']}"
     tipo = next((t for t, padrao in TIPO_NO_PEDIDO if re.search(padrao, f"{titulo} {producao['texto'][:600]}", re.I)),
@@ -183,6 +187,8 @@ def pasta_de_entrega(producao: dict) -> Path:
     if producao.get("base"):
         return DRIVE / producao["base"]["pasta"]
     raiz, nome = DRIVE / producao["pasta_andar"], nome_pasta(producao)
+    if (versao := pasta_da_peca.pasta_da_versao(raiz, producao)):  # mesmo item do Monday: mesma pasta, em v2/, v3/...
+        return versao
     pasta, n = raiz / nome, 2
     while pasta.exists():
         pasta, n = raiz / f"{nome} ({n})", n + 1
@@ -691,19 +697,27 @@ def enviar_bloqueios(producao: dict, rascunho: Path) -> None:
 def organizar_final(producao: dict, entrega: Path, ambiente: dict, fora: list[str] = ()) -> str:
     """FINAL/ com a versão vigente de cada arquivo e a folha de aprovação, que vai ao chat (pasta_final.py). Nunca
     derruba a entrega: a peça já está no Drive. `fora`: arquivos que não entram (legenda que diverge do aprovado)."""
+    raiz = pasta_da_peca.raiz_da_peca(entrega)  # nova produção do mesmo item (v2/): a FINAL é a da raiz da peça
     try:
-        vigentes = pasta_final.atualizar(entrega, fora)
-        folha = pasta_final.folha(entrega / pasta_final.PASTA, vigentes, entrega.name, ambiente)
+        vigentes = pasta_final.atualizar(entrega, fora, raiz / pasta_final.PASTA)
+        folha = pasta_final.folha(raiz / pasta_final.PASTA, vigentes, raiz.name, ambiente)
     except Exception as erro:  # noqa: BLE001
         log(f"   pasta FINAL não atualizada ({erro})")
         return ""
+    try:  # kit POSTAR (kit_postar.py): artes renomeadas na ordem do feed, legenda em .txt e a conferência do tipo
+        kit = kit_postar.linha_do_resumo(*kit_postar.montar(raiz / pasta_final.PASTA, vigentes, raiz.name,
+                                                            producao.get("texto_aprovado")))
+    except Exception as erro:  # noqa: BLE001
+        log(f"   kit POSTAR não montado ({erro})")
+        kit = ""
     if folha:
         try:
             comum.enviar_arquivo(f"/api/producao/{producao['tarefa_id']}/folha", folha)
         except Exception as erro:  # noqa: BLE001 - a folha fica no Drive mesmo assim
             log(f"   folha de aprovação não enviada ao chat ({erro})")
     return (f"Pasta {pasta_final.PASTA}/: {len(vigentes)} arquivo(s) na versão vigente (sem versões antigas)"
-            + (f"; folha de aprovação em {pasta_final.PASTA}/{pasta_final.NOME_FOLHA}." if folha else "."))
+            + (f"; folha de aprovação em {pasta_final.PASTA}/{pasta_final.NOME_FOLHA}." if folha else ".")
+            + (f"\n{kit}" if kit else ""))
 
 
 def produzir(producao: dict) -> None:
@@ -763,13 +777,19 @@ def produzir(producao: dict) -> None:
         if linha_som:
             resumo = f"{resumo}\n\n{linha_som}"
         # Logo de outra empresa na peça ou pasta com prefixo de outra empresa: aviso vermelho antes do Drive.
-        if (marca := logos_empresas.linha_do_resumo(logos_empresas.conferir(rascunho, empresa, entrega.name,
+        nome_da_peca = pasta_da_peca.raiz_da_peca(entrega).name  # subpasta v2/: o prefixo está na pasta da peça
+        if (marca := logos_empresas.linha_do_resumo(logos_empresas.conferir(rascunho, empresa, nome_da_peca,
                                                                             PASTA_MARCAS), empresa)):
             resumo = f"{marca}\n\n{resumo}"
             log(f"   {marca}")
         if faltaram:
             resumo = (f"{resumo}\n\n⚠ Referência(s) do Monday que não chegaram ao Max: {'; '.join(faltaram)}. Se "
                       "eram necessárias, envie o arquivo por uma pasta do Drive e peça um ajuste.")
+        # Tipo da pasta pelos arquivos quando o pedido não dizia, e pasta parecida já existente (pasta_da_peca.py).
+        entrega, linhas_pasta = pasta_da_peca.antes_de_copiar(
+            producao, entrega, novos, TIPO_NO_PEDIDO, lambda nome: medida(rascunho / PASTA_FINAL / nome, ambiente))
+        relativa = entrega.relative_to(DRIVE).as_posix()
+        resumo = "\n\n".join([resumo, *linhas_pasta])
         copiados = []
         for nome in novos:
             destino = sem_sobrescrever(entrega / nome, versao)  # 2.6: nunca troca uma arte que já está no Drive
