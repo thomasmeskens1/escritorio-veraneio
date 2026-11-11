@@ -25,6 +25,7 @@ import espera
 import max_texto
 import monday
 import painel_coletas
+import plano_tabela
 import relatorios
 import saude
 import tarefas
@@ -279,6 +280,10 @@ async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
         return
     # Números do painel: data da coleta e consultas feitas escritas pelo sistema, não pelo modelo (analista_metricas-34)
     resultado.texto = await asyncio.to_thread(painel_coletas.com_rodape, tarefa_id, resultado.texto)
+    pedido = tarefas.obter(tarefa_id)
+    if pedido and plano_tabela.do_social_media(pedido["agente"], pedido["texto"]):  # planejamento em tabela
+        resultado.texto = await asyncio.to_thread(plano_tabela.tabela_da_tarefa, tarefa_id, resultado.texto,
+                                                  pedido["texto"])
     tarefas.atualizar(tarefa_id, status="concluida", modelo=modelo, resposta=resultado.texto,
                       tokens_entrada=resultado.tokens_entrada, tokens_saida=resultado.tokens_saida, custo_usd=resultado.custo_usd)
     if tarefas.obter(tarefa_id)["status"] != "concluida":  # parada entre a checagem e a gravação: nada é entregue

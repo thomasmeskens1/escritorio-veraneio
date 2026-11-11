@@ -257,3 +257,19 @@ def test_projeto_de_planejamento_pede_e_guarda_a_tabela(monday_falso, tmp_path):
                                      threading.Event())
     assert "<<PLANO_TABELA>>" in descricoes[-1]  # a consolidação recebe a instrução da tabela
     assert f"[Tabela do planejamento #{tarefa}: 3 peças" in final and "<<PLANO_TABELA>>" not in final
+
+
+def test_planejamento_do_social_media_tambem_vira_tabela(monday_falso, tmp_path):
+    """Thomas, 12/11/2026: planejamento pedido direto ao Social Media também sai em tabela, e ele não grava sozinho."""
+    from agents import ferramentas_monday
+
+    pedido = "Planejamento de dezembro da Casa Veraneio"
+    assert plano_tabela.do_social_media("social_media", pedido)
+    assert not plano_tabela.do_social_media("social_media", "Legenda do post do Lodge 10")
+    assert not plano_tabela.do_social_media("copywriter", pedido)
+    tarefa = tarefas.criar("usuario.social@exemplo.com", "marketing", "social_media", pedido, "media", "casa_veraneio")
+    texto = plano_tabela.tabela_da_tarefa(tarefa, _entrega(), pedido)  # sem pasta de projeto: ela é criada
+    assert f"[Tabela do planejamento #{tarefa}: 3 peças" in texto and len(plano_tabela.carregar(tarefa)["linhas"]) == 3
+    nomes = {f.name for f in ferramentas_monday.para("social_media", tarefa)}
+    assert "ver_planejamento_monday" in nomes and nomes - {"ver_planejamento_monday"}  # o filtro fica no executor
+    assert "NÃO grava itens no Monday" in plano_tabela.SEM_GRAVAR

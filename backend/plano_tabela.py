@@ -53,6 +53,23 @@ def instrucao(pedido: str) -> str:
     return INSTRUCAO if e_planejamento(pedido) else ""
 
 
+SOCIAL_MEDIA = "social_media"
+SEM_GRAVAR = (" Nesta tarefa você NÃO grava itens no Monday: a equipe aprova na tabela e o sistema grava. Pode ler o "
+              "planejamento que já está no board para não repetir peças.")
+
+
+def do_social_media(agente_id: str, pedido: str) -> bool:
+    """Planejamento pedido direto ao Social Media (Thomas, 12/11/2026): também sai em tabela, gravada pelo código."""
+    return agente_id == SOCIAL_MEDIA and e_planejamento(pedido)
+
+
+def tabela_da_tarefa(tarefa_id: int, texto: str, pedido: str) -> str:
+    """com_tabela para uma tarefa fora de projeto (pasta própria na pasta de projetos)."""
+    pasta = _pasta(tarefa_id)
+    pasta.mkdir(parents=True, exist_ok=True)
+    return com_tabela(pasta, texto, pedido)
+
+
 def _pasta(tarefa_id: int) -> Path:
     from agents.projeto import PASTA_PROJETOS  # import tardio: o projeto carrega o andar inteiro
 

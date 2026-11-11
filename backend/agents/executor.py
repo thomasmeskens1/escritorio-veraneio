@@ -22,6 +22,7 @@ import encaminhamento
 import cerebro
 import cerebro_conferir
 import max_texto
+import plano_tabela
 import saude
 import tarefas
 from agents import diretrizes, ferramentas_brevo, ferramentas_monday, ferramentas_painel, projeto
@@ -317,6 +318,11 @@ def _com_cerebro_pre_consultado(agente_id: str, descricao: str, tarefa_id: int) 
 def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s: int, total: Resultado,
           tarefa_id: int) -> str:
     """Roda um agente (Crew de uma tarefa) e acumula tokens e custo no `total`."""
+    linha_tarefa = tarefas.obter(tarefa_id) if tarefa_id else None
+    em_tabela = bool(linha_tarefa and "Sua etapa (" not in descricao
+                     and plano_tabela.do_social_media(agente_id, linha_tarefa["texto"]))
+    if em_tabela:  # planejamento do Social Media: tabela revisável, gravada no Monday pelo código
+        descricao += plano_tabela.INSTRUCAO + plano_tabela.SEM_GRAVAR
     if modelo == max_texto.MODELO:  # plano Max: sem tokens nem custo de API
         return _rodar_no_max(agente_id, descricao, esperado, limite_s, tarefa_id)
     # Todos os agentes de IA consultam o Cérebro (ele mesmo recebe os trechos já na descrição).
@@ -331,7 +337,8 @@ def _rodar(agente_id: str, descricao: str, esperado: str, modelo: str, limite_s:
     # sociais para todos; vendas, receita, investimento e ROAS só para a Diretoria.
     tarefa = tarefas.obter(tarefa_id) if tarefa_id else None
     if "Sua etapa (" not in descricao and tarefa:
-        ferramentas += ferramentas_monday.para(agente_id, tarefa_id)
+        ferramentas += [f for f in ferramentas_monday.para(agente_id, tarefa_id)
+                        if not em_tabela or f.name == "ver_planejamento_monday"]  # na tabela, só leitura do board
         ferramentas += ferramentas_brevo.para(agente_id, cerebro.empresa_da_tarefa(tarefa_id), tarefa_id)
         ferramentas += ferramentas_painel.para(agente_id, tarefa_id,  # Analista: números do painel analítico
                                                financeiro=auth.ve_financeiro(tarefa["usuario"]))
