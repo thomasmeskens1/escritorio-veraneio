@@ -2,7 +2,7 @@
 // (nada fica faltando). Vêm de duas fontes: o agente escreve um bloco <<FORMULARIO>>{json}<<FIM DO FORMULARIO>> na
 // resposta, ou o próprio sistema anexa um à mensagem (ex.: escolher a empresa da conversa).
 // JSON: {"titulo": "...", "campos": [{"nome", "rotulo", "tipo": texto|texto_longo|opcoes|multipla|data|numero|hora,
-//        "opcoes": [...], "marcados": [...] (multipla), "obrigatorio": true}]}. Ao enviar, as respostas vão como mensagem ao mesmo agente.
+//        "opcoes": [...], "marcados": [...] (multipla), "pode_decidir": true (opcoes), "obrigatorio": true}]}. Ao enviar, as respostas vão como mensagem ao mesmo agente.
 
 const BLOCO_FORMULARIO = /<<FORMULARIO>>([\s\S]*?)<<FIM DO FORMULARIO>>/;
 
@@ -30,6 +30,8 @@ function campoDoFormulario(campo, indice) {
   rotulo.htmlFor = id;
   let entrada;
   const opcoes = Array.isArray(campo.opcoes) ? campo.opcoes.map(String) : [];
+  // "pode_decidir" (professor-13): escolha editorial ganha "Escolha por mim", que o agente trata como delegação.
+  if (campo.pode_decidir && campo.tipo === 'opcoes' && !opcoes.includes('Escolha por mim')) opcoes.push('Escolha por mim');
   if (campo.tipo === 'opcoes' && opcoes.length) {
     entrada = novoEl('select', 'form-entrada');
     entrada.append(new Option('Escolha…', ''), ...opcoes.map((o) => new Option(o, o)));

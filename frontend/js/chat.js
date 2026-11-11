@@ -60,6 +60,8 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
   const nome = document.createElement('span');
   nome.className = 'msg-autor';
   nome.textContent = autor;
+  const plano = extrairPlanoTabela(texto); // tabela do planejamento (js/plano_tabela.js)
+  texto = plano.texto;
   // Formulário pedido pelo agente (bloco <<FORMULARIO>>) ou anexado pelo sistema (js/formularios.js).
   const extraido = tipo === 'agente' ? extrairFormulario(texto) : { texto, formulario: null };
   div.append(nome, document.createTextNode(tipo === 'agente' ? textoNatural(extraido.texto) : texto));
@@ -69,6 +71,7 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
   if (pedido && (encerrado || formulariosEncerrados.has(tarefa_id))) {
     div.append(novoEl('span', 'msg-encerrado', 'Formulário encerrado sem resposta.'));
   } else if (pedido) div.append(criarBotaoFormulario(pedido, tarefa_id));
+  if (plano.tabela) div.append(plano.tabela);
   if (anexos?.length) div.append(criarAnexosDaMensagem(anexos));
   if (tipo === 'agente' && link && LINK_DRIVE.test(link)) div.append(criarBotaoVisualizar(link));
   if (tipo === 'agente' && relatorio && LINK_RELATORIO.test(relatorio)) div.append(criarBotaoRelatorio(relatorio));

@@ -13,9 +13,10 @@ from pathlib import Path
 from typing import Callable
 
 import config
+import plano_tabela
 import saude
 import segredos
-from agents import projeto_regras
+from agents import pergunta_gestor, projeto_regras
 from agents.perfis import ESTILO_CHAT
 from estado import ANDARES
 
@@ -282,17 +283,18 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar, ficha: s
             "recebe só os resultados das fases anteriores. "
             "Dê também um título curto ao projeto (até 6 palavras, sem data, ex.: \"Post Réveillon Lodge 1\"). "
             "As instruções das etapas seguem o entendimento (citem os imóveis e dados dele). "
-            f"{SUCESSO}"
+            f"{SUCESSO}{pergunta_gestor.INSTRUCAO}{pergunta_gestor.bloco(pergunta_gestor.decisoes(pasta, pedido))}"
             'Responda SOMENTE com um JSON: {"entendimento": "<o que o usuário quer agora>", "duvida": "", '
+            '"opcoes": [], "pode_decidir": true, '
             '"titulo": "<título>", "papel": "<papel>", "cta": "<chamada>", "metrica": "<métrica>", '
             '"hipotese": "<hipótese>", '
             '"etapas": [{"agente": "<id>", "instrucao": "<o que entregar>", "fase": <número>}]}.'
         )
-        resposta = executar("gestor", descricao, "JSON com o entendimento, o título e as etapas.", "gestor")
+        resposta = pergunta_gestor.pedir_plano(pasta, executar, descricao)  # com a trava de pergunta repetida
         if (entendimento := _campo(resposta, "entendimento")):
             _gravar(pasta / "entendimento.txt", entendimento)
-        duvida = _campo(resposta, "duvida")
-        if duvida and duvida.lower().strip(" .") not in ("nenhuma", "nenhum", "não", "nao", "-", "n/a"):
+        if (duvida := pergunta_gestor.duvida_de(resposta)):
+            pergunta_gestor.guardar(pasta, resposta, duvida)  # opções e "pode decidir" para o formulário
             _gravar(pasta / "duvida.txt", duvida)
             _gravar(arquivo, "[]")
             return []
@@ -307,7 +309,7 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar, ficha: s
         _gravar(arquivo, json.dumps(plano, ensure_ascii=False, indent=2))
         linhas = [f"{n}. **{_nome(p['agente'])}** (fase {p['fase']}): {p['instrucao']}" for n, p in enumerate(plano, 1)]
         _gravar(pasta / "plano.md", f"# Plano\n\nPedido: {pedido}\n\nEntendimento: {entendimento or '-'}\n\n"
-                + "\n".join(linhas) + (f"\n\n{nota}" if nota else "") + "\n")
+                + "\n".join(linhas) + (f"\n\n{nota}" if nota else "") + pergunta_gestor.no_plano(pasta) + "\n")
     return json.loads(arquivo.read_text(encoding="utf-8"))
 
 
@@ -356,7 +358,8 @@ def _empresa(tarefa_id: int) -> str | None:
 # assumiu e reaproveitou plano e etapas salvos sem reinterpretar o pedido. Plano de modelo fraco não é herdado.
 MODELOS_FORTES = ("claude-code/", "anthropic/", "claude-")
 REFEITOS_QUANDO_FORTE_ASSUME = ("plano.json", "plano.md", "entendimento.txt", "duvida.txt", "titulo.txt",
-                                "requisitos.md", "final.md", "passagem.md", "plano_modelo.txt", "sucesso.md")
+                                "requisitos.md", "final.md", "passagem.md", "plano_modelo.txt", "sucesso.md",
+                                "pergunta.json", "plano_tabela.json")
 
 
 def _forte(modelo: str) -> bool:
@@ -396,7 +399,7 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
     if (duvida := _lido(pasta, "duvida.txt")):  # não deu para saber a que o pedido se refere: pergunta antes
         final = pasta / "final.md"
         if not final.exists():
-            _gravar(final, (f"{entendimento}\n\n" if entendimento else "") + f"PERGUNTA: {duvida}")
+            _gravar(final, pergunta_gestor.texto_da_pergunta(pasta, entendimento, duvida))  # formulário com opções
         return final.read_text(encoding="utf-8")
     sucesso = _sucesso(pasta, pedido, entendimento, executar)  # já gravada no plano; projeto antigo pede agora
     fase = lambda n, p: p.get("fase", n)  # plano antigo (sem fases): uma etapa por vez
@@ -470,6 +473,7 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
             descricao += (f"\n\nFICHA DE REQUISITOS:\n{ficha}\n\nAntes de entregar, confira cada R# contra a "
                           "entrega. Depois do texto final, acrescente o bloco <<CHECAGEM>> com uma linha por "
                           "requisito (\"R1: ok\" ou \"R1: faltou - motivo\") e feche com <<FIM>>.")
+        descricao += plano_tabela.instrucao(pedido)  # planejamento do mês: tabela revisável no chat (social_media-05)
         texto = executar("gestor", descricao, "Entrega final consolidada e revisada.", "gestor")
         if cancelar.is_set():
             raise Cancelado
@@ -478,6 +482,7 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
         if (medir := como_medir(sucesso)):  # vai ao chat e, pelo andamento "concluida", ao comentário do Monday
             texto = f"{texto.rstrip()}\n\n{medir}"
         texto = projeto_regras.com_checklist_meta(texto, plano)  # gestor_trafego-03
+        texto = plano_tabela.com_tabela(pasta, texto, pedido)  # a tabela sai do texto e fica no projeto
         _gravar(final, texto)
     return final.read_text(encoding="utf-8")
 
