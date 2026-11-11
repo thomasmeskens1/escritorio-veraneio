@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 import tarefas
 
+ATIVO = False  # desligado pelo Thomas em 11/11/2026: pedido parecido ou repetido segue normal, sem aviso
 JANELA_IDENTICO = timedelta(hours=2)
 JANELA_PECA = timedelta(days=45)   # o crítico pediu de 30 a 60 dias
 ANDAR, GESTOR = "marketing", "gestor"
@@ -81,7 +82,7 @@ def peca_parecida(login: str, texto: str, empresa: str):
 def aviso(login: str, andar: str, agente_id: str, texto: str, empresa: str, para_o_gestor: bool = False) -> dict | None:
     """Aviso com botões para o chat (titulo, texto, opcoes), ou None se o pedido segue normal. Vale para o Gestor e
     para a peça pedida a um especialista que vai ao Gestor (`para_o_gestor`)."""
-    if andar != ANDAR or not (agente_id == GESTOR or para_o_gestor) or DE_PROPOSITO in (texto or ""):
+    if not ATIVO or andar != ANDAR or not (agente_id == GESTOR or para_o_gestor) or DE_PROPOSITO in (texto or ""):
         return None
     pedido = texto.strip()
     if pedido.startswith("Respostas") or re.match(r"\s*ajuste\s+na\s+pe[cç]a\s+#\d+", pedido, re.I):

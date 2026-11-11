@@ -7,6 +7,8 @@ import threading
 import pytest
 
 import pedido_repetido
+
+pedido_repetido.ATIVO = True  # o aviso está desligado em produção; os testes conferem o mecanismo
 import plano_tabela
 import tarefas
 from agents import consulta_repetida, pergunta_gestor, projeto

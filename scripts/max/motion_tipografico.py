@@ -15,9 +15,9 @@ Uso: python motion_tipografico.py tipografico.json [--previa] [--com-som]
 tipografico.json (na pasta da peça):
 {"empresa": "cv_corporativo", "peca": "Reels tipográfico - fim de ano", "formato": "1080x1920",
  "kicker": "CONFRATERNIZAÇÃO", "frases": ["O ano está acabando", "e o seu time merece celebrar", "...", "..."],
- "cta": "Realize agora mesmo o seu orçamento", "saida": "entrega/Reels_Tipografico.mp4", "vinheta": false}
+ "cta": "Realize agora mesmo o seu orçamento", "saida": "entrega/Reels_Tipografico.mp4"}
 Gera motion.json e receita.json ao lado (receita.py) e renderiza pelo motion.py. Formatos: 1080x1920 (Reels) e
-1080x1080 (LinkedIn). "vinheta": true acrescenta a vinheta do logo no fim (só 9:16; o logo sai do fechamento).
+1080x1080 (LinkedIn). A vinheta do logo entra por padrão no fim do 9:16 ("vinheta": false tira; o logo sai do fechamento).
 """
 
 import argparse
@@ -224,7 +224,7 @@ def roteiro(dados: dict, prazo: dict | None = None, hoje: date | None = None,
     formato = dados.get("formato") or "1080x1920"
     if formato not in LAYOUT:
         raise ValueError(f"Formato do Reels tipográfico: {', '.join(LAYOUT)}")
-    vinheta = bool(dados.get("vinheta"))
+    vinheta = com_vinheta(dados)
     if vinheta and formato != "1080x1920":
         raise ValueError("A vinheta do logo só existe no 9:16 aqui; no 1:1 o fechamento leva o logo.")
     frases = conferir_frases(dados.get("frases"))
@@ -276,7 +276,7 @@ def renderizar(arquivo: Path, com_previa: bool = False, hoje: date | None = None
     (base / "motion.json").write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
     resultados = motion.renderizar(base / "motion.json", com_previa)
     saida = base / (dados.get("saida") or "entrega/Reels_Tipografico.mp4")
-    if dados.get("vinheta"):
+    if com_vinheta(dados):
         import motion_vinheta
         from motion_video import duracao_do_video, juntar_cenas
         vinheta = motion_vinheta.vinheta(spec["empresa"], spec["formato"], base / "trabalho" / "vinheta.mp4", base)
@@ -306,15 +306,20 @@ def com_som(video: Path, empresa: str, pedido: str = "reels tipografico corporat
     return saida, faixa
 
 
+def com_vinheta(dados: dict) -> bool:
+    """A vinheta do logo entra por padrão no 9:16 (Thomas, 11/11/2026); no 1:1 o fechamento já leva o logo."""
+    return bool(dados.get("vinheta", (dados.get("formato") or "1080x1920") == "1080x1920"))
+
+
 def instrucao(agente: str, empresa: str, entrega: str = "") -> str:
     """Bloco do prompt do Editor de Vídeo do Corporativo."""
     if agente != "editor_video" or empresa not in EMPRESAS or entrega in ("texto", "documento"):
         return ""
     exemplo = json.dumps({"empresa": empresa, "peca": "<nome da peça>", "formato": "1080x1920", "kicker": "<TIPO DE EVENTO>",
                           "frases": ["<frase 1>", "<frase 2>", "<frase 3>", "<frase 4>"], "cta": CTA_PADRAO,
-                          "saida": "entrega/<Peça>.mp4", "vinheta": False}, ensure_ascii=False)
-    return ("REELS TIPOGRÁFICO DO CORP (Onda 2): quando o pedido for Reels tipográfico ou \"só texto\", ou um tema de "
-            "urgência, dado ou bastidor sem vídeo bom de evento, NÃO monte do zero: grave na raiz desta pasta um "
+                          "saida": "entrega/<Peça>.mp4"}, ensure_ascii=False)
+    return ("REELS TIPOGRÁFICO DO CORP (Onda 2): SÓ quando o pedido disser Reels tipográfico, \"só texto\" ou "
+            "\"frases animadas\" (Thomas, 11/11/2026: nunca por iniciativa própria). Nesse caso, NÃO monte do zero: grave na raiz desta pasta um "
             f"tipografico.json ({exemplo}) e rode: python \"{Path(__file__).as_posix()}\" tipografico.json --previa\n"
             f"De {FRASES[0]} a {FRASES[1]} frases curtas (até {MAX_PALAVRAS} palavras; \"|\" quebra a linha), do "
             "texto aprovado quando houver, no tom do manual 11; sem nome de cliente, e-mail, telefone ou valores. O "
@@ -322,7 +327,7 @@ def instrucao(agente: str, empresa: str, entrega: str = "") -> str:
             "chamada e o logo do Corp no fechamento, e grava motion.json e receita.json. A contagem regressiva entra "
             f"SOZINHA só se houver prazo \"fechar até\" válido ({ARQUIVO_PRAZO}, gravado pelo sistema): nunca "
             "escreva contagem, \"faltam N dias\" ou prazo nas frases. Versão 1:1 para o LinkedIn: \"formato\": "
-            "\"1080x1080\" com outra saída. Entregue sem música (o Sonoplasta põe a trilha aprovada do Corp).")
+            "\"1080x1080\" com outra saída. A vinheta do logo entra sozinha no fim do 9:16. Entregue sem música (o Sonoplasta põe a trilha aprovada do Corp).")
 
 
 def main() -> None:

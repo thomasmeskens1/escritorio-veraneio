@@ -232,7 +232,7 @@ def _tipos(cena: dict) -> list[str]:
 
 def test_roteiro_sem_prazo_nao_tem_contagem(tp, rc):
     import motion
-    spec, ficha, avisos = tp.roteiro({"frases": FRASES, "kicker": "Confraternização"}, None, HOJE)
+    spec, ficha, avisos = tp.roteiro({"frases": FRASES, "kicker": "Confraternização", "vinheta": False}, None, HOJE)
     motion.validar(spec)
     assert spec["empresa"] == "cv_corporativo" and len(spec["cenas"]) == 5  # 4 frases + fechamento
     assert all(c["fundo"] == "verde" for c in spec["cenas"])
@@ -302,3 +302,15 @@ def test_prazo_comercial_da_producao(monkeypatch):
         raise OSError("sem calendário")
     monkeypatch.setattr(prazos_comerciais, "vigente", quebra)
     assert producao._prazo_comercial("cv_corporativo", "Reels") is None
+
+
+def test_vinheta_entra_por_padrao_so_no_9x16(tp):
+    """Thomas, 11/11/2026: a vinheta do logo entra por padrão no Reels; no 1:1 o fechamento leva o logo."""
+    assert tp.com_vinheta({"frases": FRASES}) and tp.com_vinheta({"formato": "1080x1920"})
+    assert not tp.com_vinheta({"formato": "1080x1080"}) and not tp.com_vinheta({"vinheta": False})
+    spec, ficha, _ = tp.roteiro({"frases": FRASES}, None, HOJE)
+    assert ficha["vinheta_em"] and "juntar" not in spec
+
+
+def test_tipografico_so_quando_pedido(tp):
+    assert "SÓ quando o pedido disser" in tp.instrucao("editor_video", "cv_corporativo")
