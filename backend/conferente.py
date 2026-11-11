@@ -1,9 +1,10 @@
 """Conferente automático das regras duras (Onda 2, item 2; copywriter-01, social_media-01, email_marketing-01,
 gestor_trafego-16). Código puro, sem IA e sem custo, e SÓ AVISA: não bloqueia nem corrige nada.
 
-Roda sobre a legenda e o roteiro de cada item antes de gravar no Monday (ferramentas_monday.py) e sobre a resposta
-final dos agentes de texto (executor.py). As regras por empresa ficam em conferente_regras.py.
-Uma menção negada ("nunca WhatsApp", "sem a Casa Veraneio") não é aviso.
+Roda sobre a legenda e o roteiro de cada item antes de gravar no Monday (ferramentas_monday.py), sobre a resposta
+final dos agentes de texto (executor.py) e sobre a legenda que vem dentro dela (Onda 2 de novembro, copywriter-03:
+com o botão "Corrigir o mecânico", conferente_rotas.py). As regras por empresa ficam em conferente_regras.py e o motor
+comum (o mesmo da entrega no PC), em conferente_motor.py. Uma menção negada ("nunca WhatsApp") não é aviso.
 """
 
 import os
@@ -13,21 +14,18 @@ from datetime import date
 
 import config
 import empresas
-from conferente_regras import CHECKLIST_META, CHECKLIST_META_TITULO, COMUNS, CRECI, HOSPEDAGEM, REGRAS
+import conferente_motor as motor
+from conferente_motor import EMOJI, HASHTAG, LOCAL, TRAVESSAO  # noqa: F401 (nomes antigos deste módulo)
+from conferente_regras import (CHECKLIST_META, CHECKLIST_META_TITULO, COMUNS, CRECI, HOSPEDAGEM, REGRAS,
+                               VETOS_FOTO_CORP)
 
 # Agentes cuja resposta é texto de peça (o Gestor consolida e já passa pelo especialista).
 AGENTES = {"copywriter", "social_media", "email_marketing", "gestor_trafego"}
 NEGACAO = re.compile(r"\b(?:sem|nunca|nada de|n[aã]o|nem|proibid[oa]s?|bloquead[oa]s?|evite|evitar|jamais|"
                      r"impedid[oa]s?)\b[^.\n]{0,30}$", re.I)
-EMOJI = re.compile("[\U0001F300-\U0001FAFF\U0001F000-\U0001F2FF☀-➿⭐⭕]")
-HASHTAG = re.compile(r"#[\wÀ-ÿ]+")
-TRAVESSAO = re.compile(r"[—–]")
 CONTAGEM = re.compile(r"\bfaltam\s+(\d{1,3})\s+(?:noites|dias)\b", re.I)
 REVEILLON = re.compile(r"r[eé]veillon|\bvirada\b|ano novo", re.I)
-_UF = "|".join(COMUNS["ufs"])
-# Fim do nome da cidade (minúscula ou parêntese) + separador + UF: o certo é exatamente " / ". Espaço sozinho
-# ("litoral de SP") e lista de UFs ("SP, RJ") não contam.
-LOCAL = re.compile(rf"([a-zà-ÿ)])(\s*[,\-–—(]\s*|/\s*|\s+/(?=\S))({_UF})\b(?![a-zà-ÿ])")
+TITULO_LEGENDA = "Conferência automática da legenda"  # o botão "Corrigir o mecânico" (js/conferencia.js) procura
 
 
 NUMERO_CRECI = re.compile(r"CRECI\s*(?:n[ºo°.]*\s*)?([\d][\d.\-/ ]{3,15}-?\s?[A-Z]?)\b", re.I)
@@ -99,6 +97,11 @@ def conferir(texto: str, empresa: str, campo: str = "legenda", pedido: str = "",
         import direcao_visual
 
         avisos += direcao_visual.conferir(texto, empresa)
+        if empresa == "cv_corporativo" and (achou := [a for p in VETOS_FOTO_CORP for a in _achados(p, texto)]):
+            avisos.append(f"foto com pessoas ou marca de cliente ({_unicos(achou)}): rosto reconhecível só com "
+                          "autorização de imagem e nenhuma logo ou crachá de cliente (manual 04 §4)")
+    if campo in ("legenda", "email"):
+        avisos += motor.grafia(texto)
     for padrao in COMUNS["palavras_a_dosar"] if campo != "resposta" else ():  # a resposta pode ter várias legendas
         if len(achou := _achados(padrao, texto)) >= 2:
             avisos.append(f"\"{achou[0].lower()}\" aparece {len(achou)} vezes (no máximo 1 por texto)")
@@ -107,9 +110,21 @@ def conferir(texto: str, empresa: str, campo: str = "legenda", pedido: str = "",
         avisos += _da_empresa(texto, empresa, regras, campo, pedido)
     if campo == "legenda":
         avisos += _formato_legenda(texto, empresa, regras, tipo)
+    if campo in ("legenda", "email") and tipo != "STORIES":
+        avisos += _com_a_ficha(texto, empresa)
     if data_postagem:
         avisos += _contagem(texto, data_postagem)
     return avisos
+
+
+def _com_a_ficha(texto: str, empresa: str) -> list[str]:
+    """Legenda final e e-mail contra a ficha do imóvel (cerebro-03): capacidade, suítes, local e diária."""
+    try:
+        import cerebro_conferir  # import tardio: lê a base do Cérebro
+
+        return cerebro_conferir.divergencias_da_legenda(texto, empresa)
+    except Exception:  # noqa: BLE001 - a conferência nunca derruba a entrega
+        return []
 
 
 def _da_empresa(texto: str, empresa: str, regras: dict, campo: str, pedido: str) -> list[str]:
@@ -135,33 +150,8 @@ def _da_empresa(texto: str, empresa: str, regras: dict, campo: str, pedido: str)
 
 
 def _formato_legenda(texto: str, empresa: str, regras: dict | None, tipo: str) -> list[str]:
-    if tipo == "STORIES":
-        return ["STORIES não têm legenda: a legenda escrita foi descartada"]
-    avisos = []
-    if (n := len(TRAVESSAO.findall(texto))):
-        avisos.append(f"{n} travessão(ões): legenda sem travessão (troque por vírgula ou ponto)")
-    if ";" in texto:
-        avisos.append("ponto e vírgula na legenda")
-    if (n := len(EMOJI.findall(texto))) > COMUNS["max_emojis"]:
-        avisos.append(f"{n} emojis (no máximo {COMUNS['max_emojis']})")
-    tags = HASHTAG.findall(texto)
-    if len(tags) > COMUNS["max_hashtags"]:
-        avisos.append(f"{len(tags)} hashtags (até {COMUNS['max_hashtags']})")
-    if (acentuadas := [t for t in tags if not t.isascii()]):
-        avisos.append(f"hashtag com acento ({_unicos(acentuadas)}): escreva sem acento")
-    if not regras:
-        return avisos
-    obrigatoria = regras["hashtag_obrigatoria"]
-    if tags and obrigatoria and obrigatoria not in (t.lower() for t in tags):
-        avisos.append(f"falta a hashtag {obrigatoria}")
-    if (vetadas := [t for t in tags for p in regras["hashtags_vetadas"] if re.fullmatch(p, t, re.I)]):
-        avisos.append(f"hashtag de outra empresa ({_unicos(vetadas)})")
-    minusculo = texto.lower()
-    if not any(a.lower().rstrip("!.") in minusculo for a in regras["assinatura"]):
-        avisos.append(f"falta a assinatura (\"{regras['assinatura'][0]}\")")
-    if not any(re.search(c, texto, re.I) for c in regras["ctas"]):
-        avisos.append("CTA fora da lista aprovada da empresa")
-    return avisos
+    """As regras de formato ficam no motor comum (as mesmas da legenda entregue pelo Max)."""
+    return motor.formato_legenda(texto, empresa if regras else "", tipo)
 
 
 def _contagem(texto: str, data_postagem: str) -> list[str]:
@@ -201,10 +191,21 @@ def anotar(resposta: str, agente_id: str, empresa: str, pedido: str = "", tarefa
     with _trava:
         do_monday = _pendentes.pop(tarefa_id, []) if tarefa_id else []
     avisos = conferir(resposta, empresa, "resposta", pedido) if agente_id in AGENTES else []
-    blocos = [rodape(avisos), rodape(do_monday, "Conferência dos itens gravados no Monday"),
+    da_legenda = conferir_legenda_do_chat(resposta, empresa, pedido, avisos) if agente_id in AGENTES else []
+    blocos = [rodape(avisos), rodape(da_legenda, TITULO_LEGENDA),
+              rodape(do_monday, "Conferência dos itens gravados no Monday"),
               *_complementos(resposta, agente_id, empresa, pedido)]
     extra = "\n\n".join(b for b in blocos if b)
     return f"{resposta}\n\n{extra}" if extra and resposta else resposta
+
+
+def conferir_legenda_do_chat(resposta: str, empresa: str, pedido: str = "", ja_avisados: list[str] = ()) -> list[str]:
+    """Copywriter-03: a legenda dentro da resposta do chat passa pelas regras de legenda (antes só no Monday).
+    Sem bloco de legenda, a resposta inteira é conferida com a ficha do imóvel (cerebro-03)."""
+    legenda = motor.legenda_do_texto(resposta)
+    if not legenda:
+        return [a for a in _com_a_ficha(resposta, empresa) if a not in ja_avisados]
+    return [a for a in conferir(legenda, empresa, "legenda", pedido) if a not in ja_avisados]
 
 
 PLANO_DE_MIDIA = re.compile(r"\b(plano de m[ií]dia|campanhas?|conjuntos? de an[uú]ncios|p[uú]blicos?|verba|"

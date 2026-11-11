@@ -6,6 +6,8 @@ tarefa 61 (Vero 30 com 8 suítes; são 6), revisão de 30/10 item 1.9 (plano com
 de Max perdidos). O pedido (e o plano do Gestor) é comparado com a tabela de imóveis (cerebro_imoveis): número do
 Lodge, cidade/UF, suítes, quartos e capacidade. Divergência vira uma pergunta com "seguir mesmo assim", nunca um
 bloqueio: linguagem livre ("cabe a família toda") não é conferida, só números e "Cidade / UF".
+Desde a Onda 2 de novembro (cerebro-03), a legenda final, o e-mail e o item do Monday também passam pela ficha, com a
+diária da Casa Veraneio (divergencias_da_legenda, chamada pelo conferente), só como aviso.
 """
 
 import json
@@ -93,6 +95,57 @@ def divergencias(texto: str, empresa: str, rotulo_origem: str = "o pedido") -> l
                     achados.append(f"{rotulo} {numero}: {rotulo_origem} diz {cidade} / {uf}; a {origem}) diz "
                                    f"{ficha['cidade']} / {ficha.get('uf') or '—'}.")
                     break
+    return list(dict.fromkeys(achados))[:MAX_AVISOS]
+
+
+# --- Legenda final, e-mail e item do Monday contra a ficha (cerebro-03, Onda 2 de novembro) ----------------
+
+VALOR = re.compile(r"R\$\s*([\d.]+(?:,\d{2})?)")
+DATA_DA_FICHA = re.compile(r"\(dados de (\d{2})/(\d{2})/(\d{4})\)")
+FICHA_VELHA_DIAS = 7
+
+
+def _reais(texto: str) -> set[int]:
+    return {int(v.split(",")[0].replace(".", "")) for v in VALOR.findall(texto or "") if v.strip(".")}
+
+
+def _diarias(texto: str, hoje=None) -> list[str]:
+    """Casa Veraneio: a diária citada na legenda precisa aparecer nos valores por época da ficha do site, e a coleta
+    precisa ser recente. Na Casa Vero e no Corp nenhum valor vai para a conferência (sem dado de hospedagem)."""
+    from datetime import date
+
+    hoje = hoje or date.today()
+    achados = []
+    for numero, trecho in _trechos_por_imovel(texto, "casa_veraneio").items():
+        sem_taxa = re.sub(r"taxa de ativa[cç][aã]o[^\n]{0,20}?R\$\s*[\d.,]+", "", trecho, flags=re.I)  # manual 01 §5
+        if not (citados := _reais(sem_taxa)):
+            continue
+        if not (ficha := fichas.ficha(numero, "casa_veraneio") or ""):
+            continue  # imóvel sem ficha: o aviso saiu antes do Max
+        valores = {v for linha in ficha.splitlines() if re.search(r"di[aá]ria|R\$", linha, re.I) for v in _reais(linha)}
+        if not valores:
+            achados.append(f"Lodge {numero}: a legenda cita diária, mas a ficha não tem valores por época para "
+                           "conferir (confirme a temporada).")
+            continue
+        if (fora := sorted(citados - valores)):
+            achados.append(f"Lodge {numero}: a diária citada (R$ {fora[0]:,}".replace(",", ".")
+                           + ") não confere com os valores da ficha.")
+        if (data := DATA_DA_FICHA.search(ficha)):
+            coleta = date(int(data.group(3)), int(data.group(2)), int(data.group(1)))
+            if (hoje - coleta).days > FICHA_VELHA_DIAS:
+                achados.append(f"Lodge {numero}: a ficha é de {coleta:%d/%m} (mais de {FICHA_VELHA_DIAS} dias): "
+                               "confirme a diária antes de publicar.")
+    return achados
+
+
+def divergencias_da_legenda(texto: str, empresa: str, hoje=None) -> list[str]:
+    """Só o que a ficha desmente (imóvel sem ficha já foi avisado antes do Max), mais a diária na Casa Veraneio.
+    Nunca bloqueia: vira linha do rodapé da conferência."""
+    if not empresas.valida(empresa) or not fichas.cita_imovel(texto):
+        return []
+    achados = [a for a in divergencias(texto, empresa, "a legenda") if "não está na ficha" not in a]
+    if empresa == "casa_veraneio":
+        achados += _diarias(texto, hoje)
     return list(dict.fromkeys(achados))[:MAX_AVISOS]
 
 
