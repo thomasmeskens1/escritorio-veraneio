@@ -30,6 +30,8 @@ import conferencia_texto
 import logos_empresas
 import link_drive
 import molde
+import motion_tipografico
+import receita
 import comum
 import emails_brevo
 import painel_analitico
@@ -445,6 +447,10 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
         entrega,
         # Moldes prontos da Casa Veraneio (Onda 3, item 1): o Max preenche o molde.json em vez de desenhar do zero.
         molde.instrucao(producao["agente"], producao.get("empresa") or "casa_veraneio", producao.get("entrega") or ""),
+        # Reels tipográfico do Corp e receita fixa da peça (Onda 2 de novembro; motion_tipografico.py e receita.py).
+        motion_tipografico.instrucao(producao["agente"], producao.get("empresa") or "casa_veraneio",
+                                     producao.get("entrega") or ""),
+        receita.instrucao(producao["agente"], producao.get("entrega") or ""),
         "Contexto: Escritório Veraneio, equipe de marketing da Casa Veraneio. Responda em português do Brasil.",
         f"Conversa recente:\n{historico}" if historico else "",
         f"Pedido: {producao['texto']}",
@@ -471,7 +477,7 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
         f"{PASTA_FINAL}/. Só o que estiver em {PASTA_FINAL}/ vai para o Drive (não use \"MARKETING > THOMAS\" citado "
         f"nas diretrizes). Em {PASTA_FINAL}/ entregue: (1) a arte final (PNG, MP4 ou PDF); (2) o editável em "
         f"{PASTA_FINAL}/EDITÁVEL/, gerado com python-pptx conforme as diretrizes (em vídeo, também "
-        f"{PASTA_FINAL}/EDITÁVEL/CENAS/ e manifest.json); (3) a legenda, quando a peça tiver (stories não têm), em "
+        f"{PASTA_FINAL}/EDITÁVEL/CENAS/; o manifest agora é a receita.json, descrita acima); (3) a legenda, quando a peça tiver (stories não têm), em "
         "\"Legenda - <peça>.docx\", gerada com python-docx, no lugar do Google Doc. Não use Higgsfield nem outra IA "
         "de imagem.",
         "Se esta pasta já tiver arquivos de uma tentativa anterior interrompida, reaproveite-os e faça só o que falta.",
@@ -724,6 +730,10 @@ def produzir(producao: dict) -> None:
         copiar_referencias(rascunho, producao.get("empresa") or "casa_veraneio")
     except OSError as erro:  # Drive fora: a peça segue e o Max avisa o que faltou
         log(f"   referências do CÉREBRO não copiadas ({erro})")
+    try:  # prazo "fechar até" vigente: a contagem do Reels tipográfico só lê dele (Onda 2)
+        motion_tipografico.gravar_prazo(rascunho, producao.get("prazo_comercial"))
+    except OSError as erro:
+        log(f"   prazo comercial não gravado ({erro})")
     comum.zerar_uso()  # medição do Max: soma as rodadas desta peça (vai com a conclusão/falha)
     try:
         anexos = copiar_anexos(producao, rascunho)
@@ -767,6 +777,16 @@ def produzir(producao: dict) -> None:
                                                                             PASTA_MARCAS), empresa)):
             resumo = f"{marca}\n\n{resumo}"
             log(f"   {marca}")
+        # Receita fixa da peça (Onda 2): conferida com o que voltou e gravada em entrega/EDITÁVEL/receita.json.
+        nome_receita, linha_receita = receita.na_producao(
+            rascunho, rascunho / PASTA_FINAL, novos, empresa, entrega.name, producao["texto"],
+            lambda arquivo: medida(arquivo, ambiente),
+            bool(motion_tipografico.prazo_valido(producao.get("prazo_comercial"))))
+        if nome_receita:
+            novos = sorted({*novos, nome_receita})
+        if linha_receita:
+            resumo = f"{resumo}\n\n{linha_receita}"
+            log(f"   {linha_receita}")
         if faltaram:
             resumo = (f"{resumo}\n\n⚠ Referência(s) do Monday que não chegaram ao Max: {'; '.join(faltaram)}. Se "
                       "eram necessárias, envie o arquivo por uma pasta do Drive e peça um ajuste.")
