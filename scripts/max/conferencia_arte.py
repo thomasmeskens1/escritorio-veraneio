@@ -5,7 +5,8 @@ falhar e diz no resumo o que conferiu. As regras de texto do backend ficam em ba
 
 COMUM = [
     "logo só desta empresa (pasta CÉREBRO/MARCAS dela), na cor certa para o fundo e sem redesenho",
-    "paleta Verde #00361B, Creme #F0DBC3, Caramelo #D9A15B e Branco; degradê ou caixa de leitura nunca preta",
+    "paleta Verde #00361B, Creme #F0DBC3, Caramelo #D9A15B e Branco #FFFFFF; degradê ou caixa de leitura nunca "
+    "preta",
     "nenhum rótulo interno do plano escrito na arte (GANCHO, URGÊNCIA, SLIDE 1, CTA, KICKER, TÍTULO)",
     "título sem palavra sozinha na última linha",
     "localização como \"Cidade / UF\"",
@@ -16,7 +17,11 @@ COMUM = [
 ]
 POR_EMPRESA = {
     "casa_veraneio": "nada do Corporativo (\"CORP.\") nem da Casa Vero",
-    "cv_corporativo": "nada da Casa Veraneio (Lodges) nem da Casa Vero; sem diária, estadia ou dado de hospedagem",
+    # designer-06 (Onda 2 de novembro): só aviso, nunca bloqueio; sem foto liberada, propõe alternativa sem rostos.
+    "cv_corporativo": "nada da Casa Veraneio (Lodges) nem da Casa Vero; sem diária, estadia ou dado de hospedagem; "
+                      "rosto reconhecível em destaque só com autorização de imagem; nenhuma logo ou crachá de "
+                      "cliente; nenhum sinal de época (máscara, decoração de outra data); sem foto liberada, use "
+                      "ambiente montado, mesa posta, palco ou pessoas de costas/desfocadas e avise no resumo",
     "casa_vero": "nada da Casa Veraneio nem do Corporativo, nem a palavra \"Lodge\"; sem valor de venda, condomínio "
                  "ou IPTU sem autorização no pedido",
 }

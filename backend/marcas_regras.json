@@ -1,0 +1,157 @@
+{
+  "_sobre": "Regras de marca das 3 empresas num arquivo só (Onda 2 de novembro, 11/11/2026; gestor-19, designer-33, editor_video-19, sonoplasta-07). Fonte: manuais 01, 03, 05, 06, 08, 11 e 12 e o código das peças (scripts/max). O teste tests/test_marcas_regras.py avisa quando o código discorda deste arquivo. \"pendente_decisao_1\" = aguarda a decisão 1 do Thomas (fechamento da Vero e 0,75x no Corp e na Vero): sem valor inventado. \"status\": \"proposta\" = regra só na proposta de manual, configurável aqui até a aprovação.",
+  "pendente": "pendente_decisao_1",
+  "paleta": {
+    "_fonte": "manual 01 §3, 08 §5, 11 e 12 (Nenhuma cor nova)",
+    "verde": "#00361B",
+    "creme": "#F0DBC3",
+    "caramelo": "#D9A15B",
+    "branco": "#FFFFFF"
+  },
+  "degrade": {
+    "_fonte": "manuais 01 §3, 03 §2, 11 e 12: degradê de leitura sempre Verde, de 0 a ~85%, nunca preto",
+    "cor": "verde",
+    "opacidade_max": 0.85,
+    "nunca": ["preto"]
+  },
+  "veu": {
+    "_fonte": "proposta da Onda 1 (manuais_propostos.md): véu preto uniforme e leve só para escurecer vídeo claro demais; não substitui o degradê Verde",
+    "status": "proposta",
+    "cor": "preto",
+    "opacidade_max": 0.3
+  },
+  "caixas": {
+    "_fonte": "manual 08 §5: caixa Verde com texto Branco (Playfair itálico, localização); caixa Caramelo com texto Branco (Muli, apoio); nunca caixa preta ou cinza",
+    "verde": "branco",
+    "caramelo": "branco",
+    "nunca": ["preto", "cinza"]
+  },
+  "feed": {
+    "_fonte": "manuais 03 (moldes), 11 e 12: feed 3:4 e logo ~112 px; fechamento do 9:16 ~135 px",
+    "formato_padrao": "1080x1440",
+    "logo_feed_px": 112,
+    "logo_fechamento_px": 135,
+    "zonas_916": {"topo_px": 250, "base_px": 340}
+  },
+  "video": {
+    "_fonte": "manuais 05 §5 e 06 §2 (Thomas, 04/11/2026); motion.py",
+    "velocidade_min": 0.5,
+    "velocidade_max": 1.0,
+    "take_min_s": 3.5,
+    "take_max_s": 6.0,
+    "takes_reels_25_30s": [5, 7],
+    "max_takes_ate_30s": 7,
+    "duracoes_iguais_seguidas_max": 2,
+    "palavras_por_segundo": 2.5,
+    "palavras_por_cena_max": 8,
+    "_palavras": "palavras por segundo e por cena: proposta do moviemaker-21, configurável até o Thomas confirmar"
+  },
+  "som_comum": {
+    "_fonte": "sonoplasta.py (loudnorm I=-14 TP=-1.5) e decisões de 05/11/2026; limites de conferência do sonoplasta-04",
+    "lufs": -14,
+    "lufs_tolerancia": 1.0,
+    "true_peak_alvo_db": -1.5,
+    "true_peak_max_db": -1.0,
+    "silencio_db": -50,
+    "silencio_max_s": 1.0,
+    "nada_junto_da_assinatura": true,
+    "nunca": ["piano + cordas cinematográfico"]
+  },
+  "marcas": {
+    "casa_veraneio": {
+      "nome": "Casa Veraneio",
+      "sigla": "VERANEIO",
+      "pasta_marcas": "CASA_VERANEIO",
+      "dominante": [],
+      "logos": {
+        "clara": "logo_branca.png",
+        "escura": "logo_preta.png",
+        "caramelo": "logo_caramelo_texto_creme.png",
+        "_obs": "não há logo completo em Verde (manual 01): em fundo claro sai o preto monocromático, com aviso"
+      },
+      "logo_por_fundo": {"foto": "clara", "verde": "clara", "verde_com_cor": "caramelo", "creme": "escura", "branco": "escura"},
+      "video": {"velocidade": 0.75, "_fonte": "manuais 05 e 06: 0,75x em todos os takes; 1x só a pedido"},
+      "fechamento": {"fundo": "verde", "logo": "caramelo", "_fonte": "manual 06 §3 (logo Creme = caramelo com texto Creme), molde fechamento"},
+      "vinheta": {"fundo": "verde", "logo": "caramelo", "logo_916_px": 180},
+      "moldes": true,
+      "som": {
+        "catalogo": "CASA VERANEIO",
+        "direcao": "parte da bossa e explora outros ritmos de praia (Thomas, 05/11/2026)",
+        "aprovacao": "Thomas, 11/11/2026 (folha de audição): faixas 2, 3 e 5",
+        "faixas": [
+          {"n": 1, "estilo": "bossa_nova_praia", "bpm": 100, "status": "reprovada"},
+          {"n": 2, "estilo": "tropical_house", "bpm": 110, "status": "aprovada"},
+          {"n": 3, "estilo": "balearic_chill", "bpm": 95, "status": "aprovada"},
+          {"n": 4, "estilo": "samba_jazz_leve", "bpm": 120, "status": "reprovada"},
+          {"n": 5, "estilo": "deep_house_organico", "bpm": 118, "status": "aprovada"},
+          {"n": 6, "estilo": "lounge_nu_jazz", "bpm": 105, "status": "reprovada"}
+        ]
+      }
+    },
+    "cv_corporativo": {
+      "nome": "Casa Veraneio Corporativo",
+      "sigla": "CORP",
+      "pasta_marcas": "CORPORATIVO",
+      "dominante": ["verde"],
+      "logos": {
+        "clara": "logo_corp_branca.png",
+        "escura": "logo_corp_verde.png",
+        "caramelo": "logo_corp_caramelo_texto_branco.png"
+      },
+      "logo_por_fundo": {"foto": "clara", "verde": "clara", "verde_com_cor": "caramelo", "creme": "escura", "branco": "escura"},
+      "video": {"velocidade": "pendente_decisao_1", "_fonte": "manual 11 §6.1 e checklist 9 dizem 1x; manuais 05 e 06 dizem 0,75x em todos"},
+      "fechamento": {"fundo": "verde", "logo": "caramelo", "logos_aceitas": ["clara", "caramelo"], "_fonte": "manual 11 (fundo Verde, logo Branca ou Caramelo com texto branco)"},
+      "vinheta": {"fundo": "verde", "logo": "caramelo", "logo_916_px": 200},
+      "moldes": false,
+      "vetos_foto": {
+        "_fonte": "manual 04 §4 e designer-06: só AVISO, nunca bloqueio",
+        "pessoas_sem_autorizacao": true,
+        "logo_ou_cracha_de_cliente": true,
+        "sinais_de_epoca": true,
+        "foto_antiga_anos": 2
+      },
+      "som": {
+        "catalogo": "CASA VERANEIO CORP",
+        "direcao": "só eletrônico, com energia (Thomas, 05/11/2026)",
+        "aprovacao": "Thomas, 11/11/2026 (folha de audição): faixas 1, 2, 3, 4 e 6",
+        "faixas": [
+          {"n": 1, "estilo": "progressive_house", "bpm": 126, "status": "aprovada"},
+          {"n": 2, "estilo": "nu_disco", "bpm": 120, "status": "aprovada"},
+          {"n": 3, "estilo": "tech_house", "bpm": 125, "status": "aprovada"},
+          {"n": 4, "estilo": "melodic_techno", "bpm": 122, "status": "aprovada"},
+          {"n": 5, "estilo": "electro_pop", "bpm": 118, "status": "reprovada"},
+          {"n": 6, "estilo": "future_house", "bpm": 124, "status": "aprovada"}
+        ]
+      }
+    },
+    "casa_vero": {
+      "nome": "Casa Vero Imóveis",
+      "sigla": "VERO",
+      "pasta_marcas": "CASA_VERO",
+      "dominante": ["caramelo", "creme"],
+      "logos": {
+        "clara": "logo_vero_caramelo_creme.png",
+        "escura": "logo_vero_verde_caramelo.png",
+        "caramelo": "logo_vero_caramelo_creme.png"
+      },
+      "logo_por_fundo": {"foto": "clara", "verde": "clara", "verde_com_cor": "caramelo", "creme": "escura", "branco": "escura"},
+      "video": {"velocidade": "pendente_decisao_1", "_fonte": "manual 12 §4.3 e checklist 9 dizem 1x; manuais 05 e 06 dizem 0,75x em todos"},
+      "fechamento": {"fundo": "pendente_decisao_1", "logo": "pendente_decisao_1", "_fonte": "manual 12 checklist 9: Verde; trabalhador e vinheta: Creme"},
+      "vinheta": {"fundo": "pendente_decisao_1", "logo": "pendente_decisao_1", "logo_916_px": 300},
+      "moldes": false,
+      "som": {
+        "catalogo": "CASA VERO",
+        "direcao": "acolhedor e elegante, com groove e movimento; nada monótono (Thomas, 05/11/2026)",
+        "aprovacao": "Thomas, 11/11/2026 (folha de audição): todas menos a 2",
+        "faixas": [
+          {"n": 1, "estilo": "lofi_groove", "bpm": 90, "status": "aprovada"},
+          {"n": 2, "estilo": "violao_acustico_quente", "bpm": 105, "status": "reprovada"},
+          {"n": 3, "estilo": "neo_soul_groove", "bpm": 95, "status": "aprovada"},
+          {"n": 4, "estilo": "jazz_hop", "bpm": 88, "status": "aprovada"},
+          {"n": 5, "estilo": "acoustic_funk", "bpm": 108, "status": "aprovada"},
+          {"n": 6, "estilo": "chill_pop_elegante", "bpm": 100, "status": "aprovada"}
+        ]
+      }
+    }
+  }
+}

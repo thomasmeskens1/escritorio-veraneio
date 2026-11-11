@@ -26,6 +26,7 @@ import caixa_saida
 import catalogo_fotos_empresas
 import catalogo_lodges
 import conferencia_arte
+import conferencia_saida
 import conferencia_texto
 import logos_empresas
 import link_drive
@@ -810,6 +811,10 @@ def produzir(producao: dict) -> None:
         if linha_texto:
             resumo = f"{resumo}\n\n{linha_texto}"
             log(f"   {linha_texto}")
+        # Legenda, ritmo e cores do vídeo, áudio e fotos do Corp: só aviso (Onda 2 de novembro).
+        if (linha_saida := conferencia_saida.conferir(entrega, novos, rascunho, empresa, producao["texto"])):
+            resumo = f"{resumo}\n\n{linha_saida}"
+            log(f"   {linha_saida}")
         if novos and (linha_final := organizar_final(producao, entrega, ambiente, barradas)):
             resumo = f"{resumo}\n\n{linha_final}"
     except comum.MaxSemCota as erro:

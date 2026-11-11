@@ -100,4 +100,16 @@ REGRAS = {
     },
 }
 
+# Erros de digitação conhecidos (email_marketing-03: tarefas 122 a 128). Sem dicionário nem IA: só a lista; cresce
+# quando aparecer um erro novo. Padrão (regex) -> grafia certa. Só aviso.
+ERROS_DE_GRAFIA = {
+    r"\bjaniero\b": "janeiro", r"\bfeverei?riro\b": "fevereiro", r"\bimesquec[ií]ve(?:l|is)\b": "inesquecível",
+    r"\bsua f[ée]rias\b": "suas férias", r"\bf[ée]ria de\b": "férias de", r"\bexcess[aã]o\b": "exceção",
+    r"\bconcerteza\b": "com certeza", r"\bderrepente\b": "de repente", r"\bagente cuida\b": "a gente cuida",
+}
+
+# Corporativo: fotos com pessoas e logo de cliente (manual 04 §4, designer-06). No roteiro da arte, só AVISA.
+VETOS_FOTO_CORP = [r"\bfotos?\b[^.\n]{0,40}\b(?:pessoas|convidad[oa]s|rostos?|participantes|colaboradores)\b",
+                   r"\blogos?\s+d[oa]s?\s+(?:cliente|empresa cliente|patrocinador)", r"\bcrach[aá]s?\b"]
+
 # A lista que o Max confere nos PNGs finais fica em scripts/max/conferencia_arte.py (roda no PC, sem o backend).
