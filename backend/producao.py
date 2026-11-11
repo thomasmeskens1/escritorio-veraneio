@@ -584,7 +584,23 @@ async def _montar_producao(linha) -> dict:
         # Legenda/texto do Copywriter aprovado na conversa: vai como TEXTO FIXO ("copie, não reescreva") e o
         # trabalhador confere os números antes da pasta FINAL (Onda 1 de novembro, copywriter-02).
         "texto_aprovado": texto_aprovado.da_producao(linha, raiz["texto"] if raiz else ""),
+        # Prazo "fechar até" vigente (Onda 2, Reels tipográfico): a contagem regressiva só entra com ele.
+        "prazo_comercial": _prazo_comercial(linha["empresa"], linha["texto"]),
     }
+
+
+def _prazo_comercial(empresa: str, texto: str) -> dict | None:
+    """O prazo válido que sustenta a urgência da peça (prazos_comerciais.vigente), com as datas em texto."""
+    try:
+        import prazos_comerciais  # import tardio: lê o calendario.json
+        prazo = prazos_comerciais.vigente(empresa, texto)
+    except Exception as erro:  # noqa: BLE001 - sem prazo, a peça segue sem contagem
+        log.warning("prazo comercial não lido: %s", erro)
+        return None
+    if not prazo:
+        return None
+    return {"momento": prazo["momento"], "fechar_ate": prazo["fechar_ate"].isoformat(),
+            "vale_ate": prazo["vale_ate"].isoformat(), "faltam": prazo["faltam"], "valido": prazo["valido"]}
 
 
 def _anexos_da_producao(tarefa_id: int) -> list[str]:
