@@ -120,7 +120,9 @@ class ConsultarCerebro(BaseTool):
         if self.externo and sigilosa("", "", resposta, self.tarefa_id):
             return ("Esse conhecimento é sigiloso (CRM, carteira de clientes ou financeiro) e não pode ser usado aqui. "
                     "Responda sem ele e diga ao usuário que esse detalhe fica com a Diretoria.")
-        return resposta
+        from agents import consulta_repetida  # mesma pergunta na mesma tarefa: aviso curto (cerebro-35)
+
+        return consulta_repetida.aviso(self.tarefa_id, self.agente, pergunta, resposta) or resposta
 
 
 class _Especificacao(BaseModel):

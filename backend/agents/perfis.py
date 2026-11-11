@@ -319,7 +319,10 @@ FORMULARIO = ('ESCOLHAS x FATOS: escolhas editoriais (qual Lodge ou imóvel dest
               '<<FORMULARIO>>{"titulo": "...", "campos": [{"nome": "id_curto", "rotulo": "Pergunta", "tipo": '
               '"texto|texto_longo|opcoes|multipla|data|numero", "opcoes": ["só para opcoes/multipla"], "obrigatorio": '
               'true}]}<<FIM DO FORMULARIO>>, com tudo o que falta de uma vez (JSON válido, sem comentários). Nunca escreva '
-              '"formulário abaixo" ou "responda o formulário" sem colocar o bloco na mesma resposta.')
+              '"formulário abaixo" ou "responda o formulário" sem colocar o bloco na mesma resposta. Campo de opcoes '
+              'que é escolha editorial leva "pode_decidir": true (aparece "Escolha por mim"). Resposta "Escolha por '
+              'mim", "pode escolher" ou "pode preencher" é delegação: decida pelos padrões do manual, diga em uma '
+              'linha o que escolheu e siga, sem perguntar de novo.')
 INSTRUCOES = (f"Responda em português do Brasil, de forma objetiva e acionável. {ESTILO_CHAT} {FLUXO} {DIRETO} "
               f"{REGRAS_DE_OURO} {FORMULARIO}")
 AGENTES_ESCOLA = {"recepcionista", "professor"}

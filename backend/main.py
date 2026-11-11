@@ -46,6 +46,8 @@ import historico
 import insatisfacoes
 import orquestrador
 import parar
+import pedido_repetido
+import plano_tabela
 import producao
 import producao_semana
 import relatorios
@@ -213,6 +215,7 @@ app.include_router(documentos_entrega.rotas)  # planilha do catálogo e .docx da
 app.include_router(cerebro_modelos.rotas)  # modelos de estilo aprovados (Onda 3, cerebro-12)
 app.include_router(repetir_lodges.rotas)   # "Repetir para…" até 5 Lodges (Onda 3, copywriter-04)
 app.include_router(desdobrar.rotas)  # botão Desdobrar: 4:5 e 9:16 pelo molde (Onda 3, item 3)
+app.include_router(plano_tabela.rotas)  # planejamento em tabela gravado no Monday pelo código (social_media-05)
 
 
 class Credenciais(BaseModel):
@@ -490,6 +493,8 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         if not (plano := encaminhamento.ultimo_planejamento(usuario["sub"])):
             return await erro("Não achei um planejamento recente do Gestor para lançar. Peça o planejamento primeiro "
                               "e, quando ele chegar, peça para lançar no Monday.", **alvo)
+        if (tabela := await asyncio.to_thread(plano_tabela.aviso_lancar, plano[0])):  # grava o aprovado, sem modelo
+            return await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "liberar": True, **tabela})
         origem_id, agente = agente.id, buscar_agente(andar, encaminhamento.SOCIAL_MEDIA)
         texto = encaminhamento.pedido_ao_social_media(texto, *plano)
         aviso = {"titulo": "Lançando no Monday",
@@ -503,6 +508,10 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
                      "arquivos) ou a peça final pronta (artes e vídeos produzidos no Max)?",
             "opcoes": [{"rotulo": "Só o planejamento", "texto": f"Planejamento: {texto}"},
                        {"rotulo": "Peça final", "texto": f"Peça final: {texto}"}]})
+    # Pedido igual ou peça parecida e recente: continuar (ajuste, variante B) em vez de refazer (Onda 2, item 2).
+    elif (repetido := await asyncio.to_thread(pedido_repetido.aviso, usuario["sub"], andar, agente.id, texto, empresa,
+                                              encaminhamento.para_o_gestor(andar, agente.id, texto))):
+        return await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "liberar": True, **repetido})
     # Peça completa pedida a um especialista do Marketing: o Gestor coordena a equipe.
     elif encaminhamento.para_o_gestor(andar, agente.id, texto):
         origem_id = agente.id
