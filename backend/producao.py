@@ -29,6 +29,7 @@ import max_texto
 import saude
 import fichas
 import monday
+import pasta_peca
 import segredos
 import tarefas
 import texto_aprovado
@@ -42,8 +43,9 @@ log = logging.getLogger("veraneio.producao")
 
 ARQUIVO_TOKEN = config.DADOS_DIR / "operador.token"
 MODELO_MAX = "claude-code/max"
-TIPOS_TRABALHO = {"anexo", "site", "prospeccao", "documento"}  # prospeccao: pesquisa na web do Prospectador
-# (comercial.py); documento: planilha/.docx da resposta gravada no Drive pelo trabalhador (documentos_entrega.py)
+TIPOS_TRABALHO = {"anexo", "site", "prospeccao", "documento", "inventario"}  # prospeccao: pesquisa na web do
+# Prospectador (comercial.py); documento: planilha/.docx da resposta gravada no Drive pelo trabalhador
+# (documentos_entrega.py); inventario: material do imóvel lido sem IA antes do plano (inventario.py, Onda 2)
 
 # Pasta de cada andar dentro de "ESCRITÓRIO VERANEIO" no Drive.
 PASTAS_ANDAR = {"marketing": "MARKETING", "comercial": "COMERCIAL", "porao": "PORÃO", "terreo": "TÉRREO", "cobertura": "COBERTURA"}
@@ -523,7 +525,7 @@ async def proxima(sem_producao: bool = False, faltando: str = "", authorization:
         log.warning("Produção interrompida de %s voltou para a fila.", agente)
         await atividade.liberar(agente)
     await drive_pc.avisar_quem_espera()
-    if (trabalho := _reservar_trabalho(("anexo", "texto"))):
+    if (trabalho := _reservar_trabalho(("anexo", "texto", "inventario"))):  # inventario: o plano espera por ele
         return {"producao": None, "trabalho": trabalho}
     if sem_producao and not drive_pc.so_acervo():
         return {"producao": None, "trabalho": None}
@@ -574,6 +576,8 @@ async def _montar_producao(linha) -> dict:
         "anexos": _anexos_da_producao(linha["id"]),
         # Item do Monday: referências (links novos) para baixar e envio dos criativos no fim.
         "monday": bool(monday.item_da_tarefa(linha["id"])),
+        # Uma pasta por item do Monday, com o TIPO do item (pasta_peca.py; Onda 2 de novembro, social_media-01).
+        "item_monday": pasta_peca.item_da_producao(linha["id"], linha["texto"]),
         "referencias": await asyncio.to_thread(monday.referencias_da_tarefa, linha["id"]),
         "fichas": await asyncio.to_thread(fichas.fichas_citadas, linha["texto"], linha["empresa"]),  # da empresa
         "empresa": linha["empresa"],  # o trabalhador escolhe manuais e acervo da empresa (nunca misturar)

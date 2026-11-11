@@ -54,6 +54,11 @@ def registrar(faltando: str, incompleto: bool, agora: float | None = None) -> No
     _estado.update(faltando=faltando, visto=agora)
 
 
+def faltando() -> str:
+    """O que falta do Drive agora ("" = tudo acessível ou sem notícia do trabalhador). Usado pelo inventario.py."""
+    return _estado["faltando"]
+
+
 def so_acervo() -> bool:
     """Falta só o acervo dos Lodges: as peças que não o usam podem rodar."""
     return _estado["faltando"] == ACERVO
