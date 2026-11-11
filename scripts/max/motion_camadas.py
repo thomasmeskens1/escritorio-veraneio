@@ -14,6 +14,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
+import logos_empresas
+
 # Manual 01/08: Verde #00361B, Caramelo #D9A15B, Creme #F0DBC3 e Branco (preto só para escurecer o vídeo).
 CORES = {"verde": (0, 54, 27), "caramelo": (217, 161, 91), "creme": (240, 219, 195), "branco": (255, 255, 255),
          "preto": (0, 0, 0)}
@@ -25,7 +27,8 @@ ARQUIVOS_FONTE = {"playfair": "PlayfairDisplay-Variavel.ttf", "playfair_italico"
 # Título primário em Playfair Extrabold 800; secundário em Playfair Regular itálico; corpo em Muli Regular.
 PESO_PADRAO = {"playfair": 800, "playfair_italico": 400, "muli": 400, "muli_italico": 400}
 ITALICO_DE = {"playfair": "playfair_italico", "muli": "muli_italico"}
-LOGOS = {"branca": "logo_branca.png", "caramelo": "logo_caramelo_texto_creme.png"}  # Casa Veraneio
+# Apelidos do "logo" (iguais nas três marcas; o arquivo sai da empresa da peça, logos_empresas.py, 11/11/2026).
+LOGOS = {"clara": "clara", "escura": "escura", "caramelo": "caramelo", "branca": "clara"}  # "branca": nome antigo
 
 
 def cor(valor, opacidade: float = 1.0) -> tuple[int, int, int, int]:
@@ -347,11 +350,12 @@ def numero_br(valor: float, casas: int = 0) -> str:
 
 # ---------------------------------------------------------------- fontes e logos da peça
 
-def pastas_de_recursos(base: Path) -> list[Path]:
-    """Onde procurar fontes e logos: a pasta da peça (_referencias/ copiado do CÉREBRO) e, no PC, o CÉREBRO."""
-    marcas = pasta_marcas()
-    return ([base / "_referencias" / "FONTES", base / "_referencias" / "CASA_VERANEIO", base / "FONTES", base]
-            + [marcas / "FONTES", marcas / "CASA_VERANEIO"])
+def pastas_de_recursos(base: Path, empresa: str = logos_empresas.PADRAO) -> list[Path]:
+    """Onde procurar fontes e logos: a pasta da peça (_referencias/ copiado do CÉREBRO) e, no PC, o CÉREBRO. Só a
+    pasta de logos da empresa da peça (antes, sempre a da Casa Veraneio)."""
+    marcas, logos = pasta_marcas(), logos_empresas.LOGOS[logos_empresas.empresa_valida(empresa)]["pasta"]
+    return ([base / "_referencias" / "FONTES", base / "_referencias" / logos, base / "FONTES", base]
+            + [marcas / "FONTES", marcas / logos])
 
 
 def pasta_marcas() -> Path:
@@ -367,14 +371,22 @@ def _dentro(base: Path, relativo: str, campo: str) -> Path:
     return caminho
 
 
-def _arquivo_imagem(el: dict, base: Path, pastas: list[Path]) -> Path:
+def _arquivo_imagem(el: dict, base: Path, pastas: list[Path], empresa: str = logos_empresas.PADRAO,
+                    avisos: list[str] | None = None) -> Path:
+    """Arquivo da imagem; "logo" vira o arquivo da empresa da peça. Logo de outra empresa é recusado."""
     if el.get("arquivo"):
+        if (outra := logos_empresas.logo_de_outra(empresa, el["arquivo"])):
+            raise ValueError(f"imagem {el['arquivo']} é logo de {logos_empresas.LOGOS[outra]['nome']}; esta peça é "
+                             f"de {logos_empresas.LOGOS[logos_empresas.empresa_valida(empresa)]['nome']}. Use \"logo\": "
+                             "\"clara\" ou \"escura\" (o arquivo certo sai sozinho)")
         caminho = _dentro(base, el["arquivo"], "imagem")
         if caminho.is_file():
             return caminho
         nome = Path(el["arquivo"]).name
     else:
-        nome = LOGOS[el["logo"]]
+        nome, aviso = logos_empresas.arquivo_do_apelido(empresa, el["logo"])
+        if aviso and avisos is not None and aviso not in avisos:
+            avisos.append(aviso)
     achado = next((p / nome for p in pastas if (p / nome).is_file()), None)
     if not achado:
         raise ValueError(f"Imagem não encontrada: {el.get('arquivo') or nome}")

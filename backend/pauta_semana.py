@@ -17,6 +17,7 @@ import calendario
 import empresas
 import monday
 import monday_datas
+import pauta_papeis
 import tarefas
 
 log = logging.getLogger(__name__)
@@ -158,12 +159,16 @@ def analisar(quadro: dict[str, list[dict]], empresa: str, hoje: date) -> dict:
     return {"empresa": empresa, "inicio": inicio, "fim": fim, "itens": da_semana,
             "grade": [_diferenca(t, contagem[t], *GRADE[empresa][t]) for t in GRADE[empresa]],
             "fora_da_grade": fora_da_grade, "sem_tipo": sem_tipo, "sem_conta": sem_conta, "sem_data": sem_data,
-            "vencendo": vencendo, "contagens": [c for _, i in da_semana if (c := _contagem_errada(i))]}
+            "vencendo": vencendo, "contagens": [c for _, i in da_semana if (c := _contagem_errada(i))],
+            **pauta_papeis.analisar([i for _, i in da_semana], empresa, hoje, _coluna)}
 
 
 def _texto_empresa(a: dict) -> str:
     linhas = [f"**{empresas.nome(a['empresa'])}** — semana de {a['inicio']:%d/%m} a {a['fim']:%d/%m}",
               "- Grade (manual 15): " + "; ".join(a["grade"])]
+    if a.get("mistura"):  # papel na jornada (gestor-13): Descoberta, Consideração e Conversão
+        linhas.append("- Papel das peças (manual 15 §5): " + a["mistura"])
+    linhas += [f"- Aviso de papel: {aviso}" for aviso in a.get("avisos_papel", [])]
     if a["fora_da_grade"]:
         linhas.append("- Fora da grade semanal: " + ", ".join(f"{t} {n}" for t, n in a["fora_da_grade"].items()))
     if a["vencendo"]:

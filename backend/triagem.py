@@ -26,6 +26,7 @@ import encaminhamento
 import tarefas
 from auth import validar_token
 from estado import ANDARES
+from roteamento import VIDEO_NEGADO
 
 log = logging.getLogger(__name__)
 rotas = APIRouter(prefix="/api/triagem")
@@ -129,7 +130,9 @@ def _treinar_se_preciso() -> None:
 
 
 def _pontos_regras(texto: str, candidatos) -> dict[str, list[str]]:
-    """agente -> termos do pedido que batem com a especialidade dele."""
+    """agente -> termos do pedido que batem com a especialidade dele. "Sem vídeo" não conta como vídeo
+    (brainstorm de 11/11/2026, editor_video-09)."""
+    texto = VIDEO_NEGADO.sub(" ", texto)
     achados: dict[str, list[str]] = {}
     for agente_id in candidatos:
         padroes = [p for p in (encaminhamento.ESCOPO.get(agente_id), EXTRA.get(agente_id)) if p]

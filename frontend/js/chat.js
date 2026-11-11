@@ -81,6 +81,8 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
   if (semana?.length) div.append(criarOpcoes(semana));
   const repetir = tipo === 'agente' && tarefa_id && criarBotaoRepetir(tarefa_id, texto); // js/referencias.js
   if (repetir) div.append(repetir);
+  const extras = tipo === 'agente' && tarefa_id && !pedido && criarExtrasDoTexto(texto); // ajustes e Peça final (js/refino.js)
+  if (extras) div.append(extras);
   if (tipo === 'agente' && tarefa_id) div.append(criarAvaliacao(tarefa_id, avaliacao)); // 👍/👎 (js/avaliacao.js)
   if (meta) {
     const linha = document.createElement('span');
@@ -328,6 +330,7 @@ function atualizarChat() {
   if (restrito) modalInput.placeholder = 'Envio indisponível para esta conta';
   else if (!online) modalInput.placeholder = 'Sem conexão com o servidor...';
   else modalInput.placeholder = carregando ? 'Carregando histórico…' : 'Descreva a tarefa...';
+  conferirEmpresaDoTexto(); // aviso de empresa acompanha o campo (js/empresa.js)
 }
 
 // A ficha do agente abre/fecha e muda a altura da conversa: quem estava no fim continua vendo a última mensagem.
@@ -757,6 +760,7 @@ function receberResposta(msg) {
   adicionarMensagem(andar, agente, mensagemDoAgente(andar, agente, msg));
   if (chatEstaAberto(andar, agente)) carregarPerfil(andar, agente); // atualiza o contador de tarefas
   else mostrarToast(andar, agente, texto);
+  contarRespostaNova(); // título da aba (js/refino.js)
   atualizarPendencias();
   atualizarChat();
   avisarPainel();
@@ -766,7 +770,8 @@ function receberResposta(msg) {
 function receberAdiada({ andar, agente, texto, tarefa_id }) {
   if (!andar || !agente) return;
   pendentes.delete(chave(andar, agente));
-  adicionarMensagem(andar, agente, { autor: 'sistema', texto, tipo: 'sistema', tarefa_id });
+  // Em palavras simples e com "pode fechar, não precisa reenviar" (js/chat_textos.js).
+  adicionarMensagem(andar, agente, { autor: 'sistema', texto: textoDeEspera(texto), tipo: 'sistema', tarefa_id });
   atualizarChat();
   avisarPainel();
 }

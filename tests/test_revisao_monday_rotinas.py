@@ -122,11 +122,12 @@ def test_previa_de_outra_pessoa_nao_e_usada(tmp_path, monkeypatch):
     import json
 
     import comercial
+    import prospeccao_previa  # saiu de comercial.py (Onda 1, 11/11/2026)
 
     monkeypatch.setattr(comercial, "PASTA_PREVIAS", tmp_path)
     (tmp_path / "50.json").write_text(json.dumps({"usuario": "bia", "leads": [], "criados": []}), encoding="utf-8")
-    assert comercial._qual_previa("Crie os leads da prévia #50", "ana") is None
-    assert comercial._qual_previa("Crie os leads da prévia #50", "bia") == 50
+    assert prospeccao_previa._qual_previa("Crie os leads da prévia #50", "ana") is None
+    assert prospeccao_previa._qual_previa("Crie os leads da prévia #50", "bia") == 50
 
 
 def test_busca_de_item_ambigua_nao_escolhe_o_primeiro(monkeypatch):

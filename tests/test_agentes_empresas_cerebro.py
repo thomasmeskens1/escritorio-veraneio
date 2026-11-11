@@ -34,7 +34,8 @@ PERSONA = ("Missão: organizar pacotes de hospedagem para grupos e famílias, co
 
 
 def _spec(nome="Organizador de Pacotes", backstory=PERSONA, **extra):
-    return {"nome": nome, "andar": "comercial", "setor": "hospedagem", "funcao": "Monta pacotes de hospedagem",
+    # Andar Marketing: o Comercial não recebe agentes do Construtor desde a Onda 1 (N2-construtor-02, 11/11/2026).
+    return {"nome": nome, "andar": "marketing", "setor": "performance", "funcao": "Monta pacotes de hospedagem",
             "descricao": "Organiza pacotes.", "exemplo": "Monte um pacote de Réveillon para 20 pessoas.",
             "role": nome, "goal": "Montar pacotes claros a partir das fichas oficiais.", "backstory": backstory,
             "aparencia": {"pele": "#e0ac69", "cabelo": {"estilo": "curto", "cor": "#222222"},
@@ -77,7 +78,7 @@ def test_agente_nasce_como_proposta_e_so_entra_quando_quem_pediu_aprova(diretori
     assert "Só a pessoa" in asyncio.run(ad.decidir(registro["id"], OUTRA, "aprovar"))
     assert not andar_do_agente(registro["id"])
     assert "Aprovado" in asyncio.run(ad.decidir(registro["id"], DIRETORIA, "aprovar"))
-    assert andar_do_agente(registro["id"]) == "comercial" and registro["id"] in perfis.PERFIS
+    assert andar_do_agente(registro["id"]) == "marketing" and registro["id"] in perfis.PERFIS
     assert ad.do_construtor(registro["id"])  # fora do Max
 
 

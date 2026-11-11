@@ -20,11 +20,14 @@ import threading
 import time
 import traceback
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
+import caixa_saida
 import catalogo_fotos_empresas
 import catalogo_lodges
 import conferencia_arte
+import conferencia_texto
+import logos_empresas
 import link_drive
 import molde
 import comum
@@ -124,6 +127,9 @@ def instrucao_motion(agente: str, empresa: str) -> str:
         "gere-a com:\n"
         f'  python "{MOTION}" vinheta --empresa {empresa} --formato 1080x1920 --saida vinheta.mp4\n'
         "(formatos 1080x1920, 1080x1350 e 1920x1080). Nunca use a vinheta ou o logo de outra empresa.\n"
+        f"LOGO NO MOTION: ponha \"empresa\": \"{empresa}\" no motion.json e use \"logo\": \"clara\" (sobre foto ou fundo "
+        "escuro), \"escura\" (sobre Creme ou fundo claro) ou \"caramelo\" (cor, sobre Verde): o motion.py pega o arquivo "
+        "desta empresa sozinho e recusa logo de outra empresa.\n"
         "ÁUDIO (Sonoplasta, 05/11/2026): entregue o vídeo SEM música (o áudio silencioso das cenas, ou o som original "
         "do clipe quando o pedido quiser fala ou som ambiente). Depois da entrega, o Sonoplasta gera sozinho a versão "
         f"<nome>{sonoplasta.SUFIXO}.mp4 com a trilha da biblioteca da marca e a assinatura sonora na vinheta: não "
@@ -131,6 +137,13 @@ def instrucao_motion(agente: str, empresa: str) -> str:
         f"(fora de {PASTA_FINAL}/) o {sonoplasta.MARCACOES} com o segundo em que ela começa no vídeo final, ex.: "
         '{"reels_lodge_20.mp4": {"vinheta_em": 22.4}}. Num ajuste que só pede outra música, não refaça o vídeo: '
         "diga isso no resumo (o Sonoplasta troca a trilha).")
+
+
+# Quem não é o Editor de Vídeo também pode entregar MP4 (carrossel em vídeo, motion do Designer, peça do Gestor):
+# a versão com som sai do mesmo jeito (sonoplasta-06, 11/11/2026).
+AUDIO_OUTROS = ("ÁUDIO: se entregar vídeo (MP4/MOV), entregue SEM música; depois da entrega o Sonoplasta gera sozinho "
+                f"a versão <nome>{sonoplasta.SUFIXO} com a trilha da marca (num carrossel em vídeo, a mesma faixa em "
+                f"sequência em todos os slides). Não coloque música nem crie arquivos {sonoplasta.SUFIXO}.")
 
 
 def ffmpeg_dir() -> str | None:
@@ -449,6 +462,10 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
         producao.get("regras") or "",
         regras_fotos(producao.get("empresa") or "casa_veraneio"),
         conferencia_arte.instrucao(producao.get("empresa") or "casa_veraneio", producao.get("entrega") or ""),
+        # Legenda do Copywriter aprovada na conversa: TEXTO FIXO, "copie, não reescreva" (copywriter-02, 11/11/2026).
+        conferencia_texto.instrucao(producao.get("texto_aprovado")),
+        # Todo vídeo sai também com som (sonoplasta-06): o Editor já recebe isso na instrução do motion.
+        "" if producao["agente"] == "editor_video" else AUDIO_OUTROS,
         f"Grave SOMENTE dentro da pasta atual ({pasta}), que é o rascunho desta peça. Arquivos de trabalho (HTML, "
         "fundos, recortes, logos, cópias de fotos, cenas brutas) ficam FORA da subpasta "
         f"{PASTA_FINAL}/. Só o que estiver em {PASTA_FINAL}/ vai para o Drive (não use \"MARKETING > THOMAS\" citado "
@@ -671,11 +688,11 @@ def enviar_bloqueios(producao: dict, rascunho: Path) -> None:
         log(f"   bloqueios não enviados ao backend ({erro})")
 
 
-def organizar_final(producao: dict, entrega: Path, ambiente: dict) -> str:
+def organizar_final(producao: dict, entrega: Path, ambiente: dict, fora: list[str] = ()) -> str:
     """FINAL/ com a versão vigente de cada arquivo e a folha de aprovação, que vai ao chat (pasta_final.py). Nunca
-    derruba a entrega: a peça já está no Drive."""
+    derruba a entrega: a peça já está no Drive. `fora`: arquivos que não entram (legenda que diverge do aprovado)."""
     try:
-        vigentes = pasta_final.atualizar(entrega)
+        vigentes = pasta_final.atualizar(entrega, fora)
         folha = pasta_final.folha(entrega / pasta_final.PASTA, vigentes, entrega.name, ambiente)
     except Exception as erro:  # noqa: BLE001
         log(f"   pasta FINAL não atualizada ({erro})")
@@ -701,6 +718,7 @@ def produzir(producao: dict) -> None:
                 **comum.caixa_de_areia(rascunho, pastas_de_fotos(producao.get("empresa") or "casa_veraneio")[1])}
     if (dir_ffmpeg := ffmpeg_dir()):
         ambiente["PATH"] = dir_ffmpeg + os.pathsep + ambiente.get("PATH", "")
+    ambiente[logos_empresas.VARIAVEL] = empresa = producao.get("empresa") or "casa_veraneio"  # o motion.py usa
     so_texto = False
     try:
         copiar_referencias(rascunho, producao.get("empresa") or "casa_veraneio")
@@ -724,9 +742,10 @@ def produzir(producao: dict) -> None:
                     raise
                 raise SemArquivo(f"{resumo}\n\n(A segunda tentativa também parou: {parada})") from parada
             novos, estragados = finais_novos(rascunho, antes, ambiente)
-            if producao["agente"] == "editor_video":  # dentro da rodada: "só troque a música" já sai com arquivo
-                com_som, linha_som = versoes_com_som(producao, rascunho, novos)
-                novos = sorted({*novos, *com_som})
+            # Todo vídeo, de qualquer agente (sonoplasta-06; antes só o do Editor de Vídeo). Dentro da rodada: "só
+            # troque a música" já sai com arquivo.
+            com_som, linha_som = versoes_com_som(producao, rascunho, novos)
+            novos = sorted({*novos, *com_som})
             if estragados:
                 resumo = f"{resumo}\n\n⚠ Ficaram de fora por estarem incompletos ou corrompidos: {', '.join(estragados)}."
             if entrega_aceita(producao, novos) or (producao.get("entrega") == "texto" and resumo.strip()):
@@ -743,6 +762,11 @@ def produzir(producao: dict) -> None:
             so_texto = True  # pedido só de texto: o texto do Max é a entrega
         if linha_som:
             resumo = f"{resumo}\n\n{linha_som}"
+        # Logo de outra empresa na peça ou pasta com prefixo de outra empresa: aviso vermelho antes do Drive.
+        if (marca := logos_empresas.linha_do_resumo(logos_empresas.conferir(rascunho, empresa, entrega.name,
+                                                                            PASTA_MARCAS), empresa)):
+            resumo = f"{marca}\n\n{resumo}"
+            log(f"   {marca}")
         if faltaram:
             resumo = (f"{resumo}\n\n⚠ Referência(s) do Monday que não chegaram ao Max: {'; '.join(faltaram)}. Se "
                       "eram necessárias, envie o arquivo por uma pasta do Drive e peça um ajuste.")
@@ -760,7 +784,13 @@ def produzir(producao: dict) -> None:
             log(f"   {conferencia}")
         if producao.get("monday"):  # antes de concluir: o item já recebe os criativos quando vira "Revisão"
             enviar_criativos(producao, entrega, arquivos)
-        if novos and (linha_final := organizar_final(producao, entrega, ambiente)):
+        # Números da legenda contra o texto aprovado do Copywriter, antes da FINAL (copywriter-02).
+        barradas, linha_texto = conferencia_texto.conferir(entrega, novos, producao.get("texto_aprovado"), empresa,
+                                                           rascunho)
+        if linha_texto:
+            resumo = f"{resumo}\n\n{linha_texto}"
+            log(f"   {linha_texto}")
+        if novos and (linha_final := organizar_final(producao, entrega, ambiente, barradas)):
             resumo = f"{resumo}\n\n{linha_final}"
     except comum.MaxSemCota as erro:
         log(f"   Max sem cota agora; a peça volta para a fila ({erro})")
@@ -783,17 +813,20 @@ def produzir(producao: dict) -> None:
         enviar_bloqueios(producao, rascunho)
     # Daqui em diante a peça já está no Drive (e no Monday): nunca vira "falha"; insiste em avisar a conclusão.
     link = "" if so_texto else link_drive.link_da_pasta(entrega, DRIVE)  # botão "Visualizar" ("" se não sincronizou)
+    corpo = {"resumo": resumo, "pasta": relativa, "arquivos": arquivos, "link": link, "so_texto": so_texto,
+             "uso": comum.uso_acumulado()}
+    caixa_saida.guardar(producao["tarefa_id"], corpo)  # despachante-07: guardada até o backend confirmar
     for tentativa in range(6):
         try:
-            comum.chamar("POST", f"/api/producao/{producao['tarefa_id']}/concluir",
-                         {"resumo": resumo, "pasta": relativa, "arquivos": arquivos, "link": link,
-                          "so_texto": so_texto, "uso": comum.uso_acumulado()})
+            comum.chamar("POST", f"/api/producao/{producao['tarefa_id']}/concluir", corpo)
+            caixa_saida.remover(producao["tarefa_id"])
             log(f"   concluída: {', '.join(arquivos) or 'como texto'}")
             return
         except Exception as erro_api:
             log(f"   entrega feita, mas o backend não confirmou ({erro_api}); nova tentativa em {30 * (tentativa + 1)} s.")
             time.sleep(30 * (tentativa + 1))
-    log("   AVISO: a peça está no Drive, mas o backend não registrou a conclusão.")
+    log("   AVISO: a peça está no Drive, mas o backend não registrou a conclusão; ela fica na caixa de saída e é "
+        "reenviada antes da próxima peça (sem produzir de novo).")
 
 
 def migrar_rascunhos() -> None:
@@ -892,7 +925,8 @@ def main() -> None:
             continue
         faltando = faltando_no_drive()
         if faltando and time.monotonic() >= proximo_aviso_drive:
-            log(f"Drive incompleto ({', '.join(faltando)}): só trabalhos de texto até ele voltar; as peças esperam.")
+            log(f"Drive incompleto ({', '.join(faltando)}): só trabalhos de texto até ele voltar; as peças esperam"
+                + (" (as que não usam o acervo seguem)." if faltando == ["acervo dos Lodges"] else "."))
             proximo_aviso_drive = time.monotonic() + AVISO_DRIVE_S
         if not faltando:
             if not preparado:  # na primeira vez em que o Drive está pronto
@@ -902,8 +936,12 @@ def main() -> None:
             if time.monotonic() >= proximo_catalogo:
                 catalogo_em_segundo_plano()
                 proximo_catalogo = time.monotonic() + INTERVALO_CATALOGO
-        try:
-            item = comum.chamar("GET", "/api/producao/proxima" + ("?sem_producao=true" if faltando else ""))
+        if not caixa_saida.reenviar():  # peça pronta sem confirmação: pedir a fila agora a faria de novo
+            time.sleep(INTERVALO * 3)
+            continue
+        try:  # o backend fica sabendo o que falta do Drive (aviso a quem espera, painel e Telegram)
+            item = comum.chamar("GET", "/api/producao/proxima" + (
+                f"?sem_producao=true&faltando={quote(', '.join(faltando))}" if faltando else ""))
         except Exception as erro:  # backend fora do ar: tenta de novo
             log(f"Backend indisponível ({erro}); nova tentativa em {INTERVALO * 3} s.")
             time.sleep(INTERVALO * 3)

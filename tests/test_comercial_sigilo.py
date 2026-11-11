@@ -14,6 +14,7 @@ import acesso
 import carteira
 import comercial as c
 import config
+import persona_corporativo
 import roteamento
 import saude
 import tarefas
@@ -61,7 +62,7 @@ def test_nome_de_pessoa_depois_da_palavra_generica_e_nominal():
 
 def test_lead_com_email_nominal_fica_sem_o_email_e_a_previa_avisa():
     aceitos, _ = c.validar([{"empresa": "Empresa Teste", "site": "exemplo.com", "email": "rh.maria@exemplo.com",
-                             "telefone": "(19) 3333-4444"}], set(), set())
+                             "telefone": "(19) 3333-4444", "fontes": ["https://exemplo.com/contato"]}], set(), set())
     assert aceitos[0]["email"] == "" and "nominal" in aceitos[0]["aviso"]
     assert "Obs.: e-mail removido" in c._linha_lead(1, aceitos[0])
 
@@ -71,7 +72,7 @@ def test_empresa_pequena_sai_e_agencia_de_eventos_fica():
     aceitos, recusados = c.validar([
         {"empresa": "Micro Teste", "email": "contato@micro.exemplo.com", "site": "micro.exemplo.com", "funcionarios": 6},
         {"empresa": "Produtora Teste", "segmento": "Eventos", "email": "contato@prod.exemplo.com",
-         "site": "prod.exemplo.com", "funcionarios": 8},
+         "site": "prod.exemplo.com", "funcionarios": 8, "fontes": ["https://prod.exemplo.com/contato"]},
     ], set(), set())
     assert [a["empresa"] for a in aceitos] == ["Produtora Teste"]
     assert "pequena demais" in recusados[0]
@@ -88,7 +89,8 @@ def test_email_nominal_de_previa_antiga_nao_vai_ao_monday(tmp_path, monkeypatch)
     (tmp_path / "900.json").write_text(json.dumps({"usuario": "usuario.teste@exemplo.com", "pedido": "", "criados": [],
                                                    "leads": [{"empresa": "Empresa Teste", "site": "exemplo.com",
                                                               "email": "contato.joao@exemplo.com",
-                                                              "telefone": "(19) 3333-4444"}]}), encoding="utf-8")
+                                                              "telefone": "(19) 3333-4444",
+                                                              "fontes": ["https://exemplo.com"]}]}), encoding="utf-8")
     assert "Criei 1 lead" in c.criar_da_previa(tarefa, "Crie os leads da prévia #900")
     assert c.COL["email"] not in enviados[0] and c.COL["telefone"] in enviados[0]
 
@@ -126,10 +128,12 @@ def test_persona_e_feita_sem_pesquisa_na_web(carteira_ficticia, tmp_path, monkey
     monkeypatch.setattr(c, "pedir_ao_max", lambda prompt, *a, **k: chamadas.append(k) or
                         "<<PERSONA>>\n# Persona\n<<FIM>>")
     monkeypatch.setattr(c, "PASTA_PERSONA", tmp_path / "14_persona.md")
+    monkeypatch.setattr(persona_corporativo, "PASTA", tmp_path / "persona")
     monkeypatch.setattr(c, "_evento", lambda *_a: None)
     monkeypatch.setitem(sys.modules, "cerebro", types.SimpleNamespace(indexar_oficiais=lambda: None))
     c.atualizar_persona(0)
-    assert chamadas == [{"web": False}]
+    assert [k["web"] for k in chamadas] == [False]
+    assert not (tmp_path / "14_persona.md").exists()  # N2-prospectador-01: sai como rascunho, o manual não muda
     assert "nomes das empresas clientes" in c.prompt_persona()
 
 

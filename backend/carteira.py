@@ -112,6 +112,17 @@ def tem_nomes(texto: str) -> bool:
     return bool((palavras or frases) and _trechos(texto, palavras, frases))
 
 
+def rodape(login: str) -> str:
+    """Marca d'água das respostas com nomes da carteira ou contatos de leads (prospectador-37, ajuste do crítico): uma
+    lista copiada leva o aviso de uso interno e quem a gerou. O registro de quem pediu já é a tabela tarefas."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    quando = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M")
+    return (f"_Uso interno da Casa Veraneio Corporativo · gerado para {login or 'usuário do sistema'} em {quando} · "
+            "não encaminhar._")
+
+
 def perfil_agregado(base: dict) -> str:
     """Quem já é cliente, sem nomes: contagens por segmento, cidade, tipo de evento e faixa de pax."""
     contas, ganhos = base.get("contas", []), base.get("ganhos", [])

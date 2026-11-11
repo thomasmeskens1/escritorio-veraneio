@@ -110,7 +110,8 @@ PERFIS = {
                 "do usuário sobre uma peça que já existe vão para atualizar_item_monday (nunca crie outro item igual); "
                 "crie o item quando tiver o essencial e complete depois. ROTEIRO: sempre preencha o campo roteiro "
                 "com o briefing da peça (capa, cada página/cena com imóvel, local e destaque, formato e duração, CTA), "
-                "para a produção não depender do chat. "
+                "para a produção não depender do chat, e feche-o com o bloco DIREÇÃO VISUAL (Referência, Formato, "
+                "Evitar). "
                 "STORIES NUNCA têm legenda: no planejamento de stories não escreva, rascunhe nem sugira legenda "
                 "(nem no chat, nem no Monday); descreva só tema, telas e roteiro visual. Não gaste tokens com isso.",
         "backstory": "Gerencia perfis de hospitalidade e sabe o que performa em cada formato e horário.",
@@ -582,6 +583,11 @@ def contexto(agente_id: str, historico: list = (), pedido: str = "", empresa: st
 
     if (datas := calendario.bloco(agente_id, empresa, pedido)):
         partes.append(datas)
+    import direcao_visual  # roteiro com referência aprovada (social_media-18)
+    import pedido_video  # vídeo pedido contra o manual 05 §5 vira pergunta (moviemaker-02)
+
+    partes += [b for b in (direcao_visual.bloco(agente_id, empresa, pedido),
+                           pedido_video.bloco(agente_id, empresa, pedido)) if b]
     return "\n\n".join(partes)
 
 

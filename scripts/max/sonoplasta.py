@@ -1,4 +1,5 @@
-"""Sonoplasta (Thomas, 05/11/2026): todo vídeo sai em DUAS versões, a do Editor sem som e a `_com_som`, com a trilha
+"""Sonoplasta (Thomas, 05/11/2026): todo vídeo sai em DUAS versões, a entregue sem som (de qualquer agente,
+desde 11/11/2026; antes só a do Editor de Vídeo) e a `_com_som`, com a trilha
 da biblioteca da marca ("caso a equipe não se sinta satisfeita com o áudio produzido").
 
 Roda no trabalhador, depois que o Max entrega o vídeo: sem IA e sem custo. Escolhe a faixa da biblioteca da empresa
@@ -31,6 +32,7 @@ TRILHAS_DA_PECA = ".trilhas.json"                  # no rascunho: a faixa de cad
 MARCACOES = "sonoplasta.json"                      # no rascunho, escrito pelo Editor: onde a vinheta começa
 SUFIXO = "_com_som"
 VIDEOS = {".mp4", ".mov"}
+EDITAVEL = "EDITÁVEL"
 APROVADA, REPROVADA = "aprovada", "reprovada"
 EMENDA_S = 2.0       # crossfade quando a faixa precisa repetir
 FADE_ENTRADA_S = 0.4
@@ -192,12 +194,14 @@ def fim_util(faixa: Path) -> float:
     return min(total, max(total / 2, (ultima + 1) * JANELA_S))
 
 
-def filtro(dur: float, dur_faixa: float, copias: int, vinheta: float | None, com_som: bool) -> str:
+def filtro(dur: float, dur_faixa: float, copias: int, vinheta: float | None, com_som: bool,
+           inicio: float = 0.0) -> str:
     """Grafo do ffmpeg. Entradas: 0 = vídeo, 1..copias = a faixa (já sem o silêncio do fim: `dur_faixa`), depois a
-    trilha da vinheta (se houver)."""
+    trilha da vinheta (se houver). `inicio`: de onde a faixa começa (slides de um carrossel em sequência)."""
     fim = min(dur, vinheta + SAI_ANTES_DA_VINHETA_S * 0.3) if vinheta is not None else dur
     saida = min(SAI_ANTES_DA_VINHETA_S, fim / 3) if vinheta is not None else min(2.0, max(0.5, fim * 0.12))
-    partes = [f"[{n}:a]atrim=0:{dur_faixa:.3f},asetpts=PTS-STARTPTS[c{n}]" for n in range(1, copias + 1)]
+    partes = [f"[{n}:a]atrim={f'{inicio:.3f}' if n == 1 and inicio else 0}:{dur_faixa:.3f},asetpts=PTS-STARTPTS[c{n}]"
+              for n in range(1, copias + 1)]
     atual = "[c1]"
     for n in range(2, copias + 1):
         partes.append(f"{atual}[c{n}]acrossfade=d={EMENDA_S}:c1=qsin:c2=qsin[e{n}]")
@@ -231,10 +235,21 @@ def _trilha_da_vinheta(empresa: str, pasta: Path) -> Path | None:
         return None
 
 
-def mixar(video: Path, faixa: Path, saida: Path, empresa: str, vinheta: float | None = None) -> Path:
+def ponto_de_inicio(desde: float, dur_faixa: float) -> float:
+    """Onde o próximo slide pega a faixa: segue de onde o anterior parou e volta ao começo quando faltam menos de
+    8 s de corpo (num 5 s isso evita cair no fim da música)."""
+    inicio = desde % max(1.0, dur_faixa)
+    return 0.0 if dur_faixa - inicio < 8.0 else inicio
+
+
+def mixar(video: Path, faixa: Path, saida: Path, empresa: str, vinheta: float | None = None,
+          desde: float = 0.0) -> Path:
+    """`desde`: segundos da faixa já tocados nos slides anteriores do mesmo carrossel (0 = do começo)."""
     dur, dur_faixa = duracao(video), fim_util(faixa)
+    inicio = ponto_de_inicio(desde, dur_faixa) if desde else 0.0
     fim = min(dur, vinheta + 1.0) if vinheta is not None else dur
-    copias = 1 if dur_faixa >= fim else 1 + math.ceil((fim - dur_faixa) / max(1.0, dur_faixa - EMENDA_S))
+    restante = dur_faixa - inicio
+    copias = 1 if restante >= fim else 1 + math.ceil((fim - restante) / max(1.0, dur_faixa - EMENDA_S))
     with tempfile.TemporaryDirectory() as tmp:
         trilha_vinheta = _trilha_da_vinheta(empresa, Path(tmp)) if vinheta is not None else None
         if trilha_vinheta is None:
@@ -242,7 +257,7 @@ def mixar(video: Path, faixa: Path, saida: Path, empresa: str, vinheta: float | 
         entradas = ["-i", str(video)] + ["-i", str(faixa)] * copias + (["-i", str(trilha_vinheta)] if vinheta is not None else [])
         audio = ["-c:a", "pcm_s24le"] if saida.suffix.lower() == ".mov" else ["-c:a", "aac", "-b:a", "256k"]
         resultado = _rodar([_ffmpeg(), "-y", "-loglevel", "error", *entradas,
-                            "-filter_complex", filtro(dur, dur_faixa, copias, vinheta, tem_som(video)),
+                            "-filter_complex", filtro(dur, dur_faixa, copias, vinheta, tem_som(video), inicio),
                             "-map", "0:v", "-map", "[a]", "-c:v", "copy", *audio, "-ar", "48000",
                             "-movflags", "+faststart", "-t", f"{dur:.3f}", str(saida)], timeout=900)
     if resultado.returncode != 0:
@@ -255,19 +270,41 @@ def nome_da_faixa(faixa: dict) -> str:
 
 
 def versao_com_som(video: Path, empresa: str, pedido: str = "", rascunho: Path | None = None,
-                   evitar: set[str] = frozenset()) -> tuple[Path, dict, bool]:
-    """Gera <video>_com_som ao lado do vídeo. Devolve (arquivo, faixa usada, se a faixa já é aprovada)."""
+                   evitar: set[str] = frozenset(), escolhida: tuple[dict, bool] | None = None,
+                   desde: float = 0.0) -> tuple[Path, dict, bool]:
+    """Gera <video>_com_som ao lado do vídeo. Devolve (arquivo, faixa usada, se a faixa já é aprovada).
+    `escolhida`: (faixa, aprovada) já escolhida para o conjunto (carrossel); `desde`: onde ela continua."""
     saida = video.with_name(f"{video.stem}{SUFIXO}{video.suffix}")
     if "vinheta" in video.stem.lower() and empresa in MARCAS:  # a própria vinheta: só a trilha dela, sem música
         from audio_vinhetas import montar
 
         return montar(empresa, video, saida), {"arquivo": "", "estilo": "trilha da vinheta"}, True
-    faixa, aprovada = escolher(empresa, pedido, evitar)
+    faixa, aprovada = escolhida or escolher(empresa, pedido, evitar)
     if not faixa or not (arquivo := arquivo_da_faixa(faixa)):
         raise RuntimeError("nenhuma faixa da biblioteca desta empresa está disponível")
-    mixar(video, arquivo, saida, empresa, vinheta_em(rascunho, video.name))
+    mixar(video, arquivo, saida, empresa, vinheta_em(rascunho, video.name), desde)
     _registrar_uso(faixa["arquivo"])
     return saida, faixa, aprovada
+
+
+_NUMERO_FINAL = re.compile(r"[\s_-]*\d{1,3}$")
+
+
+def conjuntos(videos: list[str]) -> list[list[str]]:
+    """Vídeos da mesma peça em partes (slide_1, slide_2...; carrossel em MP4) ficam juntos, na ordem do feed; os
+    demais saem sozinhos. Só o nome decide: mesmo tronco e um número no fim (sonoplasta-06, 11/11/2026)."""
+    grupos: dict[tuple, list[str]] = {}
+    for nome in videos:
+        caminho = Path(nome)
+        tronco = _NUMERO_FINAL.sub("", caminho.stem)
+        numerado = tronco != caminho.stem and bool(tronco)
+        chave = (caminho.parent.as_posix(), tronco.lower(), caminho.suffix.lower()) if numerado else (nome,)
+        grupos.setdefault(chave, []).append(nome)
+
+    def numero(nome: str) -> int:
+        achado = re.search(r"(\d{1,3})$", Path(nome).stem)
+        return int(achado.group(1)) if achado else 0
+    return [sorted(g, key=numero) for g in grupos.values()]
 
 
 # ---------------------------------------------------------------- na produção (trabalhador_max)
@@ -288,28 +325,48 @@ def na_producao(rascunho: Path, final: Path, novos: list[str], empresa: str, ped
     """Versão com som de cada vídeo novo da entrega (nomes relativos a `final`). Num ajuste que só pede outra música,
     sem vídeo novo, refaz a versão com som dos vídeos que já existem com outra faixa. Devolve (nomes gerados, linha
     para o resumo). Nunca derruba a entrega: o que falhar vira aviso."""
-    videos = [n for n in novos if Path(n).suffix.lower() in VIDEOS and not Path(n).stem.endswith(SUFIXO)]
+    def e_video(nome: str) -> bool:  # cenas brutas do editável (EDITÁVEL/CENAS) não ganham música
+        caminho = Path(nome)
+        return (caminho.suffix.lower() in VIDEOS and not caminho.stem.endswith(SUFIXO)
+                and not any(p.upper() == EDITAVEL for p in caminho.parts[:-1]))
+    videos = [n for n in novos if e_video(n)]
     troca = ajuste and e_troca_de_musica(pedido)
     if not videos and troca:
-        videos = sorted(a.relative_to(final).as_posix() for a in final.rglob("*")
-                        if a.suffix.lower() in VIDEOS and not a.stem.endswith(SUFIXO))
+        videos = sorted(r for a in final.rglob("*") if e_video(r := a.relative_to(final).as_posix()))
     if not videos:
         return [], ""
     usadas = _trilhas_da_peca(rascunho)
     gerados, linhas, falhas = [], [], []
-    for nome in videos:
-        evitar = set(usadas.get(nome, [])) if troca else set()
-        try:
-            saida, faixa, aprovada = versao_com_som(final / nome, empresa, pedido, rascunho, evitar)
-        except Exception as erro:  # noqa: BLE001
-            falhas.append(f"{nome} ({erro})")
-            continue
-        gerados.append(saida.relative_to(final).as_posix())
-        if faixa.get("arquivo"):
-            usadas[nome] = [*usadas.get(nome, []), faixa["arquivo"]]
-        rotulo = faixa.get("estilo", "").replace("_", " ")
-        extra = f", {faixa['bpm']} BPM" if faixa.get("bpm") else ""
-        linhas.append(f"{Path(gerados[-1]).name}: {rotulo}{extra}" + ("" if aprovada else " (faixa ainda em aprovação)"))
+    for grupo in conjuntos(videos):
+        # Carrossel em MP4: uma faixa só para todos os slides, em sequência, para soarem como um conjunto.
+        escolhida, desde, linha_do_grupo = None, 0.0, False
+        if len(grupo) > 1:
+            evitar = {f for n in grupo for f in usadas.get(n, [])} if troca else set()
+            escolhida = escolher(empresa, pedido, evitar)
+            if not escolhida[0]:
+                escolhida = None
+        for nome in grupo:
+            evitar = set(usadas.get(nome, [])) if troca else set()
+            try:
+                extra = {"escolhida": escolhida, "desde": desde} if escolhida else {}
+                saida, faixa, aprovada = versao_com_som(final / nome, empresa, pedido, rascunho, evitar, **extra)
+                if escolhida:
+                    desde += duracao(final / nome)
+            except Exception as erro:  # noqa: BLE001
+                falhas.append(f"{nome} ({erro})")
+                continue
+            gerados.append(saida.relative_to(final).as_posix())
+            if faixa.get("arquivo"):
+                usadas[nome] = [*usadas.get(nome, []), faixa["arquivo"]]
+            rotulo = faixa.get("estilo", "").replace("_", " ")
+            extra = f", {faixa['bpm']} BPM" if faixa.get("bpm") else ""
+            em_aprovacao = "" if aprovada else " (faixa ainda em aprovação)"
+            if escolhida and linha_do_grupo:
+                continue  # o conjunto aparece numa linha só (a mesma faixa)
+            primeiro = Path(gerados[-1]).name
+            nomes = f"{primeiro} e os outros slides, em sequência" if escolhida else primeiro
+            linhas.append(f"{nomes}: {rotulo}{extra}{em_aprovacao}")
+            linha_do_grupo = True
     try:
         (rascunho / TRILHAS_DA_PECA).write_text(json.dumps(usadas, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError:

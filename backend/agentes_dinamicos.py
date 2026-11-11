@@ -31,6 +31,10 @@ log = logging.getLogger(__name__)
 # O frontend sempre mostra uma mesa vaga e acrescenta outra quando o setor lota (mesasComVaga), até
 # este limite; passou disso, o layout do andar precisa de ajuste.
 # Térreo e Cobertura (Cérebro e estagiários) não recebem agentes novos.
+# Comercial bloqueado (N2-construtor-02, decisão 18 em aberto): o agente criado ali ficava sem empresa e fora da rota
+# sigilosa (que vale por id), com a carteira e os números ao alcance. O setor fica na tabela para quando for liberado.
+ANDARES_BLOQUEADOS = {"comercial": "ele trabalha com a carteira de clientes e números sigilosos, e um agente criado ali "
+                                   "ficaria sem empresa e fora da rota sigilosa"}
 SETORES = {
     "porao": {"oficina": 4, "operacoes": 4},
     "marketing": {"gestao": 4, "criacao": 6, "conteudo": 6, "video": 6, "performance": 6},
@@ -200,9 +204,9 @@ def vagas(andar: str, setor: str) -> int:
 
 
 def setores_com_vagas() -> str:
-    """Texto para o Construtor: setores válidos por andar e vagas livres."""
+    """Texto para o Construtor: setores válidos por andar e vagas livres (andar bloqueado fica de fora)."""
     return "; ".join(f"{andar}: " + ", ".join(f"{s} ({vagas(andar, s)} vaga(s))" for s in setores)
-                     for andar, setores in SETORES.items())
+                     for andar, setores in SETORES.items() if andar not in ANDARES_BLOQUEADOS)
 
 
 def validar(spec: dict, ajuste_de: str = "") -> dict:
@@ -212,8 +216,13 @@ def validar(spec: dict, ajuste_de: str = "") -> dict:
     nome = _texto(spec, "nome")
     andar = _snake(str(spec.get("andar") or ""))
     if andar not in SETORES:
-        raise ErroValidacao(f"andar inválido {spec.get('andar')!r}; use um de: {', '.join(SETORES)} "
+        raise ErroValidacao(f"andar inválido {spec.get('andar')!r}; use um de: "
+                            f"{', '.join(a for a in SETORES if a not in ANDARES_BLOQUEADOS)} "
                             "(o térreo e a cobertura não recebem agentes novos).")
+    if andar in ANDARES_BLOQUEADOS:
+        raise ErroValidacao(f"o andar {NOMES_ANDARES[andar]} não recebe agentes novos: {ANDARES_BLOQUEADOS[andar]}. "
+                            "Explique isso ao usuário e ofereça os colegas que já existem lá (Prospectador e "
+                            "Estrategista) ou outro andar.")
     setor = _snake(str(spec.get("setor") or ""))
     if setor not in SETORES[andar]:
         raise ErroValidacao(f"setor inválido {spec.get('setor')!r} para o andar {andar}; "
@@ -383,6 +392,9 @@ async def decidir(agente_id: str, login: str, acao: str, tarefa_id: int | None =
         return f"Proposta do {registro['nome']} descartada. Nada entrou no escritório."
     if andar_do_agente(agente_id) or agente_id in PERFIS:
         return f"Já existe um agente com o id {agente_id} no escritório; peça ao Construtor outro nome."
+    if registro["andar"] in ANDARES_BLOQUEADOS:  # proposta de antes do bloqueio: não ganha mesa
+        return (f"O andar {NOMES_ANDARES[registro['andar']]} não recebe agentes novos por enquanto. A proposta "
+                "continua guardada; descarte-a ou peça um ajuste para outro andar.")
     if vagas(registro["andar"], registro["setor"]) <= 0:
         return (f"O setor {NOMES_SETORES[registro['setor']]} lotou desde a proposta. Peça um ajuste com outro setor "
                 f"({setores_com_vagas()}).")
@@ -447,6 +459,9 @@ def carregar() -> None:
         registro = _da_linha(linha)
         if registro["andar"] not in ANDARES or andar_do_agente(registro["id"]):
             log.warning("Agente criado ignorado (andar inválido ou id repetido): %s", registro["id"])
+            continue
+        if registro["andar"] in ANDARES_BLOQUEADOS:  # fica no banco (nada é apagado), mas sem mesa nem modelo
+            log.warning("Agente criado fora do escritório (andar %s bloqueado): %s", registro["andar"], registro["id"])
             continue
         _registrar(registro, Status.disponivel)
 

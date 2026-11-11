@@ -12,6 +12,7 @@ Drive (Thomas, 04/11/2026): o documento também vai para o Drive, numa pasta pr�
 """
 
 import logging
+import os
 import re
 import uuid
 from urllib.parse import quote
@@ -60,8 +61,9 @@ def _nome_arquivo(*partes: str, extensao: str) -> str:
     return anexos._nome_seguro(re.sub(r"\s+", " ", nome)[:110] + extensao)
 
 
-def anexar(tarefa_id: int, conteudo: bytes, nome: str, mime: str, descricao: str) -> str:
-    """Grava o arquivo como anexo do dono da tarefa e o liga à resposta; devolve o id do anexo."""
+def anexar(tarefa_id: int, conteudo: bytes, nome: str, mime: str, descricao: str, restrito: bool = False) -> str:
+    """Grava o arquivo como anexo do dono da tarefa e o liga à resposta; devolve o id do anexo. `restrito`
+    (CONFIDENCIAL): a cópia do Drive vai para a subpasta restrita do andar, não para a pasta compartilhada."""
     linha = tarefas.obter(tarefa_id)
     if not linha:
         raise ValueError(f"tarefa {tarefa_id} não existe")
@@ -77,13 +79,17 @@ def anexar(tarefa_id: int, conteudo: bytes, nome: str, mime: str, descricao: str
                    (anexo_id, linha["usuario"], anexos._nome_seguro(nome), mime, len(conteudo), relativo,
                     descricao[:4000], tarefas._agora()))
         db.execute("INSERT OR IGNORE INTO anexos_resposta (tarefa_id, anexo_id) VALUES (?, ?)", (tarefa_id, anexo_id))
-    _para_o_drive(linha, conteudo, anexos._nome_seguro(nome), mime)
+    _para_o_drive(linha, conteudo, anexos._nome_seguro(nome), mime, restrito)
     return anexo_id
 
 
 SIGLA_EMPRESA = {"casa_veraneio": "VERANEIO", "cv_corporativo": "CORP", "casa_vero": "VERO"}  # como na produção
 TIPO_DA_PASTA = {"cerebro": "PLANILHA", "estrategista": "ESTUDO", "gestor_trafego": "PLANO"}
 DRIVE_MAX_BYTES = 5 * 1024 * 1024
+# Selo CONFIDENCIAL respeitado na entrega (N2-estrategista-06, lacuna do crítico): antes, o estudo com dados
+# financeiros ia para a pasta COMERCIAL compartilhada. Agora vai para <ANDAR>/<subpasta restrita> (padrão
+# COMERCIAL/RESTRITO), que a Diretoria cria no Drive com acesso só dela; o nome da subpasta é configurável.
+SUBPASTA_RESTRITA = os.getenv("DRIVE_SUBPASTA_RESTRITA", "RESTRITO").strip().strip("/\\") or "RESTRITO"
 
 
 def pasta_da_solicitacao(linha) -> str:
@@ -97,7 +103,14 @@ def pasta_da_solicitacao(linha) -> str:
     return f"{sigla} ｜ {TIPO_DA_PASTA.get(linha['agente'], 'DOCUMENTO')} - {assunto} #{linha['id']}"
 
 
-def _para_o_drive(linha, conteudo: bytes, nome: str, mime: str) -> None:
+def pasta_do_andar(linha, restrito: bool = False) -> str:
+    import producao  # import tardio: produção depende do orquestrador
+
+    pasta = producao.PASTAS_ANDAR.get(linha["andar"], linha["andar"].upper())
+    return f"{pasta}/{SUBPASTA_RESTRITA}" if restrito else pasta
+
+
+def _para_o_drive(linha, conteudo: bytes, nome: str, mime: str, restrito: bool = False) -> None:
     """Enfileira a cópia no Drive (nunca derruba a resposta: sem Drive, o anexo do chat continua valendo)."""
     if len(conteudo) > DRIVE_MAX_BYTES:
         return log.warning("Documento da tarefa %s grande demais para o Drive (%s bytes).", linha["id"], len(conteudo))
@@ -106,7 +119,7 @@ def _para_o_drive(linha, conteudo: bytes, nome: str, mime: str) -> None:
 
         producao.criar_trabalho_agora("documento", {
             "tarefa_id": linha["id"], "nome": nome, "mime": mime,
-            "pasta_andar": producao.PASTAS_ANDAR.get(linha["andar"], linha["andar"].upper()),
+            "pasta_andar": pasta_do_andar(linha, restrito), "restrita": restrito,  # o trabalhador não cria a restrita
             "pasta": pasta_da_solicitacao(linha), "conteudo_b64": base64.b64encode(conteudo).decode()})
     except Exception:
         log.exception("Documento da tarefa %s não foi para a fila do Drive.", linha["id"])
@@ -130,7 +143,8 @@ def planilha_do_catalogo(texto: str, empresa: str) -> tuple[bytes, dict, str] | 
     """(bytes do .xlsx, resultado do filtro, descrição do filtro); None se a empresa não tem tabela ou está vazia.
     Os filtros do pedido ("com piscina", "para 16 pessoas") valem também para a planilha."""
     filtros = (imoveis.interpretar(texto, empresa) or {}) if empresa in imoveis.ORIGENS and texto else {}
-    chaves = ("cidade", "uf", "suites_min", "quartos_min", "pessoas_min", "pessoas_max", "comodidade", "orlando")
+    chaves = ("cidade", "uf", "suites_min", "quartos_min", "pessoas_min", "pessoas_max", "comodidade", "orlando",
+              "categoria")
     resultado = imoveis.filtrar(empresa, **{k: filtros[k] for k in chaves if k in filtros})
     if not resultado or not resultado["total_base"]:
         return None
@@ -224,11 +238,13 @@ def documento_da_resposta(linha) -> str | None:
         else:
             titulo, selo, rotulo = "Plano de campanha", "", "Plano de campanha"
         resposta = FORMULARIO.sub("", linha["resposta"] or "")
+        confidencial = _confidencial(linha)
         conteudo = documentos.documento(titulo, f"## Pedido\n{pedido}\n\n{resposta}", empresa, subtitulo=assunto,
-                                        selo=selo, confidencial=_confidencial(linha))
+                                        selo=selo, confidencial=confidencial)
         nome = _nome_arquivo(data.replace("/", "-"), rotulo, assunto.rstrip("…"), extensao=".docx")
         return anexar(linha["id"], conteudo, nome, documentos.MIME_DOCX,
-                      f"{rotulo} da tarefa #{linha['id']} em .docx (mesmo texto da resposta no chat), gerado em código.")
+                      f"{rotulo} da tarefa #{linha['id']} em .docx (mesmo texto da resposta no chat), gerado em código.",
+                      restrito=bool(confidencial))  # CONFIDENCIAL: cópia na subpasta restrita do Drive
     except Exception:
         log.exception("Documento da tarefa %s não foi gerado.", linha["id"])
         return None

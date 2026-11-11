@@ -36,12 +36,67 @@ function gravarEmpresa(andar, agente, valor) {
 function mostrarSeletorEmpresa(andar, agente) {
   const precisa = precisaEmpresa(andar, agente);
   seletorEmpresa.hidden = !precisa;
-  if (!precisa) return;
-  const opcoes = [['', 'Escolha a empresa…'], ...EMPRESAS_DO_GRUPO, ...opcaoTodas(andar, agente)];
-  seletorEmpresa.replaceChildren(...opcoes.map(([valor, rotulo]) => new Option(rotulo, valor)));
-  seletorEmpresa.value = lerEmpresa(andar, agente);
-  seletorEmpresa.dataset.empresa = seletorEmpresa.value;
+  if (precisa) {
+    const opcoes = [['', 'Escolha a empresa…'], ...EMPRESAS_DO_GRUPO, ...opcaoTodas(andar, agente)];
+    seletorEmpresa.replaceChildren(...opcoes.map(([valor, rotulo]) => new Option(rotulo, valor)));
+    seletorEmpresa.value = lerEmpresa(andar, agente);
+    seletorEmpresa.dataset.empresa = seletorEmpresa.value;
+  }
+  atualizarBotaoEnviar();
 }
+
+// Empresa certa antes de enviar (recepcionista-25, professor-02): o botão diz para qual empresa vai, e um aviso
+// aparece quando o texto tem um sinal forte de outra empresa (js/chat_textos.js). Nunca bloqueia o envio.
+const botaoEnviarEmpresa = document.getElementById('modal-enviar');
+const avisoEmpresa = document.createElement('p');
+avisoEmpresa.className = 'anexos-aviso empresa-aviso';
+avisoEmpresa.setAttribute('role', 'status');
+avisoEmpresa.hidden = true;
+document.getElementById('modal-input').before(avisoEmpresa);
+const avisosEmpresaFechados = new Set(); // "empresa|trecho" que a pessoa mandou manter
+let timerAvisoEmpresa = null;
+
+function atualizarBotaoEnviar() {
+  const empresa = chatAberto ? empresaDaConversa(chatAberto.andar, chatAberto.agente) : '';
+  botaoEnviarEmpresa.textContent = rotuloEnviar(empresa);
+  botaoEnviarEmpresa.title = empresa ? 'O pedido vai para a empresa escolhida no seletor do topo' : '';
+  conferirEmpresaDoTexto();
+}
+
+function conferirEmpresaDoTexto() {
+  const texto = document.getElementById('modal-input').value;
+  const empresa = chatAberto ? empresaDaConversa(chatAberto.andar, chatAberto.agente) : '';
+  const sinal = sinalDeOutraEmpresa(texto, empresa, empresaCitada(texto));
+  const chaveAviso = sinal && `${empresa}|${sinal.trecho.toLowerCase()}`;
+  avisoEmpresa.hidden = !sinal || avisosEmpresaFechados.has(chaveAviso);
+  // Chamado também a cada atualização do chat: o mesmo aviso não é redesenhado (o clique no botão não se perde).
+  if (avisoEmpresa.hidden || avisoEmpresa.dataset.chave === chaveAviso) {
+    avisoEmpresa.dataset.chave = avisoEmpresa.hidden ? '' : chaveAviso;
+    return;
+  }
+  avisoEmpresa.dataset.chave = chaveAviso;
+  const nome = EMPRESAS_DO_GRUPO.find(([valor]) => valor === sinal.sugere)?.[1] || '';
+  const trocar = novoEl('button', 'botao-secundario', `Trocar para ${NOMES_CURTOS_EMPRESA[sinal.sugere]}`);
+  trocar.type = 'button';
+  trocar.addEventListener('click', () => {
+    seletorEmpresa.value = sinal.sugere;
+    seletorEmpresa.dispatchEvent(new Event('change'));
+    document.getElementById('modal-input').focus();
+  });
+  const manter = novoEl('button', 'botao-secundario', 'Manter');
+  manter.type = 'button';
+  manter.addEventListener('click', () => {
+    avisosEmpresaFechados.add(chaveAviso);
+    avisoEmpresa.hidden = true;
+    document.getElementById('modal-input').focus();
+  });
+  avisoEmpresa.replaceChildren(document.createTextNode(`“${sinal.trecho}” parece ser da ${nome}. `), trocar, manter);
+}
+
+document.getElementById('modal-input').addEventListener('input', () => {
+  clearTimeout(timerAvisoEmpresa);
+  timerAvisoEmpresa = setTimeout(conferirEmpresaDoTexto, 400);
+});
 
 function empresaDaConversa(andar, agente) {
   return precisaEmpresa(andar, agente) ? seletorEmpresa.value : '';
@@ -89,4 +144,5 @@ seletorEmpresa.addEventListener('change', () => {
   if (!chatAberto) return;
   gravarEmpresa(chatAberto.andar, chatAberto.agente, seletorEmpresa.value);
   seletorEmpresa.dataset.empresa = seletorEmpresa.value;
+  atualizarBotaoEnviar();
 });

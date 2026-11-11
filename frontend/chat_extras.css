@@ -1,0 +1,30 @@
+/* Extras do chat (Onda 1 de 11/11/2026, Térreo): aviso de empresa, ajustes rápidos e "pode fechar" no Andamento. */
+
+/* Aviso "parece ser da X": âmbar, acima do campo, com Trocar / Manter */
+.empresa-aviso {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: #f4a261;
+}
+
+.empresa-aviso .botao-secundario {
+  padding: 3px 10px;
+  font-size: 0.72rem;
+}
+
+/* Ajustes rápidos só na última resposta; "Levar para uma Peça final" em todas */
+.msg-refino .msg-ajuste-rapido {
+  display: none;
+}
+
+.msg.ultima-resposta .msg-refino .msg-ajuste-rapido {
+  display: inline-block;
+}
+
+.andamento-pode-fechar {
+  margin: 0;
+  color: #868e96;
+  font-size: 0.72rem;
+}

@@ -11,6 +11,7 @@ import pytest
 
 import agendamentos
 import atividade
+import carteira
 import comercial
 import config
 import estudos
@@ -65,6 +66,7 @@ def test_estudo_agendado_vai_ao_max_com_web_e_volta_ao_chat_do_agente(monkeypatc
     monkeypatch.setattr(estudos, "prompt", lambda agente_id, texto, empresa, *a, **k: f"[{agente_id}|{empresa}] {texto}")
     monkeypatch.setattr(comercial, "pedir_ao_max", lambda prompt, limite_s=0, web=True: pedidos.append(
         (prompt, web)) or "Estudo fictício com fontes.")
+    monkeypatch.setattr(carteira, "tem_nomes", lambda _texto: False)  # sem ler o Monday no teste
     agente = buscar_agente("comercial", "estrategista")
 
     async def rodar():
@@ -101,7 +103,7 @@ def test_prospeccao_agendada_traz_a_previa_no_chat_sem_criar_leads(tmp_path, mon
     monkeypatch.setattr(comercial, "criar_lead", lambda _lead: pytest.fail("rotina nunca cria lead no Monday"))
     monkeypatch.setattr(comercial, "pedir_ao_max", lambda prompt, *a, **k: (
         '<<LEADS>>[{"empresa": "Empresa Teste", "site": "https://exemplo.com", "email": "eventos@exemplo.com", '
-        '"telefone": "(19) 3333-4444", "motivo": "teste"}]<<FIM>>'))
+        '"telefone": "(19) 3333-4444", "fontes": ["https://exemplo.com/contato"], "motivo": "teste"}]<<FIM>>'))
     agente = buscar_agente("comercial", "prospectador")
 
     async def rodar():

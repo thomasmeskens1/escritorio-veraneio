@@ -359,7 +359,8 @@ def agendar(dados: Pedido, authorization: str = Header("")):
     if not agente or agente.tipo != "ia" or not acesso.pode_usar(usuario, dados.andar, agente.id):
         raise HTTPException(status_code=404, detail="Agente não encontrado")
     if agente.id in AGENTES_PRODUCAO and not config.usa_max(usuario["sub"]):
-        raise HTTPException(status_code=403, detail="A produção de imagens e vídeos é exclusiva da conta do Thomas.")
+        raise HTTPException(status_code=403, detail="A produção de imagens e vídeos ainda não está liberada para a sua "
+                            "conta. Fale com o Thomas para liberar.")
     limite = 30000 if agente.id == "gestor" else 8000  # os mesmos limites do chat (main.py)
     tarefa = dados.tarefa.strip()
     if len(tarefa) > limite:

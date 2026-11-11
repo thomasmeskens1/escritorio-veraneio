@@ -267,7 +267,10 @@ class CriarRascunhoBrevo(BaseTool):
 
 
 def para(agente_id: str, empresa: str, tarefa_id: int = 0) -> list[BaseTool]:
-    """Ferramenta do Brevo (só o E-mail Marketing, só na conta do Thomas e só se a chave do painel estiver montada)."""
+    """Ferramentas do Brevo (só o E-mail Marketing, só na conta do Thomas e só se a chave do painel estiver montada):
+    criar o rascunho e LER um rascunho pelo número (só leitura, email_marketing-01)."""
     if agente_id != "email_marketing" or not _chave():
         return []
-    return [CriarRascunhoBrevo(empresa=empresa, tarefa_id=tarefa_id)]
+    from agents.brevo_leitura import LerRascunhoBrevo  # import tardio: o módulo importa este
+
+    return [CriarRascunhoBrevo(empresa=empresa, tarefa_id=tarefa_id), LerRascunhoBrevo(empresa=empresa)]

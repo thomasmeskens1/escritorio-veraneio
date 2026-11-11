@@ -15,6 +15,7 @@ from typing import Callable
 import config
 import saude
 import segredos
+from agents import projeto_regras
 from agents.perfis import ESTILO_CHAT
 from estado import ANDARES
 
@@ -300,12 +301,13 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar, ficha: s
         if ideacao:  # rede de segurança: nada de produção num pedido de ideias
             plano = [p for p in plano if p["agente"] not in AGENTES_PRODUCAO] or [
                 {"agente": "social_media", "instrucao": pedido, "fase": 1}]
+        plano, nota = projeto_regras.analista_antes(plano)  # ângulos antes de quem escreve (analista_tendencias-30)
         if titulo:
             _gravar(pasta / "titulo.txt", titulo)
         _gravar(arquivo, json.dumps(plano, ensure_ascii=False, indent=2))
         linhas = [f"{n}. **{_nome(p['agente'])}** (fase {p['fase']}): {p['instrucao']}" for n, p in enumerate(plano, 1)]
         _gravar(pasta / "plano.md", f"# Plano\n\nPedido: {pedido}\n\nEntendimento: {entendimento or '-'}\n\n"
-                + "\n".join(linhas) + "\n")
+                + "\n".join(linhas) + (f"\n\n{nota}" if nota else "") + "\n")
     return json.loads(arquivo.read_text(encoding="utf-8"))
 
 
@@ -344,6 +346,12 @@ def _sem_aviso(tipo: str, agente: str, detalhe: str) -> None:
     pass
 
 
+def _empresa(tarefa_id: int) -> str | None:
+    import cerebro  # import tardio: o Cérebro carrega o banco
+
+    return cerebro.empresa_da_tarefa(tarefa_id)
+
+
 # Revisão de 30/10/2026 (item 1.9): o plano do #232 (Lodge 35) foi feito por um gratuito fraco que caiu; o Max
 # assumiu e reaproveitou plano e etapas salvos sem reinterpretar o pedido. Plano de modelo fraco não é herdado.
 MODELOS_FORTES = ("claude-code/", "anthropic/", "claude-")
@@ -375,6 +383,10 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
     (pasta / "etapas").mkdir(parents=True, exist_ok=True)
     if _descartar_plano_fraco(pasta, modelo):
         avisar("etapa_iniciada", "gestor", f"Plano refeito: {modelo} assumiu o projeto de um modelo gratuito")
+    # Vídeo pedido contra o manual 05 §5: pergunta de um clique antes de planejar (moviemaker-02).
+    if not (pasta / "plano.json").exists() and (pergunta := projeto_regras.pergunta_de_video(pedido, _empresa(tarefa_id))):
+        _gravar(pasta / "final.md", pergunta)
+        return (pasta / "final.md").read_text(encoding="utf-8")
     ficha = _ficha(pasta, pedido, contexto, executar)
     novo = not (pasta / "plano.json").exists()
     plano = _plano(pasta, pedido, contexto, executar, ficha)
@@ -409,7 +421,7 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
         descricao = (
             f"{contexto}\n\n{projeto_txt}\n\n{_passagem(pasta, plano)}\n"
             f"Resultados das etapas anteriores:\n{anteriores or '(nenhuma)'}\n\n"
-            f"Sua etapa ({n}): {passo['instrucao']}\n\n"
+            f"Sua etapa ({n}): {passo['instrucao']}{projeto_regras.lembrete_angulos(plano, n, passo)}\n\n"
             f"Seja objetivo: até ~{PALAVRAS_ETAPA} palavras, só o essencial para as próximas etapas.{ancora}"
         )
         detalhe = f"Etapa {n}: {passo['instrucao'][:160]}"
@@ -465,6 +477,7 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
             texto = _aplicar_checagem(pasta, texto)
         if (medir := como_medir(sucesso)):  # vai ao chat e, pelo andamento "concluida", ao comentário do Monday
             texto = f"{texto.rstrip()}\n\n{medir}"
+        texto = projeto_regras.com_checklist_meta(texto, plano)  # gestor_trafego-03
         _gravar(final, texto)
     return final.read_text(encoding="utf-8")
 

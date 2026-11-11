@@ -170,7 +170,9 @@ def instrucoes() -> str:
     texto = arquivo.read_text(encoding="utf-8")
     partes = [m.group(0) for m in re.finditer(r"## (?:Regras de Atuação|Limitações dos Dados)\n.*?(?=\n## |\Z)", texto, re.S)]
     return ("DADOS DO PAINEL ANALÍTICO: use as ferramentas do painel (analisar_*, comparar_redes, obter_metricas_hoje) "
-            "para qualquer número; nunca invente nem estime sem dizer. Informe o período e a data dos dados. Marcas: "
+            "para qualquer número; nunca invente nem estime sem dizer. Informe o período analisado. A data da coleta e "
+            "a lista das consultas feitas o sistema escreve sozinho no fim da resposta: não escreva a data da coleta "
+            "de cabeça. Marcas: "
             "Casa Veraneio (hospedagem), Casa Corp (= Casa Veraneio Corporativo) e Casa Vero; analise a empresa do "
             "trabalho e só compare com as outras se o usuário pedir. TRABALHO DO GRUPO (as três empresas): abra com "
             "\"Respondi pelas três empresas, cada uma no seu bloco\" e responda em três blocos, sempre nesta ordem: "

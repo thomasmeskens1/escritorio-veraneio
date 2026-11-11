@@ -26,6 +26,7 @@ import cerebro_embed as embed
 import cerebro_estagiarios as estagiarios
 import cerebro_imoveis as imoveis
 import cerebro_lacunas as lacunas
+import cerebro_sigilo as sigilo
 import config
 import empresas
 import tarefas
@@ -206,9 +207,11 @@ def sem_contatos(texto: str) -> str:
     return TELEFONE.sub("[telefone]", texto)
 
 
-def consultar(pergunta: str, agente: str, tarefa_id: int = 0) -> str:
-    """Chamado pela ferramenta do agente (em thread). Nunca bloqueia: sem estagiário livre, responde sem visita."""
+def consultar(pergunta: str, agente: str, tarefa_id: int = 0, externo: bool = False) -> str:
+    """Chamado pela ferramenta do agente (em thread). Nunca bloqueia: sem estagiário livre, responde sem visita.
+    `externo`: gratuito de fora; sai só o trecho ou a linha sigilosa, não a resposta inteira (cerebro_sigilo)."""
     estagiario = estagiarios.iniciar_visita(agente) if agente != ID else None
+    fora: list[dict] = []
     try:
         if tarefa_id:
             atividade.evento_em_thread(tarefa_id, "consulta_cerebro", agente, detalhe=pergunta)
@@ -216,11 +219,15 @@ def consultar(pergunta: str, agente: str, tarefa_id: int = 0) -> str:
         # inteira e exata (cerebro-01), sem os 9 pedaços de texto que cortavam a lista.
         if (tabela := imoveis.responder(pergunta, empresa_da_tarefa(tarefa_id), imoveis.MAX_CARACTERES_FERRAMENTA)):
             base.registrar_consulta(tarefa_id, agente, pergunta, [], [])
-            return f"Tabela de imóveis do Cérebro (lista completa e conferida; cite a fonte e a data):\n\n{tabela}"
+            resposta = f"Tabela de imóveis do Cérebro (lista completa e conferida; cite a fonte e a data):\n\n{tabela}"
+            return _para_externo(resposta, len(resposta), 0, tarefa_id, agente) if externo else resposta
         trechos = base.buscar(pergunta, k=K_CAMADAS, empresa=empresa_da_tarefa(tarefa_id),
                               financeiro=_ve_financeiro(tarefa_id))
-        base.registrar_consulta(tarefa_id, agente, pergunta, [t["id"] for t in trechos], [t["sinais"] for t in trechos])
         lacunas.da_busca(pergunta, trechos, empresa_da_tarefa(tarefa_id), agente)  # "não sei" vira pergunta (cerebro-02)
+        todos = trechos
+        if externo:  # o sigiloso não chega ao gratuito de fora e nem conta como consultado (a tarefa segue livre)
+            trechos, fora = sigilo.separar(trechos)
+        base.registrar_consulta(tarefa_id, agente, pergunta, [t["id"] for t in trechos], [t["sinais"] for t in trechos])
     except Exception:
         log.exception("Cérebro: falha na consulta.")
         return "O Cérebro está indisponível agora. Não invente fatos sobre a empresa; avise o usuário se faltar algo."
@@ -228,12 +235,27 @@ def consultar(pergunta: str, agente: str, tarefa_id: int = 0) -> str:
         if estagiario:
             estagiarios.concluir_visita(estagiario)
     if not trechos:
+        if fora:
+            _para_externo("", 1, len(fora), tarefa_id, agente)  # registra o gatilho
+            return sigilo.BLOQUEIO
         return ("O Cérebro não tem nada registrado sobre isso. Não invente: diga que essa informação não está "
                 f"na base da {empresas.nome(empresa_da_tarefa(tarefa_id))} ou pergunte ao usuário.")
     linha = tarefas.obter(tarefa_id) if tarefa_id else None
-    return ("Conhecimento do Cérebro (cite a fonte ao usar; prefira o mais recente se houver conflito):\n\n"
-            + empresas.sem_precos(_formatar_em_camadas(trechos, MAX_CARACTERES_FERRAMENTA), empresa_da_tarefa(tarefa_id),
-                                  linha["texto"] if linha else ""))
+    resposta = ("Conhecimento do Cérebro (cite a fonte ao usar; prefira o mais recente se houver conflito):\n\n"
+                + empresas.sem_precos(_formatar_em_camadas(trechos, MAX_CARACTERES_FERRAMENTA),
+                                      empresa_da_tarefa(tarefa_id), linha["texto"] if linha else ""))
+    if not externo:
+        return resposta
+    original = len(_formatar_em_camadas(todos, MAX_CARACTERES_FERRAMENTA)) if fora else len(resposta)
+    return _para_externo(resposta, original, len(fora), tarefa_id, agente)
+
+
+def _para_externo(resposta: str, original: int, trechos_fora: int, tarefa_id: int, agente: str) -> str:
+    """Corte por linha para o gratuito de fora; o gatilho vai para o Registro de atividade (nunca o conteúdo)."""
+    texto, gatilho = sigilo.filtrar(resposta, original, trechos_fora)
+    if gatilho and tarefa_id:
+        atividade.evento_em_thread(tarefa_id, "cerebro_sigilo", agente, detalhe=f"Fora do gratuito: {gatilho}")
+    return texto
 
 
 def descricao_tarefa(texto: str, historico: list = (), tarefa_id: int = 0) -> str:

@@ -1,7 +1,7 @@
 // Ficha do agente (descrição, exemplo, tarefas, aprendizado, rotinas, treino) e, no popup
 // do Cérebro, a seção "Conhecimento" (GET /api/cerebro/estatisticas).
 
-const AVISO_PRODUCAO = 'A produção de imagens e vídeos é exclusiva da conta do Thomas. Fale com ele para solicitar.';
+const AVISO_PRODUCAO = 'A produção de imagens e vídeos ainda não está liberada para a sua conta. Fale com o Thomas para liberar.';
 
 const perfis = {}; // 'andar/agente' -> resposta de GET /api/agentes/{andar}/{id}
 const errosPerfil = {}; // 'andar/agente' -> mensagem de erro do último carregamento
@@ -27,7 +27,7 @@ async function buscarAgente(andar, id) {
     encerrarSessao('Sessão expirada. Entre novamente.');
     return null;
   }
-  if (resposta.status === 404) throw new ErroApi('Agente não encontrado.');
+  if (resposta.status === 404) throw new ErroApi('Este agente não existe mais ou mudou de lugar. Recarregue a página.');
   if (!resposta.ok) throw new ErroApi('Não foi possível carregar as informações do agente.');
   return resposta.json();
 }

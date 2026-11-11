@@ -7,8 +7,8 @@ e só o Analista de Tendências recebia o calendário. Aqui, tudo é conta em c�
 - `bloco(...)`: os próximos 90 dias SÓ da empresa do trabalho, com feriados nacionais (Carnaval, Sexta-feira Santa e
   Corpus Christi calculados pela Páscoa), os estaduais e municipais das cidades de origem do público e as datas
   próprias de cada empresa, nunca misturadas.
-Configurável em dados/calendario.json (fora do git): cidades de origem por empresa, feriados regionais extras e
-datas próprias por empresa (substituem as padrão daquela empresa).
+Configurável em dados/calendario.json (fora do git): cidades de origem por empresa, feriados regionais extras,
+datas próprias por empresa (substituem as padrão daquela empresa) e os prazos "fechar até" (prazos_comerciais.py).
 """
 
 import json
@@ -87,7 +87,8 @@ MES_CITADO = re.compile(r"\b(" + "|".join(MESES).replace("ç", "[çc]") + r")\b"
 # Pedido de planejamento ou que cita data/momento (o mesmo espírito de encaminhamento.py): só aí o bloco entra.
 PEDE_DATAS = re.compile(r"planej|calend[aá]rio|cronograma|pautas?\b|grade|\bm[eê]s\b|semanas?\b|feriad|campanha|"
                         r"temporada|r[eé]veillon|carnaval|natal|p[aá]scoa|f[eé]rias|faltam|contagem|noites|\bdatas?\b|"
-                        r"verba|anivers[aá]rio|dia d[aeo]s?\b", re.I)
+                        r"verba|anivers[aá]rio|dia d[aeo]s?\b|prazo|fechar|urg[eê]ncia|[uú]ltimos dias|black friday",
+                        re.I)
 
 
 def _config() -> dict:
@@ -276,6 +277,9 @@ def bloco(agente_id: str, empresa: str | None, pedido: str = "", hoje: date | No
                       "e a data do momento.")
     if mes and alvos:
         partes += tabela_do_mes(empresa, *mes)
+    import prazos_comerciais  # import tardio: o módulo lê o calendario.json por aqui
+
+    partes.append(prazos_comerciais.bloco(empresa, hoje))  # "fechar até" com validade (copywriter-01)
     partes.append("Datas (tipo, dia da semana, feriadão e distância):")
     partes += [_linha(e, hoje, postagem) for e in eventos(empresa, hoje, fim)]
     partes.append(f"Feriados estaduais e municipais considerados: os das cidades de origem do público "

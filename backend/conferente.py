@@ -6,12 +6,14 @@ final dos agentes de texto (executor.py). As regras por empresa ficam em confere
 Uma menção negada ("nunca WhatsApp", "sem a Casa Veraneio") não é aviso.
 """
 
+import os
 import re
 import threading
 from datetime import date
 
+import config
 import empresas
-from conferente_regras import COMUNS, HOSPEDAGEM, REGRAS
+from conferente_regras import CHECKLIST_META, CHECKLIST_META_TITULO, COMUNS, CRECI, HOSPEDAGEM, REGRAS
 
 # Agentes cuja resposta é texto de peça (o Gestor consolida e já passa pelo especialista).
 AGENTES = {"copywriter", "social_media", "email_marketing", "gestor_trafego"}
@@ -26,6 +28,22 @@ _UF = "|".join(COMUNS["ufs"])
 # Fim do nome da cidade (minúscula ou parêntese) + separador + UF: o certo é exatamente " / ". Espaço sozinho
 # ("litoral de SP") e lista de UFs ("SP, RJ") não contam.
 LOCAL = re.compile(rf"([a-zà-ÿ)])(\s*[,\-–—(]\s*|/\s*|\s+/(?=\S))({_UF})\b(?![a-zà-ÿ])")
+
+
+NUMERO_CRECI = re.compile(r"CRECI\s*(?:n[ºo°.]*\s*)?([\d][\d.\-/ ]{3,15}-?\s?[A-Z]?)\b", re.I)
+
+
+def creci_vero() -> str:
+    """Número do CRECI da Casa Vero: CRECI_VERO no ambiente ou o do manual 12 (fora do git); "" se não achar."""
+    if (configurado := os.getenv("CRECI_VERO", "").strip()):
+        return configurado
+    for caminho in sorted(config.PASTA_CONHECIMENTO.glob("12_*.md"))[:1]:
+        try:
+            if (achado := NUMERO_CRECI.search(caminho.read_text(encoding="utf-8"))):
+                return achado.group(1).strip()
+        except OSError:
+            pass
+    return ""
 
 
 def _achados(padrao: str, texto: str, flags=re.I) -> list[str]:
@@ -63,7 +81,24 @@ def conferir(texto: str, empresa: str, campo: str = "legenda", pedido: str = "",
             avisos.append(f"nome interno de agente ({_unicos(achou)}): use \"nossa equipe\" ou \"a gente\"")
     for padrao in COMUNS["disponibilidade"]:
         if (achou := _achados(padrao, texto)):
-            avisos.append(f"disponibilidade afirmada ({_unicos(achou)}): use \"ainda dá tempo de escolher\"")
+            # "ainda dá tempo de escolher" virou a frase repetida nas três marcas (copywriter-26): sugestão neutra.
+            avisos.append(f"disponibilidade afirmada ({_unicos(achou)}): convide sem prometer data livre (ex.: "
+                          "\"escolha a casa do seu grupo com a nossa equipe\")")
+    if (urgente := [a for p in COMUNS["urgencia"] for a in _achados(p, texto)]) and empresas.valida(empresa):
+        import prazos_comerciais  # import tardio: lê o calendario.json
+
+        if not prazos_comerciais.vigente(empresa, texto):
+            avisos.append(f"urgência de data ({_unicos(urgente)}) sem prazo de fechamento válido cadastrado para a "
+                          f"{empresas.nome(empresa)}: confirme o \"fechar até\" ou convide sem prazo")
+    if empresa == "casa_vero" and campo in ("legenda", "email") and tipo != "STORIES" \
+            and not re.search(CRECI, texto, re.I):
+        numero = creci_vero()
+        avisos.append(f"falta o CRECI{f' ({numero})' if numero else ''}: anúncio imobiliário da Casa Vero sai com o "
+                      "número do CRECI (Lei 6.530/78)")
+    if campo == "roteiro":
+        import direcao_visual
+
+        avisos += direcao_visual.conferir(texto, empresa)
     for padrao in COMUNS["palavras_a_dosar"] if campo != "resposta" else ():  # a resposta pode ter várias legendas
         if len(achou := _achados(padrao, texto)) >= 2:
             avisos.append(f"\"{achou[0].lower()}\" aparece {len(achou)} vezes (no máximo 1 por texto)")
@@ -166,6 +201,32 @@ def anotar(resposta: str, agente_id: str, empresa: str, pedido: str = "", tarefa
     with _trava:
         do_monday = _pendentes.pop(tarefa_id, []) if tarefa_id else []
     avisos = conferir(resposta, empresa, "resposta", pedido) if agente_id in AGENTES else []
-    blocos = [rodape(avisos), rodape(do_monday, "Conferência dos itens gravados no Monday")]
+    blocos = [rodape(avisos), rodape(do_monday, "Conferência dos itens gravados no Monday"),
+              *_complementos(resposta, agente_id, empresa, pedido)]
     extra = "\n\n".join(b for b in blocos if b)
     return f"{resposta}\n\n{extra}" if extra and resposta else resposta
+
+
+PLANO_DE_MIDIA = re.compile(r"\b(plano de m[ií]dia|campanhas?|conjuntos? de an[uú]ncios|p[uú]blicos?|verba|"
+                            r"or[cç]amento|criativos?|segmenta[cç][aã]o)\b", re.I)
+
+
+def _complementos(resposta: str, agente_id: str, empresa: str, pedido: str) -> list[str]:
+    """Blocos fixos que o código garante no fim da resposta (Onda 1 de novembro)."""
+    extras = []
+    # gestor_trafego-03: todo plano de mídia fecha com o checklist da Meta.
+    if agente_id == "gestor_trafego" and CHECKLIST_META_TITULO not in resposta \
+            and len({m.group(1).lower()[:6] for m in PLANO_DE_MIDIA.finditer(resposta)}) >= 2:
+        extras.append(CHECKLIST_META)
+    # moviemaker-02: o modelo esqueceu a pergunta de um clique sobre o pedido fora do padrão.
+    import pedido_video
+
+    if agente_id in ("moviemaker", "editor_video") and "<<FORMULARIO>>" not in resposta \
+            and (achados := pedido_video.conflitos(pedido, empresa)):
+        extras.append(pedido_video.formulario(achados))
+    # analista_tendencias-32: a resposta rápida oferece aprofundar com a pesquisa.
+    import estudos
+
+    if (oferta := estudos.oferta_de_aprofundar(agente_id, pedido)):
+        extras.append(oferta)
+    return extras

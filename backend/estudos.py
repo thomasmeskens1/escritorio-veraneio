@@ -34,6 +34,14 @@ AGENTES = {
 }
 # "O que é a Matriz BCG?" é conversa (resposta na hora), não estudo.
 SO_EXPLICACAO = re.compile(r"^\s*(o que (é|e|significa)|explique|como funciona|qual a diferen[cç]a)\b", re.I)
+# Análise de negócio (estrategista-18; decisão adotada em 11/11/2026: orçamento e proposta não usam a web): "analise
+# este orçamento", "avalie este lead". Roda no Max SEM web, só com os dados do pedido, a persona e o Cérebro, e com
+# tempo menor. Estudo de mercado (BCG, concorrentes, crescimento) segue com a web, salvo se citar cliente da carteira.
+LIMITE_ANALISE_S = 10 * 60
+ANALISE_NEGOCIO = re.compile(r"\b(propostas?|or[cç]amentos?|leads?|clientes?|negocia[cç](?:[aã]o|[oõ]es)|"
+                             r"obje[cç](?:[aã]o|[oõ]es)|contratos?|cota[cç](?:[aã]o|[oõ]es)|briefing)\b", re.I)
+ESTUDO_DE_MERCADO = re.compile(r"\b(bcg|matriz|swot|porter|ansoff|mckinsey|mercado|concorr[eê]n\w*|tend[eê]ncias?|"
+                               r"crescimento|participa[cç][aã]o|portf[oó]lio|setor)\b", re.I)
 
 REGRAS = (
     "REGRAS DA RESPOSTA:\n"
@@ -52,9 +60,65 @@ REGRAS = (
     "até quando).")
 
 
-def e_estudo(agente_id: str, texto: str) -> bool:
+def e_estudo(agente_id: str, texto: str, com_anexo: bool = False) -> bool:
+    """Com anexo, a análise de negócio ("analise esta proposta" + PDF) segue pelo caminho normal, que lê o anexo e já
+    é sigiloso para o Estrategista (Max ou modelo local, nunca gratuito de fora nem web)."""
     padrao = AGENTES.get(agente_id)
-    return bool(padrao and padrao.search(texto) and not SO_EXPLICACAO.search(texto))
+    if com_anexo and agente_id == "estrategista" and ANALISE_NEGOCIO.search(texto or ""):
+        return False
+    return bool(padrao and padrao.search(texto) and not SO_EXPLICACAO.search(texto) and not RAPIDA.match(texto))
+
+
+# Rápida ou completa (analista_tendencias-32, 11/11/2026): antes de ocupar o Max por até 40 minutos, a pessoa escolhe
+# nos botões do chat. "Resposta rápida: <pedido>" vai ao agente sem web (calendário e regras); "Estudo completo:
+# <pedido>" vai ao Max. Só o Analista de Tendências por enquanto; rotina agendada segue direto para o estudo.
+ESCOLHE_ANTES = {"analista_tendencias"}
+RAPIDA = re.compile(r"^\s*resposta\s+r[aá]pida\s*:\s*", re.I)
+COMPLETO = re.compile(r"^\s*estudo\s+completo\s*:\s*", re.I)
+
+
+def precisa_escolher(agente_id: str, texto: str) -> bool:
+    return agente_id in ESCOLHE_ANTES and e_estudo(agente_id, texto) and not COMPLETO.match(texto)
+
+
+def opcoes_de_escolha(texto: str) -> dict:
+    """Aviso com os dois botões (o mesmo mecanismo de "Planejamento ou peça final?")."""
+    return {"titulo": "Resposta rápida ou estudo completo?", "liberar": True,
+            "texto": "Este pedido pode virar um estudo com pesquisa na web, que leva até 40 minutos e ocupa o Max. "
+                     "Quer uma resposta rápida agora (calendário e regras, sem web, em cerca de 1 minuto) ou o estudo "
+                     "completo (aviso aqui quando terminar)?",
+            "opcoes": [{"rotulo": "Resposta rápida agora", "texto": f"Resposta rápida: {texto}"},
+                       {"rotulo": "Estudo completo", "texto": f"Estudo completo: {texto}"}]}
+
+
+def oferta_de_aprofundar(agente_id: str, pedido: str) -> str:
+    """Fim da resposta rápida: aprofundar vira o estudo, aproveitando o mesmo pedido."""
+    if agente_id not in ESCOLHE_ANTES or not RAPIDA.match(pedido or ""):
+        return ""
+    return ("Quer que eu aprofunde com pesquisa na web? Escreva \"Estudo completo: "
+            f"{RAPIDA.sub('', pedido, count=1).strip()[:300]}\" (leva até 40 minutos).")
+
+
+def analise_sem_web(agente_id: str, texto: str) -> tuple[bool, str]:
+    """(roda sem web?, motivo para o registro). Pedido que cita cliente da carteira nunca vai à web."""
+    if agente_id != "estrategista":
+        return False, ""
+    if ANALISE_NEGOCIO.search(texto or "") and not ESTUDO_DE_MERCADO.search(texto or ""):
+        return True, ""
+    import carteira
+
+    if carteira.tem_nomes(texto):
+        return True, "porque o pedido cita cliente da carteira"
+    return False, ""
+
+
+def aviso_inicio(agente_id: str, texto: str) -> str:
+    """Texto do aviso no chat quando o estudo começa."""
+    if agente_id == "estrategista" and ANALISE_NEGOCIO.search(texto or "") and not ESTUDO_DE_MERCADO.search(texto or ""):
+        return ("Vou analisar com os dados do negócio (persona, Cérebro e o que você mandou), sem pesquisa na web, e "
+                "trazer a análise aqui. Leva alguns minutos.")
+    return ("Vou pesquisar na web (notícias, dados de mercado e concorrentes) e trazer o estudo aqui, com as fontes. "
+            "Leva alguns minutos.")
 
 
 def empresa_do_estudo(agente_id: str, texto: str, empresa: str) -> str:
@@ -134,21 +198,22 @@ def _cerebro(texto: str, empresa: str, financeiro: bool = True) -> str:
         if partes else ""
 
 
-def prompt(agente_id: str, texto: str, empresa: str, historico: list = (), financeiro: bool = True) -> str:
+def prompt(agente_id: str, texto: str, empresa: str, historico: list = (), financeiro: bool = True,
+           web: bool = True) -> str:
     from agents.perfis import METODOS, PERFIS
 
+    import carteira
+
+    # Estrategista: nomes de clientes saem do pedido e da conversa ANTES de montar o prompt (estrategista-18; antes
+    # só a resposta anterior e os blocos de dados passavam pelo filtro, e o texto digitado ia cru ao Max com web).
+    ocultar = carteira.ocultar if agente_id == "estrategista" else (lambda t: t)
     perfil = PERFIS[agente_id]
     partes = [f"Você é o {perfil['role']} do escritório da Casa Veraneio. Objetivo: {perfil['goal']}\n"
               f"{perfil['backstory']}\nMétodo: {METODOS.get(agente_id, '')}",
               empresas.contexto(empresa) or empresas.contexto(empresas.PADRAO)]
     for troca in historico:  # conversa recente: o pedido pode continuar um estudo anterior
-        resposta = (troca['resposta'] or '')[:1500]
-        if agente_id == "estrategista":  # a agenda de clientes (nomes) pode estar na conversa: não vai à web
-            import carteira
-
-            resposta = carteira.ocultar(resposta)
-        partes.append(f"Conversa anterior — pedido: {troca['texto'][:600]}\n"
-                      f"Sua resposta: {resposta}")
+        partes.append(f"Conversa anterior — pedido: {ocultar((troca['texto'] or '')[:600])}\n"
+                      f"Sua resposta: {ocultar((troca['resposta'] or '')[:1500])}")
     if agente_id == "analista_tendencias":
         partes.append(calendario_eventos.texto())
         partes.append(
@@ -157,9 +222,20 @@ def prompt(agente_id: str, texto: str, empresa: str, historico: list = (), finan
             "conforme a empresa), o comportamento do cliente e o que está crescendo nas redes. Entregue: 1) o que está "
             "acontecendo (fatos com fonte); 2) sinais e tendências; 3) previsões e os BONS CAMINHOS priorizados, cada "
             "um com prazo pelo calendário acima; 4) o que produzir agora (tema, gancho, formato).")
-    else:
-        import carteira  # o estudo pesquisa na web: nomes de clientes nunca vão junto (estrategista-29)
+    elif not web:  # análise de negócio (estrategista-18): Max sem nenhuma ferramenta
+        import comercial
 
+        partes.append(carteira.ocultar(_painel(financeiro)))
+        partes.append(carteira.ocultar(_cerebro(texto, empresa, financeiro)))
+        if (persona := comercial._persona()):  # manual 14: a quem vendemos no Corporativo
+            partes.append("PERSONA DO CLIENTE CORPORATIVO (manual 14):\n" + carteira.ocultar(persona)[:MAX_DADOS])
+        partes.append(
+            "COMO FAZER A ANÁLISE: não há pesquisa na web neste pedido. Raciocine só sobre os dados do pedido, da "
+            "persona, do painel e do Cérebro acima. Entregue: 1) leitura do caso (o que o pedido mostra); 2) pontos "
+            "fortes e riscos; 3) o que ajustar (preço, escopo, argumento, próximo contato), com o porquê; 4) os "
+            "próximos passos. O que depender de dado que não está aqui fica PENDENTE.")
+    else:
+        # o estudo pesquisa na web: nomes de clientes nunca vão junto (estrategista-29)
         partes.append(carteira.ocultar(_painel(financeiro)))
         partes.append(carteira.ocultar(_cerebro(texto, empresa, financeiro)))
         partes.append(
@@ -177,19 +253,25 @@ def prompt(agente_id: str, texto: str, empresa: str, historico: list = (), finan
             "presença em buscas), numa tabela com a fonte. Sem isso a participação relativa não é medida; não "
             "entregue o estudo sem essa etapa (primeiro estudo real, 28/10/2026, pulou os concorrentes).")
     partes.append(REGRAS)
-    partes.append(f"PEDIDO DO USUÁRIO: {texto}")
+    partes.append(f"PEDIDO DO USUÁRIO: {ocultar(texto)}")
     return "\n\n".join(p for p in partes if p)
 
 
 def executar(tarefa_id: int, agente_id: str, texto: str, empresa: str, historico: list) -> str:
     import comercial  # o envio ao Max e a espera são os mesmos da prospecção
 
-    tarefas.registrar_evento(tarefa_id, "pesquisa_web", agente_id, detalhe="Pesquisa na web pelo Claude Code (Max)")
+    sem_web, motivo = analise_sem_web(agente_id, texto)
+    if sem_web:
+        tarefas.registrar_evento(tarefa_id, "analise_sem_web", agente_id, detalhe="Análise sem pesquisa na web"
+                                 + (f" ({motivo})" if motivo else "") + ", pelo Claude Code (Max)")
+    else:
+        tarefas.registrar_evento(tarefa_id, "pesquisa_web", agente_id, detalhe="Pesquisa na web pelo Claude Code (Max)")
     from auth import ve_financeiro
 
     linha = tarefas.obter(tarefa_id)
     financeiro = ve_financeiro(linha["usuario"]) if linha else False
-    resposta = comercial.pedir_ao_max(prompt(agente_id, texto, empresa, historico, financeiro), LIMITE_S)
+    resposta = comercial.pedir_ao_max(prompt(agente_id, texto, empresa, historico, financeiro, web=not sem_web),
+                                      LIMITE_ANALISE_S if sem_web else LIMITE_S, web=not sem_web)
     if not resposta.strip():
         raise RuntimeError("O Claude Code não devolveu o estudo.")
     return empresas.sem_precos(segredos.limpar(resposta.strip()), empresa, texto)
@@ -203,7 +285,7 @@ async def iniciar(login: str, andar: str, agente, texto: str, empresa: str) -> i
 
     historico = [dict(h) for h in tarefas.historico(login, andar, agente.id, 10 ** 9, limite=2, empresa=empresa)]
     tarefa_id = tarefas.criar(login, andar, agente.id, texto, "complexa", empresa)
-    tarefas.registrar_evento(tarefa_id, "recebida", agente.id, detalhe="Estudo com pesquisa na web (Max)")
+    tarefas.registrar_evento(tarefa_id, "recebida", agente.id, detalhe="Estudo pelo Claude Code (Max)")
     tarefas.registrar_evento(tarefa_id, "tentativa", agente.id, MODELO)
     await atividade.ocupar(agente.id)
 

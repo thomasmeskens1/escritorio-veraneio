@@ -11,13 +11,14 @@ Um escritório virtual onde cada andar reúne agentes de IA especialistas, a ser
 ## Andares (use o painel "Elevador")
 - Porão: infraestrutura. Construtor (cria novos agentes) e Despachante (painel da fila de tarefas).
 - Térreo: a escola. Recepcionista (onboarding guiado) e Professor (ensina a pedir tarefas).
-- 1º Andar – Marketing: Gestão (Gestor, que coordena a equipe), Criação (Designer e Criador de Imagens), Conteúdo (Copywriter, Social Media e E-mail Marketing), Vídeo (Moviemaker e Editor de Vídeo), Performance (Gestor de Tráfego e Analista de Métricas) e a mesa de Reunião (Analista de Tendências).
+- 1º Andar – Marketing: Gestão (Gestor, que coordena a equipe), Criação (Designer e Criador de Imagens), Conteúdo (Copywriter, Social Media e E-mail Marketing), Vídeo (Moviemaker, Editor de Vídeo e Sonoplasta), Performance (Gestor de Tráfego e Analista de Métricas) e a mesa de Reunião (Analista de Tendências).
 - 2º Andar – Comercial: Corporativo (Prospectador) e a mesa de Reunião (Estrategista). O setor Hospedagem tem mesas vagas para os próximos agentes.
 - Cobertura: diretoria, acesso restrito. Lá fica o laboratório do Cérebro, o conhecimento central das três empresas, com 4 Estagiários.
 - A produção de arquivos (imagens, vídeos e PowerPoint) e as pesquisas na web rodam no Claude Code (Max), liberado para todos os usuários. O Thomas escolhe, no painel de usuários, os andares e agentes de cada pessoa.
 
 ## Empresa da conversa
 - No Marketing e no Cérebro, cada conversa trabalha para UMA empresa, escolhida no seletor do topo do chat. Se você citar a empresa no pedido ("...para a Casa Veraneio"), ela é escolhida sozinha.
+- O botão de envio mostra para qual empresa o pedido vai ("Enviar para Corporativo"). Se o texto tiver um sinal forte de outra empresa ("Vero 12" com a Casa Veraneio marcada, "colaboradores" ou "confraternização" fora do Corporativo, "Lodge 20" na Casa Vero), aparece um aviso com "Trocar" ou "Manter". O aviso nunca impede o envio.
 - Os dados de uma empresa nunca entram no trabalho de outra.
 - O Analista de Métricas também aceita "Todas as empresas (visão do grupo)", e o Estrategista olha as três empresas.
 
@@ -29,20 +30,33 @@ Um escritório virtual onde cada andar reúne agentes de IA especialistas, a ser
 
 ## Conversar com um agente
 1. Vá ao andar pelo elevador e clique no agente. A ficha mostra a descrição, um exemplo de pedido (clique para usar), as tarefas resolvidas, as rotinas e o botão "Agendar tarefa".
-2. Escreva a tarefa e clique em "Enviar Tarefa" (ou Enter). Até 8 mil caracteres; o Gestor aceita até 30 mil.
-3. Enquanto ele trabalha, a bolinha fica laranja e o painel "Andamento" mostra cada passo (inclusive quando o Gestor aciona o especialista).
+2. Escreva a tarefa e clique em "Enviar" (ou Enter); no Marketing o botão diz a empresa, como "Enviar para Casa Vero". Até 8 mil caracteres; o Gestor aceita até 30 mil.
+3. Enquanto ele trabalha, a bolinha fica laranja e o painel "Andamento" mostra cada passo (inclusive quando o Gestor aciona o especialista). Pode fechar ou ir a outro agente: a resposta volta a este chat. O botão "Parar", ao lado do "pensando...", cancela o pedido (dado errado ou falta de informação).
 4. Se o agente precisar de uma informação sua, abre um FORMULÁRIO em pop-up. No chat ficam só as suas respostas. Se fechar sem responder, o botão "Responder formulário" reabre.
 5. Agente com um "!" vermelho no nome está esperando você (formulário sem resposta ou decisão de produção).
 6. Peça pronta chega com o botão "Visualizar" (abre a pasta no Drive) e "Pedir ajuste" (pede uma nova versão da mesma peça). O Analista de Métricas traz "Ver relatório" (página com gráficos).
+7. Recursos das respostas, um por linha:
+- "Desdobrar 4:5 e 9:16": na arte pronta (PNG), gera os outros formatos a partir do molde, na pasta FORMATOS/.
+- Pasta FINAL e folha de aprovação: na pasta da peça no Drive, FINAL/ tem sempre o conjunto atual (um arquivo por peça); a folha com as miniaturas numeradas chega junto da resposta.
+- Vídeo com e sem som: todo vídeo sai em duas versões, sem som e _com_som, com a trilha que o Sonoplasta escolhe pela biblioteca da marca.
+- "Repetir para…": na resposta de texto da Casa Veraneio que cita um Lodge (Copywriter, Social Media, E-mail Marketing e Gestor de Tráfego), refaz o mesmo texto para até 5 outros Lodges.
+- Ajustes rápidos: na última resposta do Copywriter e do E-mail Marketing, "Mais curto", "Mais informal", "Mais fluido" e "3 variações" mandam o pedido de ajuste pronto, mantendo igual o que não foi pedido.
+- "Levar para uma Peça final": na resposta do Copywriter, abre o Gestor na mesma empresa com o texto aprovado já no campo. Você completa o formato e clica em enviar (nada vai sozinho).
+- Documentos: o Estrategista e o Gestor de Tráfego entregam .docx, e a planilha do catálogo sai em .xlsx; o arquivo vem anexado na resposta e também vai para o Drive.
+- "Reenviar": se a mensagem não chegar ao servidor em 10 segundos, ela fica marcada e o botão manda de novo (sem duplicar).
+- Título da aba: com o escritório em outra aba, o título mostra quantas respostas novas chegaram, como "(2) Escritório Veraneio".
 Cores do status: cinza = dormindo, verde = disponível, laranja = trabalhando.
 
 ## Quem faz o quê (peça ao agente certo)
 - Peça completa (post, carrossel, reels, stories, apresentação em PowerPoint): fale com o Gestor e comece com "Peça final:". Ele monta o plano e aciona Copywriter, Designer, Criador de Imagens, Moviemaker e Editor de Vídeo. Se você pedir uma peça completa a um especialista, ela é encaminhada ao Gestor.
+- Gestor, pauta da semana: a pauta traz o botão "Produzir a semana" por empresa, que manda produzir as peças do quadro de Social Media no Monday. As peças rodam de preferência à noite (das 20h às 7h); de dia, só quando o Max está parado.
+- "Lance no Monday" ao Gestor: o último planejamento dele vai ao Social Media, que registra os itens no Monday.
 - Só as ideias ou o planejamento, sem produzir arquivos: comece com "Planejamento:".
 - Textos isolados (legenda, título, gancho, texto de anúncio): Copywriter.
 - Calendário, grade da semana, pautas, itens de planejamento no Monday: Social Media.
 - E-mail para a base (rascunho no Brevo): E-mail Marketing.
 - Roteiro e storyboard de vídeo: Moviemaker.
+- Música, efeitos e assinatura sonora dos vídeos (qual faixa da biblioteca usar, troca de música): Sonoplasta.
 - Campanha paga (público, verba, canais): Gestor de Tráfego. Números e relatórios: Analista de Métricas.
 - Datas, tendências, notícias do mercado e "bons caminhos": Analista de Tendências.
 - Matriz BCG, SWOT, concorrentes, posicionamento das empresas: Estrategista.
@@ -56,10 +70,16 @@ Cores do status: cinza = dormindo, verde = disponível, laranja = trabalhando.
 - Exemplo bom (ao Copywriter): "Escreva 3 legendas para o carrossel do Lodge 239 no Réveillon, para grupos de amigos, tom acolhedor, CTA 'Reserve a data do seu grupo. Link na bio'."
 - Regras de ouro que valem para todo pedido: nunca WhatsApp como CTA, o site nunca na arte, nunca prometer disponibilidade, a Casa Veraneio fala com grupos e famílias (nunca com casal) e nenhum dado inventado.
 
+## Como pedir um ajuste
+- Diga o que manter ("a abertura está ótima"), o que mudar ("o fecho está longo") e dê um exemplo ou uma palavra de que você gosta.
+- Um ajuste por mensagem, ou todos juntos numa só; evite "mais bonito" sem dizer o quê.
+- Exemplo: "Mantenha a abertura e o CTA. Troque só o segundo parágrafo por algo mais leve, com a lareira do Lodge."
+- Para os ajustes comuns de tom e tamanho, use os botões de ajuste rápido embaixo da resposta.
+
 ## Dificuldade, tempo e fila
 - Cada tarefa é classificada automaticamente como simples, média ou complexa.
 - Primeiro tentam modelos de IA gratuitos; se um falhar, o próximo assume com o histórico recente da conversa.
-- Se demorar demais ou falhar, a tarefa é ADIADA para a fila e a resposta chega assim que for processada, mesmo que você tenha saído.
+- Se demorar demais ou falhar, a tarefa é ADIADA para a fila e a resposta chega assim que for processada, mesmo que você tenha saído. Pode fechar o escritório: não precisa enviar de novo.
 - Para acompanhar os seus pedidos: o painel "Andamento" no chat mostra cada passo, e a Caixa de entrada (ícone no topo) junta o que espera você e o que ficou pronto. A resposta sempre volta ao chat onde você pediu.
 - O painel completo da fila (Despachante, no Porão) é só para quem tem acesso ao Porão; indique-o apenas a essas pessoas.
 

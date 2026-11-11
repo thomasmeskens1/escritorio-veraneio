@@ -13,6 +13,7 @@ conferido (cada empresa na sua linha, nunca misturadas).
 
 import re
 import threading
+from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException
 
@@ -28,6 +29,18 @@ ESTADOS = {"sao paulo": "SP", "rio de janeiro": "RJ", "minas gerais": "MG", "san
            "bahia": "BA", "espirito santo": "ES", "goias": "GO", "pernambuco": "PE", "rio grande do sul": "RS",
            "ceara": "CE", "alagoas": "AL", "rio grande do norte": "RN", "paraiba": "PB", "sergipe": "SE",
            "mato grosso do sul": "MS", "mato grosso": "MT", "distrito federal": "DF", "florida": "FL"}
+# Regiões (N2-gestor-01 e N2-cerebro-09, 11/11/2026): "as casas do Nordeste" vira o filtro pelas UFs da região, na
+# tabela, sem o modelo percorrer as fichas. "Litoral" é a categoria/comodidade Praia; "litoral norte" (SP), pelas
+# cidades. Microrregiões novas: backend/dados/regioes.json ({"serra gaucha": {"cidades": ["Gramado", ...]}}).
+REGIOES = {"norte": ("AC", "AM", "AP", "PA", "RO", "RR", "TO"),
+           "nordeste": ("AL", "BA", "CE", "MA", "PB", "PE", "PI", "RN", "SE"),
+           "centro-oeste": ("DF", "GO", "MS", "MT"), "sudeste": ("ES", "MG", "RJ", "SP"), "sul": ("PR", "RS", "SC")}
+ARQUIVO_REGIOES = Path(__file__).resolve().parent / "dados" / "regioes.json"
+MICRORREGIOES = {"litoral norte": {"cidades": ("Ubatuba", "Caraguatatuba", "São Sebastião", "Ilhabela")}}
+# "do Sul" de "Rio Grande do Sul" e "Mato Grosso do Sul" não é a região; "Sul de Minas" e "Sul da Bahia" também não.
+_REGIAO = re.compile(r"(?<!grande )(?<!grosso )\b(?:d[oa]s?|n[oa]s?|em|pel[oa]|regiao|regioes)\s+(?:regiao\s+)?"
+                     r"(nordeste|norte|sudeste|sul|centro[- ]?oeste)\b(?!\s+(?:de|da|do|dos|das)\b)")
+_REGIAO_DESCONHECIDA = re.compile(r"\bregiao\s+(?:d[oa]s?\s+|de\s+)?([a-z][a-z-]{2,})")
 MAX_LINHAS_CHAT, MAX_CARACTERES_FERRAMENTA = 300, 6000
 LISTA_NA_CONTAGEM = 40  # "quantos..." com mais que isso: contagem por cidade em vez da lista inteira
 
@@ -201,9 +214,12 @@ def filtrar(empresa: str = "casa_veraneio", cidade: str = "", uf: str = "", suit
     if not orlando:  # Lodges de Orlando: só quando citados (mesma regra da busca)
         todas = [l for l in todas if "orlando" not in sem_acento(f"{l['cidade']} {l['nome']}")]
     contem = lambda campo, alvo: sem_acento(alvo) in sem_acento(campo or "")
+    # Região: várias UFs ou cidades separadas por vírgula ("AL,BA,CE"; "Ubatuba,Ilhabela").
+    cidades_ok = {sem_acento(c.strip()) for c in cidade.split(",") if c.strip()}
+    ufs_ok = {u.strip().upper() for u in uf.split(",") if u.strip()}
     achadas = [l for l in todas
-               if (not cidade or sem_acento(l["cidade"] or "") == sem_acento(cidade))
-               and (not uf or (l["uf"] or "").upper() == uf.upper())
+               if (not cidades_ok or sem_acento(l["cidade"] or "") in cidades_ok)
+               and (not ufs_ok or (l["uf"] or "").upper() in ufs_ok)
                and (suites_min is None or (l["suites"] or 0) >= suites_min)
                and (quartos_min is None or (l["quartos"] or 0) >= quartos_min)
                and (pessoas_min is None or (l["pessoas"] or 0) >= pessoas_min)
@@ -242,10 +258,47 @@ def _limite(texto: str, unidade: str) -> tuple[int | None, int | None]:
     return None, None
 
 
+def _microrregioes() -> dict:
+    """As fixas e as do backend/dados/regioes.json (o Thomas edita; arquivo ruim ou ausente: só as fixas)."""
+    import json
+
+    regioes = dict(MICRORREGIOES)
+    try:
+        extras = json.loads(ARQUIVO_REGIOES.read_text(encoding="utf-8"))
+        regioes.update({sem_acento(k): v for k, v in extras.items() if isinstance(v, dict)})
+    except (OSError, ValueError, AttributeError):
+        pass
+    return regioes
+
+
+def _regiao(normal: str) -> dict:
+    """{"regiao", "ufs", "cidades", "praia", "desconhecida"} do pedido (texto sem acento, minúsculo)."""
+    achado: dict = {"regiao": [], "ufs": [], "cidades": [], "praia": False, "desconhecida": ""}
+    for nome, dados in _microrregioes().items():  # microrregião antes ("litoral norte" não é a região Norte)
+        if re.search(rf"\b{re.escape(nome)}\b", normal):
+            achado["regiao"].append(nome)
+            achado["ufs"] += list(dados.get("ufs", ()))
+            achado["cidades"] += list(dados.get("cidades", ()))
+            normal = normal.replace(nome, " ")
+    for m in _REGIAO.finditer(normal):
+        nome = "centro-oeste" if m.group(1).startswith("centro") else m.group(1)
+        if nome not in achado["regiao"]:
+            achado["regiao"].append(nome)
+            achado["ufs"] += list(REGIOES[nome])
+    achado["praia"] = bool(re.search(r"\blitora(?:l|is|nea?s?)\b", normal))
+    if not achado["regiao"] and (m := _REGIAO_DESCONHECIDA.search(normal)) and m.group(1) not in (
+            "com", "que", "onde", "para", "por", "sem", "mais"):
+        achado["desconhecida"] = m.group(1)
+    return achado
+
+
 def interpretar(texto: str, empresa: str = "casa_veraneio") -> dict | None:
     """Filtros do pedido de lista/contagem; None se não é um pedido desse tipo (vai para a busca normal)."""
     texto = texto or ""
-    if not (PEDE_LISTA.search(texto) and FALA_DE_IMOVEL.search(texto)) or UM_IMOVEL.search(texto):
+    regiao = _regiao(f" {sem_acento(texto)} ")
+    # "As casas do Nordeste": região + imóvel já é pedido de lista (antes saía vazio, tarefa 270).
+    pede = PEDE_LISTA.search(texto) or regiao["regiao"] or regiao["praia"]
+    if not (pede and FALA_DE_IMOVEL.search(texto)) or UM_IMOVEL.search(texto):
         return None
     filtros: dict = {"orlando": "orlando" in texto.lower()}
     filtros["pessoas_min"], filtros["pessoas_max"] = _limite(texto, r"(?:pessoas|h[óo]spedes)")
@@ -259,6 +312,12 @@ def interpretar(texto: str, empresa: str = "casa_veraneio") -> dict | None:
                    and sem_acento(filtros["cidade"]) != nome), "")
     filtros["uf"] = uf.group(1) if uf and uf.group(1) in UFS else ("" if filtros["cidade"] else estado)
     filtros["comodidade"] = next((c for c in COMODIDADES if re.search(rf"\b{c}\b", normal)), "")
+    # Região só quando o pedido não citou cidade nem UF (o mais específico vence).
+    filtros["regiao"], filtros["regiao_desconhecida"] = " e ".join(regiao["regiao"]), regiao["desconhecida"]
+    if regiao["regiao"] and not filtros["cidade"] and not filtros["uf"]:
+        filtros["cidade"] = ",".join(regiao["cidades"])
+        filtros["uf"] = ",".join(dict.fromkeys(regiao["ufs"]))
+    filtros["categoria"] = "praia" if regiao["praia"] and filtros["comodidade"] != "praia" else ""
     filtros["agrupar"] = ("uf" if re.search(r"\bpor\s+(estado|uf)\b", normal) else
                           "cidade" if re.search(r"\b(por\s+cidade|quais\s+cidades|cidades\s+onde|em\s+que\s+cidades)\b",
                                                 normal) else "")
@@ -268,8 +327,14 @@ def interpretar(texto: str, empresa: str = "casa_veraneio") -> dict | None:
 
 
 def _descricao(filtros: dict) -> str:
-    partes = [f"cidade {filtros['cidade']}" if filtros.get("cidade") else "",
-              f"UF {filtros['uf']}" if filtros.get("uf") else "",
+    regiao = filtros.get("regiao") and "," in f"{filtros.get('cidade')}{filtros.get('uf')}"
+    alcance = "; ".join(p for p in (f"UFs {filtros['uf']}" if filtros.get("uf") else "",
+                                    f"cidades {filtros['cidade'].replace(',', ', ')}" if filtros.get("cidade") else "")
+                        if p)
+    partes = [f"região {filtros['regiao']} ({alcance})" if regiao else "",
+              f"cidade {filtros['cidade']}" if filtros.get("cidade") and not regiao else "",
+              f"UF {filtros['uf']}" if filtros.get("uf") and not regiao else "",
+              f"categoria {filtros['categoria']}" if filtros.get("categoria") else "",
               f"{filtros['pessoas_min']}+ pessoas" if filtros.get("pessoas_min") else "",
               f"até {filtros['pessoas_max']} pessoas" if filtros.get("pessoas_max") else "",
               f"{filtros['suites_min']}+ suítes" if filtros.get("suites_min") else "",
@@ -287,7 +352,12 @@ def responder(texto: str, empresa: str = "casa_veraneio", limite: int | None = N
     empresa ainda não tem tabela. `limite`: tamanho máximo (ferramenta dos agentes)."""
     if empresa not in ORIGENS or not (filtros := interpretar(texto, empresa)):
         return None
-    chaves = ("cidade", "uf", "suites_min", "quartos_min", "pessoas_min", "pessoas_max", "comodidade", "orlando")
+    if filtros["regiao_desconhecida"] and not (filtros["cidade"] or filtros["uf"]):  # sem improviso (cerebro-09)
+        return (f"Não reconheci a região \"{filtros['regiao_desconhecida']}\". Regiões que a tabela entende: "
+                f"{', '.join(REGIOES)}, litoral e {', '.join(_microrregioes())}; ou cite a cidade ou a UF. (Novas "
+                "microrregiões: backend/dados/regioes.json.)")
+    chaves = ("cidade", "uf", "suites_min", "quartos_min", "pessoas_min", "pessoas_max", "comodidade", "categoria",
+              "orlando")
     resultado = filtrar(empresa, **{k: filtros[k] for k in chaves})
     if not resultado or not resultado["total_base"]:
         return None  # tabela vazia (coleta ainda não chegou): a busca normal responde

@@ -45,7 +45,8 @@ function mostrarAndamento(ativa) {
     const item = novoEl('li', `andamento-etapa etapa-${status}${recuo ? ` andamento-sub andamento-nivel-${recuo}` : ''}`
       + (fase ? ' andamento-fase' : ''));
     item.title = ROTULOS_ETAPA[status] || status;
-    item.append(novoEl('span', 'andamento-icone', ICONES_ETAPA[status] || '○'), novoEl('span', 'andamento-texto', texto));
+    item.append(novoEl('span', 'andamento-icone', ICONES_ETAPA[status] || '○'),
+      novoEl('span', 'andamento-texto', etapaSimples(texto))); // sem jargão de fila (js/chat_textos.js)
     lista.append(item);
   });
   const principais = ativa.etapas.filter((e) => !e.sub);  // a contagem é por etapa/peça; slides são detalhe
@@ -58,6 +59,8 @@ function mostrarAndamento(ativa) {
     novoEl('p', 'andamento-progresso', `${feitas} de ${principais.length} etapas`),
     criarEstimativa(ativa.estimativa),
     lista,
+    // professor-08: quem fica olhando a bolinha laranja com medo de fechar a aba e cancelar o pedido
+    novoEl('p', 'andamento-pode-fechar', 'Pode fechar ou ir a outro agente: a resposta volta a este chat e aparece na Caixa de entrada.'),
   ].filter(Boolean));
 }
 

@@ -112,6 +112,10 @@ def executar_documento(payload: dict) -> str:
     """Grava o arquivo em ESCRITÓRIO VERANEIO/<andar>/<pasta da solicitação>/ (sem Max: só cópia)."""
     import base64
 
+    # Pasta restrita (estudo CONFIDENCIAL): só a Diretoria cria, com acesso só dela; criar aqui herdaria o
+    # compartilhamento da pasta do andar.
+    if payload.get("restrita") and not (comum.DRIVE / payload["pasta_andar"]).is_dir():
+        raise RuntimeError("Pasta restrita do Drive não existe: a Diretoria precisa criá-la com acesso só dela.")
     pasta = comum.DRIVE / payload["pasta_andar"] / payload["pasta"]
     pasta.mkdir(parents=True, exist_ok=True)
     destino = pasta / Path(payload["nome"]).name

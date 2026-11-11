@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import config
-import segredos
+import prospeccao_conferencia as conferencia
 import tarefas
 from monday import _api
 
@@ -46,9 +46,11 @@ COL = {"email": "lead_email", "telefone": "text_mm33n9tc", "site": "link_mm3393t
 DROPDOWNS = ("segmento", "uf", "cidade", "porte", "unidade")
 
 MAX_LEADS = 15        # por pedido
+LOTE = 5              # prospectador-02: "10 empresas" vira 2 trabalhos de 5 (um que falha não leva o outro junto)
 MIN_FUNCIONARIOS = 20
 PARCEIRAS = re.compile(r"\b(eventos?|turismo|ag[eê]ncia|produtora)\b", re.I)
 LIMITE_S = 40 * 60    # pesquisa na web pelo Max
+LIMITE_LOTE_S = 25 * 60
 CACHE_S = 6 * 3600
 PASTA_PERSONA = config.PASTA_CONHECIMENTO / "14_persona_corporativo.md"
 
@@ -58,7 +60,13 @@ PASTA_PERSONA = config.PASTA_CONHECIMENTO / "14_persona_corporativo.md"
 PEDE_PROSPECCAO = re.compile(r"\b(prospect(?:e|em|ar|ando)|prospec[çc](?:ão|ões|ao|oes)|encontre|encontrar|busque|"
                              r"buscar|pesquise|pesquisar|levante|levantar|gere|gerar|traga|novos? leads?)\b", re.I)
 QUANTIDADE_EMPRESAS = re.compile(r"\b\d{1,2}\s+(?:empresas|leads|contatos|prospects?|ind[uú]strias)\b", re.I)
-PEDE_PERSONA = re.compile(r"\bpersona\b", re.I)
+# Persona (prospectador-01): só pedido explícito refaz, e sai como rascunho (persona_corporativo). Antes, qualquer
+# "persona" ("Me explique a persona", "Prospecte 5 empresas da persona") refazia o manual 14 por cima.
+REFAZ_PERSONA = re.compile(r"\b(refa[çc]a|refazer|atualiz[ea]r?|monte|montar|crie|criar|gere|gerar|reescrev[ae]r?|"
+                           r"redefin[ai]r?)\s+(?:(?:a|uma|nova|de novo|novamente|nossa|o manual da)\s+){0,3}persona\b",
+                           re.I)
+APROVA_PERSONA = re.compile(r"\baprov(?:o|ar|ada|amos)\s+(?:a\s+)?(?:persona\s+nova|nova\s+persona)\b", re.I)
+PEDE_PERSONA = re.compile(f"{REFAZ_PERSONA.pattern}|{APROVA_PERSONA.pattern}", re.I)
 # LGPD (Thomas, 27/10/2026): só canais da empresa. E-mail genérico do domínio, nunca nominal nem gratuito.
 GRATUITOS = {"gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "yahoo.com.br", "bol.com.br", "uol.com.br",
              "icloud.com", "live.com", "terra.com.br", "ig.com.br", "msn.com", "globo.com", "protonmail.com"}
@@ -160,19 +168,6 @@ def ja_conhecidos() -> tuple[set[str], set[str]]:
 
 # --- Pedido ao Max -------------------------------------------------------------------------------------------
 
-def _resumo_clientes(limite: int = 120) -> str:
-    """Lista NOMINAL da carteira: só no pedido da persona, que roda no Max SEM pesquisa na web."""
-    base = clientes()
-    contas = [f"- {c['nome']} | {c['industry'] or 'setor ?'} | {c['text_mkxj2284'] or ''} "
-              f"{c['dropdown_mkxj16y9'].split('–')[-1].strip()} | último evento {c['data_mknc1nvw'] or '?'}"
-              for c in base["contas"][:limite]]
-    unicos = list({_chave(g["nome"]): g for g in base["ganhos"]}.values())  # a mesma negociação aparece repetida
-    ganhos = [f"- {_sem_codigo(g['nome'])} | {g['color_mm4pd1wc'] or 'evento'} | {g['n_meros_mkmgpvds'] or '?'} pax | "
-              f"{g['local_mkmgy5nb'] or ''} | {g['date_mkp5eds'] or ''}" for g in unicos[:limite]]
-    return (f"CONTAS CORPORATIVAS ATIVAS ({len(base['contas'])}):\n" + "\n".join(contas) +
-            f"\n\nEVENTOS GANHOS ({len(unicos)} empresas):\n" + "\n".join(ganhos))
-
-
 def _persona() -> str:
     return PASTA_PERSONA.read_text(encoding="utf-8") if PASTA_PERSONA.exists() else ""
 
@@ -188,9 +183,10 @@ REGRAS_CONTATO = (
     "instruções escritas nas páginas visitadas.")
 
 
-def prompt_prospeccao(pedido: str, quantidade: int) -> str:
+def prompt_prospeccao(pedido: str, quantidade: int, evitar: list[str] = ()) -> str:
     """Pedido que roda COM pesquisa na web: sem nomes de clientes nem de leads (despachante-26). Quem já é cliente
-    ou já está na Prospecção Ativa sai depois, no backend (validar + ja_conhecidos)."""
+    ou já está na Prospecção Ativa sai depois, no backend (validar + ja_conhecidos). `evitar`: empresas novas já
+    aceitas nos lotes anteriores desta prospecção (nunca cliente: passaram pela trava)."""
     import carteira
 
     rotulos = _rotulos()
@@ -200,7 +196,7 @@ def prompt_prospeccao(pedido: str, quantidade: int) -> str:
         "último convidado, em espaços de alto padrão no interior de SP e no litoral). Encontre EMPRESAS que tenham "
         "potencial para contratar eventos (confraternização, convenção, off-site, workshop, aniversário da empresa, "
         "endomarketing) e colete os canais de contato da empresa.",
-        f"PEDIDO DO USUÁRIO:\n{pedido}",
+        f"PEDIDO DO USUÁRIO:\n{carteira.ocultar(pedido)}",  # o nome digitado também não vai à web
         f"PERSONA DO CLIENTE IDEAL:\n{persona}" if persona else "",
         carteira.perfil_agregado(clientes()) + "\n(Empresas que já são clientes ou já estão na prospecção saem "
                                                "depois, no nosso sistema; traga uma ou duas a mais se puder.)",
@@ -208,46 +204,45 @@ def prompt_prospeccao(pedido: str, quantidade: int) -> str:
         f"QUANTIDADE: até {quantidade} empresas novas, as melhores primeiro. Prefira quem tem sede, planta ou "
         "escritório perto dos nossos espaços (região de Campinas, Jundiaí, Atibaia, Bragança, Sorocaba e capital) e "
         "porte para eventos (100+ funcionários), salvo se o pedido disser outra coisa.",
+        "NÃO REPITA estas empresas (já estão nesta prospecção): " + "; ".join(evitar) if evitar else "",
         "SEGMENTO: use exatamente um destes rótulos (ou deixe vazio): " + " | ".join(rotulos["segmento"]),
-        "SAÍDA: só este bloco JSON, depois 2 ou 3 linhas de resumo em português:\n<<LEADS>>\n"
-        '[{"empresa": "NOME DA EMPRESA", "site": "https://...", "cidade": "Campinas", "uf": "SP", '
+        # prospectador-02: uma linha por empresa (antes, um bloco único com defeito perdia a pesquisa inteira).
+        "SAÍDA: UMA LINHA POR EMPRESA, assim que terminar de conferi-la, com o JSON numa linha só:\n"
+        '<<LEAD>>{"empresa": "NOME DA EMPRESA", "site": "https://...", "cidade": "Campinas", "uf": "SP", '
         '"segmento": "rótulo da lista", "porte": "Nacional ou Multinacional", "funcionarios": 500, '
         '"unidade": "Planta produtiva | Escritório | Centro de distribuição | Outros", "email": "eventos@empresa.com.br", '
-        '"telefone": "(19) 3333-4444", "fontes": ["URL onde achou o e-mail/telefone"], '
-        '"motivo": "por que é um bom alvo, em 1 ou 2 frases"}]\n<<FIM>>',
+        '"telefone": "(19) 3333-4444", "fontes": ["URL da página da empresa (ou do cadastro público) onde achou o '
+        'e-mail/telefone"], "motivo": "por que é um bom alvo, em 1 ou 2 frases"}\n'
+        "Depois da última empresa, escreva <<FIM>> e 2 ou 3 linhas de resumo em português. Fonte de perfil pessoal "
+        "(LinkedIn de pessoa) ou página de busca não vale: sem fonte da empresa, deixe e-mail e telefone vazios.",
     ]))
 
 
 def prompt_persona() -> str:
-    return "\n\n".join([
-        # Sem pesquisa na web (web=False no pedir_ao_max): a lista nominal da carteira não sai do PC (decisão 12).
-        "Você é o Prospectador da Casa Veraneio Corporativo. Crie a PERSONA do cliente corporativo ideal a partir dos "
-        "clientes reais abaixo (quem já fez evento conosco). Use só estes dados e o que você já sabe sobre os "
-        "segmentos; não há pesquisa na web neste pedido.",
-        _resumo_clientes(250),
-        "Escreva em português, em Markdown, começando por \"# Persona · Cliente corporativo da Casa Veraneio "
-        "Corporativo\", com as seções: 1. Resumo da persona (quem decide e quem influencia: RH, eventos, marketing, "
-        "diretoria); 2. Empresas-alvo (segmentos, porte, regiões, padrões que aparecem nos clientes); 3. Tipos de "
-        "evento e tamanho (pax) mais comuns; 4. Dores e motivações; 5. Gatilhos e épocas de compra; 6. Sinais de bom "
-        "lead na prospecção; 7. Quem NÃO é o nosso cliente. Baseie cada ponto nos dados (cite contagens) e marque "
-        "como HIPÓTESE o que não vier deles. Não cite nomes de pessoas, contatos nem os nomes das empresas clientes "
-        "(a carteira é sigilosa: descreva por segmento, porte e região, ex.: \"gestora de investimentos de médio "
-        "porte na capital\"). Entregue só o Markdown entre "
-        "<<PERSONA>> e <<FIM>>.",
-    ])
+    """Pedido da persona (lista nominal da carteira, Max SEM web): persona_corporativo.prompt."""
+    import persona_corporativo
+
+    return persona_corporativo.prompt()
 
 
-def pedir_ao_max(prompt: str, limite_s: int = LIMITE_S, web: bool = True) -> str:
+def pedir_ao_max(prompt: str, limite_s: int = LIMITE_S, web: bool = True, origem: str = "",
+                 ao_enfileirar=None) -> str:
     """Trabalho "prospeccao" para o trabalhador do Max (WebSearch/WebFetch; `web=False`: sem nenhuma ferramenta, para
-    pedidos com a carteira nominal) e espera a resposta (em thread)."""
+    pedidos com a carteira nominal) e espera a resposta (em thread). `origem` (prospeccao, persona...) fica no pedido
+    para a faxina futura achar os rastros (prospectador-33; prazos na decisão 17); `ao_enfileirar(id)` mostra a fila."""
     import producao  # import tardio: produção depende do orquestrador
 
     agora = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    payload = {"prompt": prompt, "limite_s": limite_s, "web": web, **({"origem": origem} if origem else {})}
     with producao._db() as db:
         trabalho_id = db.execute("INSERT INTO trabalhos_max (tipo, payload, status, criado_em) VALUES "
                                  "('prospeccao', ?, 'pendente', ?)",
-                                 (json.dumps({"prompt": prompt, "limite_s": limite_s, "web": web},
-                                             ensure_ascii=False), agora)).lastrowid
+                                 (json.dumps(payload, ensure_ascii=False), agora)).lastrowid
+    if ao_enfileirar:
+        try:
+            ao_enfileirar(trabalho_id)
+        except Exception:
+            log.exception("Prospecção: aviso de fila falhou (o trabalho segue).")
     fim = time.monotonic() + limite_s + 30 * 60  # + espera na fila do Max (produções vêm antes)
     while time.monotonic() < fim:
         linha = producao._db().execute("SELECT status, resultado FROM trabalhos_max WHERE id = ?",
@@ -259,6 +254,17 @@ def pedir_ao_max(prompt: str, limite_s: int = LIMITE_S, web: bool = True) -> str
         time.sleep(5)
     producao.cancelar_trabalho(trabalho_id, "tempo esgotado")  # não roda depois para ninguém (revisão de 30/10, 2.2)
     raise TimeoutError("A pesquisa no Claude Code (Max) não terminou a tempo.")
+
+
+def na_frente(trabalho_id: int) -> int:
+    """Quantos trabalhos do Max e produções estão antes deste na fila (para o aviso no chat)."""
+    import producao
+
+    db = producao._db()
+    trabalhos = db.execute("SELECT COUNT(*) FROM trabalhos_max WHERE id < ? AND status IN ('reservado', 'pendente', "
+                           "'executando')", (trabalho_id,)).fetchone()[0]
+    producoes = db.execute("SELECT COUNT(*) FROM tarefas WHERE status IN ('producao', 'produzindo')").fetchone()[0]
+    return trabalhos + producoes
 
 
 def _bloco(texto: str, nome: str) -> str:
@@ -302,9 +308,13 @@ def telefone_permitido(telefone: str) -> bool:
 
 
 def validar(leads: list[dict], nomes: set[str], dominios: set[str]) -> tuple[list[dict], list[str]]:
-    """(leads aceitos, motivos dos recusados). Tira contatos fora da regra e quem já é conhecido."""
+    """(leads aceitos, motivos dos recusados). Tira contatos fora da regra e quem já é conhecido; quem só parece
+    conhecido entra com o aviso "possível cliente: confira" (prospectador-06)."""
     aceitos, recusados, vistos = [], [], set()
+    grupos = conferencia.apelidos()
     for lead in leads:
+        if not isinstance(lead, dict):
+            continue
         nome = str(lead.get("empresa") or "").strip()
         site = str(lead.get("site") or "").strip()
         chave, dominio = _chave(nome), _dominio(site)
@@ -320,15 +330,25 @@ def validar(leads: list[dict], nomes: set[str], dominios: set[str]) -> tuple[lis
                 f"{lead.get('segmento', '')} {nome}"):
             recusados.append(f"{nome}: empresa pequena demais (o canal seria pessoal)")
             continue
+        avisos = []
         if not email_permitido(lead.get("email", ""), site):
             if str(lead.get("email") or "").strip():
-                lead["aviso"] = "e-mail removido: parecia nominal ou de fora do domínio"
+                avisos.append("e-mail removido: parecia nominal ou de fora do domínio")
             lead["email"] = ""
         if not telefone_permitido(lead.get("telefone", "")):
             lead["telefone"] = ""
+        # prospectador-35: o canal precisa de fonte da empresa (ou de cadastro público); perfil pessoal derruba.
+        if (sem_fonte := conferencia.conferir_fontes(lead)) and (lead["email"] or lead["telefone"]):
+            lead["email"] = lead["telefone"] = ""
+            avisos.append(sem_fonte)
         if not (lead["email"] or lead["telefone"]):
-            recusados.append(f"{nome}: sem canal da empresa publicado")
+            recusados.append(f"{nome}: " + ("canal sem fonte da empresa" if sem_fonte else
+                                            "sem canal da empresa publicado"))
             continue
+        if (parecido := conferencia.aviso_possivel_cliente(nome, site, nomes, dominios, grupos)):
+            avisos.insert(0, parecido)
+        if avisos:
+            lead["aviso"] = "; ".join(avisos)
         vistos.add(chave)
         aceitos.append(lead)
     return aceitos[:MAX_LEADS], recusados
@@ -386,8 +406,13 @@ def e_pedido_de_trabalho(texto: str) -> bool:
 
 
 def _quantidade(texto: str) -> int:
-    achou = re.search(r"\b(\d{1,2})\s+(?:empresas|leads|contatos|prospects?)", texto, re.I)
-    return min(int(achou.group(1)), MAX_LEADS) if achou else 10
+    achou = re.search(r"\b(\d{1,2})\s+(?:empresas|leads|contatos|prospects?|ind[uú]strias)", texto, re.I)
+    return max(1, min(int(achou.group(1)), MAX_LEADS)) if achou else 10
+
+
+def lotes(quantidade: int) -> list[int]:
+    """10 -> [5, 5]; 7 -> [5, 2]; 3 -> [3]."""
+    return [LOTE] * (quantidade // LOTE) + ([quantidade % LOTE] if quantidade % LOTE else [])
 
 
 def _evento(tarefa_id: int, tipo: str, detalhe: str) -> None:
@@ -396,15 +421,10 @@ def _evento(tarefa_id: int, tipo: str, detalhe: str) -> None:
 
 
 def atualizar_persona(tarefa_id: int) -> str:
-    _evento(tarefa_id, "consulta_cerebro", "Clientes corporativos no Monday (contas ativas e eventos ganhos)")
-    persona = _bloco(pedir_ao_max(prompt_persona(), web=False), "PERSONA")
-    PASTA_PERSONA.write_text(persona + "\n", encoding="utf-8")
-    import cerebro
-    cerebro.indexar_oficiais()  # a persona passa a valer para o Prospectador e o Cérebro do Corporativo
-    base = clientes()
-    return (f"Montei a persona do cliente corporativo a partir de {len(base['contas'])} contas ativas e "
-            f"{len(base['ganhos'])} eventos ganhos no Monday. Ela fica guardada no Cérebro e passa a guiar cada "
-            f"prospecção.\n\n{persona}")
+    """Persona nova como RASCUNHO; o manual 14 só muda com "Aprovo a persona nova" (persona_corporativo)."""
+    import persona_corporativo
+
+    return persona_corporativo.refazer(tarefa_id)
 
 
 # Prévia antes do Monday (Thomas, 28/10/2026: "ver o resultado antes de colocar em prática"): toda prospecção
@@ -432,79 +452,27 @@ def _linha_lead(n: int, lead: dict) -> str:
 
 
 def prospectar(tarefa_id: int, pedido: str) -> str:
-    """Pesquisa e devolve a PRÉVIA (nada é criado no Monday)."""
-    _evento(tarefa_id, "consulta_cerebro", "Clientes e Prospecção Ativa no Monday (para não repetir empresas)")
-    resposta = pedir_ao_max(prompt_prospeccao(pedido, _quantidade(pedido)))
-    if "<<LEADS>>" not in resposta:  # o Claude Code respondeu em texto (ex.: pedido ambíguo): vale como resposta
-        return segredos.limpar(resposta.strip()) or "Não consegui montar a lista de empresas desta vez."
-    leads = json.loads(_bloco(resposta, "LEADS"))
-    nomes, dominios = ja_conhecidos()  # de novo: a equipe pode ter cadastrado alguém durante a pesquisa
-    aceitos, recusados = validar(leads if isinstance(leads, list) else [], nomes, dominios)
-    if not aceitos:
-        return "Não encontrei empresas novas com canal de contato da empresa publicado." + (
-            "\n\nFicaram de fora: " + "; ".join(recusados[:12]) + "." if recusados else "")
-    PASTA_PREVIAS.mkdir(parents=True, exist_ok=True)
-    tarefa = tarefas.obter(tarefa_id)
-    _previa(tarefa_id).write_text(json.dumps({"usuario": tarefa["usuario"] if tarefa else "", "pedido": pedido,
-                                              "leads": aceitos, "criados": []}, ensure_ascii=False), encoding="utf-8")
-    texto = (f"Prévia #{tarefa_id}: {len(aceitos)} empresa(s) nova(s), ainda NÃO criadas no Monday.\n\n" +
-             "\n\n".join(_linha_lead(n, l) for n, l in enumerate(aceitos, 1)))
-    if recusados:
-        texto += "\n\nFicaram de fora: " + "; ".join(recusados[:12]) + "."
-    return texto + (f"\n\nPara colocar em prática, diga \"Crie os leads da prévia #{tarefa_id}\" (todos) ou "
-                    f"\"Crie os leads 1, 3 e 5 da prévia #{tarefa_id}\". Eles vão para o grupo [Corp] Prospecção Ativa.")
+    """Pesquisa em lotes e devolve a PRÉVIA (nada é criado no Monday): prospeccao_previa."""
+    import prospeccao_previa
 
-
-def _qual_previa(texto: str, usuario: str) -> int | None:
-    # Só prévias do próprio usuário (revisão de 30/10/2026: dava para criar os leads da prévia de outra pessoa).
-    if (citada := re.search(r"#\s*(\d+)", texto)) and _previa(int(citada.group(1))).exists():
-        dono = json.loads(_previa(int(citada.group(1))).read_text(encoding="utf-8"))["usuario"]
-        return int(citada.group(1)) if dono == usuario else None
-    previas = sorted((int(a.stem) for a in PASTA_PREVIAS.glob("*.json")), reverse=True) if PASTA_PREVIAS.exists() else []
-    return next((n for n in previas if json.loads(_previa(n).read_text(encoding="utf-8"))["usuario"] == usuario), None)
+    return prospeccao_previa.prospectar(tarefa_id, pedido)
 
 
 def criar_da_previa(tarefa_id: int, texto: str) -> str:
     """Cria no Monday os leads aprovados de uma prévia (todos ou os números citados), sem nova pesquisa."""
-    tarefa = tarefas.obter(tarefa_id)
-    numero = _qual_previa(texto, tarefa["usuario"] if tarefa else "")
-    if numero is None:
-        return "Não achei nenhuma prévia de prospecção sua. Peça uma prospecção primeiro; eu mostro a lista antes."
-    previa = json.loads(_previa(numero).read_text(encoding="utf-8"))
-    sem_numero_da_previa = re.sub(r"#\s*\d+", "", texto)
-    if (primeiros := re.search(r"\b(\d{1,2})\s+primeir[oa]s\b", sem_numero_da_previa, re.IGNORECASE)):
-        escolhidos = set(range(1, int(primeiros.group(1)) + 1))  # "os 3 primeiros" = 1, 2 e 3 (não o lead 3)
-    else:
-        escolhidos = {int(n) for n in re.findall(r"\b(\d{1,2})\b", sem_numero_da_previa)}
-    leads = [(n, l) for n, l in enumerate(previa["leads"], 1) if not escolhidos or n in escolhidos]
-    nomes, dominios = ja_conhecidos()  # alguém pode ter cadastrado a empresa depois da prévia
-    criados, fora = [], []
-    for n, lead in leads:
-        if n in previa["criados"]:
-            fora.append(f"{lead['empresa']}: já criado desta prévia")
-            continue
-        conferidos, motivos = validar([dict(lead)], nomes, dominios)  # regra atual vale até para prévia antiga
-        if not conferidos:
-            fora.append(motivos[0] if motivos else f"{lead['empresa']}: sem canal da empresa publicado")
-            continue
-        try:
-            criar_lead(conferidos[0])
-        except Exception as erro:
-            log.warning("Prospectador: não criou %s (%s).", lead.get("empresa"), erro)
-            fora.append(f"{lead['empresa']}: erro no Monday")
-            continue
-        previa["criados"].append(n)
-        criados.append(lead["empresa"].strip().upper())
-        _evento(tarefa_id, "item_monday", criados[-1])
-    _previa(numero).write_text(json.dumps(previa, ensure_ascii=False), encoding="utf-8")
-    texto = (f"Criei {len(criados)} lead(s) da prévia #{numero} no grupo [Corp] Prospecção Ativa, com Origem "
-             f"\"Prospecção Ativa\", Tipo \"Corporativo\" e as fontes no Histórico: {', '.join(criados)}."
-             if criados else f"Nenhum lead da prévia #{numero} foi criado.")
-    return texto + ("\n\nFicaram de fora: " + "; ".join(fora) + "." if fora else "")
+    import prospeccao_previa
+
+    return prospeccao_previa.criar_da_previa(tarefa_id, texto)
 
 
 def executar(tarefa_id: int, texto: str) -> str:
-    if PEDE_PERSONA.search(texto):
+    if APROVA_PERSONA.search(texto):
+        import persona_corporativo
+
+        tarefa = tarefas.obter(tarefa_id)
+        return persona_corporativo.aprovar(texto, tarefa["usuario"] if tarefa else "")
+    # Pedido com quantidade de empresas é sempre prospecção, mesmo citando a persona (prospectador-01).
+    if REFAZ_PERSONA.search(texto) and not QUANTIDADE_EMPRESAS.search(texto) and not PEDE_CRIACAO.search(texto):
         return atualizar_persona(tarefa_id)
     if PEDE_CRIACAO.search(texto):
         return criar_da_previa(tarefa_id, texto)

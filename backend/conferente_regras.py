@@ -23,7 +23,28 @@ COMUNS = {
     # Manual 07, regras de formato das legendas (§3) e limite de hashtags (manual 02 §8).
     "max_emojis": 1,
     "max_hashtags": 5,
+    # Urgência de data só com prazo "fechar até" válido (copywriter-01, 11/11/2026; prazos_comerciais.py).
+    "urgencia": [r"\b[uú]ltim[oa]s\s+(?:dias|datas|vagas|casas|chances?|semanas?|oportunidades?)\b",
+                 r"\bainda\s+d[aá]\s+tempo\b", r"\bcorra\b", r"\breta\s+final\b", r"\bn[aã]o\s+perca\b",
+                 r"\best[aá]\s+acabando\b", r"\bs[oó]\s+at[eé]\s+(?:o\s+dia|dia|\d{1,2}/\d{1,2}|amanh[aã]|domingo|"
+                 r"segunda|ter[cç]a|quarta|quinta|sexta|s[aá]bado|o\s+fim)\b"],
 }
+
+# Casa Vero é imobiliária: anúncio sem o CRECI fere a Lei 6.530/78 (estrategista-38). Só AVISA. O número não fica
+# aqui: vem de CRECI_VERO no ambiente ou do manual 12 (fora do git), lido por conferente.creci_vero().
+CRECI = r"\bCRECI\b"
+
+# Fim de todo plano de mídia (gestor_trafego-03, 11/11/2026). Cita a área ("melhorias do criativo"), não o nome exato
+# de cada botão, que a Meta muda; conferir no Gerenciador antes de gravar no manual 02.
+CHECKLIST_META_TITULO = "Configuração de marca (checklist de quem sobe o anúncio)"
+CHECKLIST_META = (
+    f"{CHECKLIST_META_TITULO}\n"
+    "- [ ] Melhorias automáticas da Meta desligadas, na conta e em cada anúncio: melhorias do criativo (expansão ou "
+    "recorte da imagem por IA, fundo gerado, variações de texto, sobreposições), música automática e navegação de "
+    "produtos.\n"
+    "- [ ] O anúncio no ar é a peça aprovada: mesma foto ou vídeo, mesma música da biblioteca da marca e mesmo texto.\n"
+    "- [ ] Conferir de novo depois de duplicar ou editar o anúncio: essas opções costumam voltar marcadas.\n"
+    "- [ ] Uma vez por mês: print da tela de melhorias de cada conta para o Gestor de Tráfego conferir.")
 
 # Dados de hospedagem (manuais 11 §1 e 12 §1: nunca num trabalho do Corporativo ou da Casa Vero).
 HOSPEDAGEM = r"\bdi[aá]rias?\b|\bestadia m[ií]nima\b|\bm[ií]nimo de \d+ noites\b|\btaxa de ativa[cç][aã]o\b"

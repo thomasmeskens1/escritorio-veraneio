@@ -12,7 +12,7 @@ Uso: python motion.py motion.json [--previa]
      python motion.py vinheta --empresa casa_veraneio --variante B ...  (opções B, C e D: motion_opcoes.py)
 
 motion.json (caminhos relativos à pasta dele, sempre dentro dela; fontes e logos vêm de _referencias/):
-{"formato": "1080x1920", "cascata": 0.15, "inicio": 0.3, "sai": true,
+{"formato": "1080x1920", "empresa": "casa_veraneio", "cascata": 0.15, "inicio": 0.3, "sai": true,
  "cenas": [
   {"video": "acervo/drone.mp4", "de": 2.0, "duracao": 5.5, "velocidade": 0.75, "foco": 0.5,
    "saida": "trabalho/cena01.mp4", "elementos": [
@@ -25,7 +25,9 @@ motion.json (caminhos relativos à pasta dele, sempre dentro dela; fontes e logo
      {"tipo": "imagem", "logo": "caramelo", "altura": 135, "y": 1500, "entrada": "escala"}]}],
  "juntar": "entrega/Reels_Exemplo.mp4"}
 
-Elementos: texto, caixa (com texto dentro opcional), filete, degrade, imagem (ou "logo": branca/caramelo), contagem.
+Elementos: texto, caixa (com texto dentro opcional), filete, degrade, imagem (ou "logo": clara/escura/caramelo), contagem.
+"empresa" (casa_veraneio, cv_corporativo ou casa_vero): o "logo" sai da pasta DESTA empresa ("clara" sobre foto ou
+fundo escuro, "escura" sobre Creme); no trabalhador vale a empresa da peça, e logo de outra empresa é recusado.
 Entradas: sobe, revela (direcao direita|cima), desenha (origem centro|esquerda), palavra, letras, escala,
 contagem, aparece, nenhuma. "entrada" pode ser o nome ou {"efeito", "inicio", "duracao", "curva", "distancia",
 "intervalo", "direcao", "origem"}; sem "inicio", entra em cascata depois do anterior. Saída suave ("sai": fade e
@@ -59,6 +61,8 @@ from motion_camadas import (CURVAS, LOGOS, Fontes, Sprite, _arquivo_imagem, _den
 from motion_video import (CODIFICACAO, SEM_JANELA, _rodar, achar_ffmpeg, duracao_do_video,  # noqa: E402,F401
                           juntar_cenas, previa)
 from PIL import Image  # noqa: E402
+
+import logos_empresas  # noqa: E402
 
 FPS = 30
 FORMATOS = {"1080x1920", "1080x1350", "1080x1080", "1920x1080"}
@@ -117,7 +121,7 @@ def validar_elemento(el: dict, n: int = 1) -> None:
     if el["tipo"] == "contagem" and not isinstance(el.get("valor"), (int, float)):
         raise ValueError(f"{rotulo}: contagem sem \"valor\" numérico")
     if el["tipo"] == "imagem" and not (el.get("arquivo") or el.get("logo") in LOGOS):
-        raise ValueError(f"{rotulo}: imagem sem \"arquivo\" nem \"logo\" (branca ou caramelo)")
+        raise ValueError(f"{rotulo}: imagem sem \"arquivo\" nem \"logo\" (clara, escura ou caramelo)")
     if el["tipo"] not in FUNDOS and not isinstance(el.get("y"), (int, float)):
         raise ValueError(f"{rotulo}: falta a posição \"y\" (px do topo do elemento)")
     if "x" in el and el["x"] != "centro" and not isinstance(el["x"], (int, float)):
@@ -146,6 +150,8 @@ def validar(spec: dict) -> dict:
         raise ValueError("motion.json sem \"cenas\".")
     if spec.get("formato", "1080x1920") not in FORMATOS:
         raise ValueError(f"Formato fora da lista: {spec.get('formato')} (use {', '.join(sorted(FORMATOS))})")
+    if "empresa" in spec and spec["empresa"] not in logos_empresas.LOGOS:
+        raise ValueError(f"empresa desconhecida: {spec['empresa']!r} (use {', '.join(logos_empresas.LOGOS)})")
     for c, cena in enumerate(spec["cenas"], 1):
         if not cena.get("video") and not cena.get("fundo"):
             raise ValueError(f"cena {c}: sem \"video\" nem \"fundo\" (cor)")
@@ -222,16 +228,18 @@ class Cena:
 
     def __init__(self, elementos: list[dict], duracao: float, largura: int = 1080, altura: int = 1920,
                  base: Path | None = None, fps: int = FPS, cascata: float = 0.15, inicio: float = 0.3, sai=True,
-                 fontes: Fontes | None = None, pastas: list[Path] | None = None):
+                 fontes: Fontes | None = None, pastas: list[Path] | None = None, empresa: str | None = None):
         for n, el in enumerate(elementos, 1):
             validar_elemento(el, n)
         self.largura, self.altura, self.duracao, self.fps = largura, altura, float(duracao), fps
         self.base = Path(base or ".")
-        pastas = list(pastas or []) + pastas_de_recursos(self.base)
+        self.empresa = logos_empresas.empresa_do_ambiente(empresa)  # a da peça (trabalhador) manda
+        pastas = list(pastas or []) + pastas_de_recursos(self.base, self.empresa)
         self.fontes = fontes or Fontes(pastas)
         self.tempos = linha_do_tempo(elementos, duracao, cascata, inicio, sai)
+        self._avisos_logo: list[str] = []
         self.itens = [self._preparar(el, tempo, pastas) for el, tempo in zip(elementos, self.tempos)]
-        self.avisos = list(self.fontes.avisos) + self._zonas()
+        self.avisos = list(self.fontes.avisos) + self._avisos_logo + self._zonas()
         self._cache_texto: dict = {}
 
     @property
@@ -251,7 +259,8 @@ class Cena:
         elif el["tipo"] == "degrade":
             item["sprite"] = sprite_degrade(el, self.largura, self.altura)
         else:
-            item["sprite"] = sprite_imagem(el, _arquivo_imagem(el, self.base, pastas), self.largura)
+            arquivo = _arquivo_imagem(el, self.base, pastas, self.empresa, self._avisos_logo)
+            item["sprite"] = sprite_imagem(el, arquivo, self.largura)
         return item
 
     @staticmethod
@@ -391,7 +400,7 @@ class Cena:
 
 def aplicar(cena_mp4, saida_mp4, elementos: list[dict], formato: str = "1080x1920", duracao: float | None = None,
             de: float = 0.0, velocidade: float = 1.0, foco: float = 0.5, fundo=None, base=None, cascata: float = 0.15,
-            inicio: float = 0.3, sai=True, pastas: list[Path] | None = None) -> dict:
+            inicio: float = 0.3, sai=True, pastas: list[Path] | None = None, empresa: str | None = None) -> dict:
     """Compõe os elementos animados sobre o clipe (recortado em "cover" no formato, a partir de `de` s, com câmera
     lenta suave opcional) ou sobre um fundo de cor. Sai MP4 H.264 30 fps com trilha AAC silenciosa (manual 06 §2).
     Devolve {"saida", "quadros", "segundos", "avisos"}."""
@@ -407,7 +416,7 @@ def aplicar(cena_mp4, saida_mp4, elementos: list[dict], formato: str = "1080x192
         raise ValueError("Cena sem duração.")
     comeco = time.perf_counter()
     cena = Cena(elementos, duracao, largura, altura, Path(base or Path(saida_mp4).parent), FPS, cascata, inicio, sai,
-                 pastas=pastas)
+                 pastas=pastas, empresa=empresa)
     saida_mp4 = Path(saida_mp4)
     saida_mp4.parent.mkdir(parents=True, exist_ok=True)
     cru = ["-f", "rawvideo", "-pix_fmt", "rgba", "-s", formato, "-framerate", str(FPS), "-i", "-"]
@@ -431,13 +440,15 @@ def renderizar(arquivo: Path, com_previa: bool = False) -> list[dict]:
     arquivo = Path(arquivo).resolve()
     base, spec = arquivo.parent, validar(json.loads(Path(arquivo).read_text(encoding="utf-8")))
     formato, resultados = spec.get("formato", "1080x1920"), []
+    logos_empresas.empresa_do_ambiente(spec.get("empresa"))  # empresa errada para antes de qualquer render
     for c, cena in enumerate(spec["cenas"], 1):
         video = _dentro(base, cena["video"], "video") if cena.get("video") else None
         if video and not video.is_file():
             raise ValueError(f"cena {c}: vídeo não encontrado: {cena['video']}")
         resultado = aplicar(video, _dentro(base, cena["saida"], "saida"), cena.get("elementos") or [], formato,
                             cena.get("duracao"), float(cena.get("de", 0)), float(cena.get("velocidade", VELOCIDADE_PADRAO)),
-                            float(cena.get("foco", 0.5)), cena.get("fundo"), base, **_ritmo(spec, cena))
+                            float(cena.get("foco", 0.5)), cena.get("fundo"), base, **_ritmo(spec, cena),
+                            empresa=spec.get("empresa"))
         if com_previa:
             fim = max([t["fim_entrada"] for t in resultado["cena"].tempos] or [0.5])
             tempos = cena.get("previas") or [round(min(fim + 0.2, resultado["cena"].duracao - 0.05), 2)]

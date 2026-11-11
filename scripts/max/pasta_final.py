@@ -59,9 +59,12 @@ def vigentes(entrega: Path) -> dict[str, Path]:
     return {chave: v[2] for chave, v in escolhidos.items()}
 
 
-def atualizar(entrega: Path) -> list[str]:
-    """Refaz FINAL/ com a versão vigente de cada peça; devolve os nomes (relativos a FINAL/), em ordem."""
-    escolhidos = vigentes(entrega)
+def atualizar(entrega: Path, fora: list[str] = ()) -> list[str]:
+    """Refaz FINAL/ com a versão vigente de cada peça; devolve os nomes (relativos a FINAL/), em ordem. `fora`:
+    arquivos da entrega (relativos a ela) cuja peça NÃO entra na FINAL, nem numa versão anterior (ex.: a legenda que
+    diverge do texto aprovado; conferencia_texto.py). Sai também a cópia antiga que já estava lá."""
+    barradas = {chave_e_versao(nome)[0] for nome in fora}
+    escolhidos = {c: a for c, a in vigentes(entrega).items() if c not in barradas}
     final = entrega / PASTA
     final.mkdir(parents=True, exist_ok=True)
     for antigo in [a for a in final.rglob("*") if a.is_file()]:  # tira o que deixou de ser vigente

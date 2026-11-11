@@ -22,6 +22,7 @@ import agentes_dinamicos
 import aprendizado
 import atividade
 import avaliacoes
+import borda
 import caixa
 import config
 import correcoes
@@ -56,7 +57,8 @@ import triagem
 import usuarios_admin
 from agents.perfis import empresa_da_escola
 from api_painel import rotas as rotas_painel
-from auth import autenticar, criar_token, e_master, encerrar_sessoes, validar_token
+from auth import (autenticar, conta_travada, criar_token, e_master, encerrar_sessoes, limpar_falhas_conta,
+                  registrar_falha_conta, validar_token)
 from conexoes import gerenciador
 from estado import AGENTES_PRODUCAO, Status, buscar_agente, snapshot
 
@@ -123,7 +125,9 @@ async def ciclo_de_vida(_: FastAPI):
     copias = asyncio.create_task(copiar_banco_periodicamente())
     alarme = asyncio.create_task(alarme_telegram.vigiar())  # avisos de operação no celular (despachante-16)
     semana = asyncio.create_task(producao_semana.vigiar())  # "Produzir a semana": fila da noite (gestor-12, fase 2)
+    ocupacao = asyncio.create_task(atividade.vigiar())  # agente preso em "trabalhando" sem tarefa (despachante-02)
     yield
+    ocupacao.cancel()
     semana.cancel()
     alarme.cancel()
     agendamentos.parar()
@@ -160,6 +164,10 @@ CABECALHOS_SEGURANCA = {
     "Referrer-Policy": "same-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 }
+
+
+# Chave de operador e rotas do trabalhador do Max só valem dentro do PC (despachante-05, borda.py).
+app.middleware("http")(borda.portao)
 
 
 @app.middleware("http")
@@ -230,14 +238,16 @@ def login(credenciais: Credenciais, request: Request):
     falhas = [t for t in _falhas_login.get(chave, []) if agora - t < BLOQUEIO_LOGIN_S]
     falhas_ip = [t for t in _falhas_ip.get(ip, []) if agora - t < BLOQUEIO_LOGIN_S]
     # Antes do hash (caro): tentativas com usuários aleatórios do mesmo IP também esbarram no limite.
-    if len(falhas) >= MAX_FALHAS_LOGIN or len(falhas_ip) >= MAX_FALHAS_IP:
+    if len(falhas) >= MAX_FALHAS_LOGIN or len(falhas_ip) >= MAX_FALHAS_IP or conta_travada(chave[0], agora):
         raise HTTPException(status_code=429, detail="Muitas tentativas. Tente de novo em alguns minutos.")
     usuario = autenticar(credenciais.usuario, credenciais.senha)
     if not usuario:
         _falhas_login[chave] = [*falhas, agora]
         _falhas_ip[ip] = [*falhas_ip, agora]
+        registrar_falha_conta(chave[0], agora)  # trava por conta, de qualquer rede (construtor-07)
         raise HTTPException(status_code=401, detail="Usuário ou senha inválidos")
     _falhas_login.pop(chave, None)
+    limpar_falhas_conta(chave[0])
     return {"token": criar_token(usuario), "usuario": usuario["nome"], "role": usuario["role"],
             "master": e_master(usuario["login"])}
 
@@ -339,7 +349,7 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     try:
         msg = json.loads(bruto)
     except ValueError:
-        return await erro("JSON inválido.")
+        return await erro("Não entendi a mensagem enviada. Recarregue a página e tente de novo.")
     if isinstance(msg, dict) and msg.get("tipo") == "ping":  # o navegador confere se a conexão ainda entrega (js/rede.js)
         return await gerenciador.enviar(ws, {"tipo": "pong"})
     if isinstance(msg, dict) and msg.get("tipo") == "presenca":  # status ativo/ausente e chat aberto
@@ -348,7 +358,7 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
             await atividade.transmitir_estado()  # "Em uso: ..." aparece/some para os outros na hora
         return
     if not isinstance(msg, dict) or msg.get("tipo") != "mensagem":
-        return await erro("Tipo de mensagem desconhecido.")
+        return await erro("Não entendi a mensagem enviada. Recarregue a página e tente de novo.")
     # Confirmação de recebimento (revisão de 30/10/2026, 2.25): numa conexão "muda" do túnel a mensagem sumia e o
     # agente "nunca respondia". O navegador espera este "recebido"; sem ele, oferece "Reenviar". Reenvio de uma
     # mensagem que já tinha chegado (só a confirmação se perdeu) é confirmado de novo e ignorado.
@@ -375,17 +385,17 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
                           "envie de novo em 2 ou 3 minutos.", **alvo)
 
     if not acesso.pode_ver_andar(usuario, andar):
-        return await erro("Acesso negado.", **alvo)
+        return await erro("Este andar não está liberado para você. O Thomas libera no painel de usuários.", **alvo)
     agente = buscar_agente(andar, agente_id)
     if not agente:
-        return await erro("Agente não encontrado.", **alvo)
+        return await erro("Este agente não existe mais ou mudou de lugar. Recarregue a página.", **alvo)
     if agente.tipo != "ia":
         return await erro(f"{agente.nome} não recebe tarefas pelo chat.", **alvo)
     if not acesso.pode_usar(usuario, andar, agente.id):  # o master decide quem usa cada agente
         return await erro(f"Você ainda não tem acesso ao {agente.nome}. Fale com o Thomas para liberar.", **alvo)
     if agente.id in AGENTES_PRODUCAO and not config.usa_max(usuario["sub"]):
-        return await erro("A produção de imagens e vídeos é exclusiva da conta do Thomas. "
-                          "Fale com ele para solicitar.", **alvo)
+        return await erro("A produção de imagens e vídeos ainda não está liberada para a sua conta. "
+                          "Fale com o Thomas para liberar.", **alvo)
     limite = TAMANHO_MAX_GESTOR if agente.id == encaminhamento.GESTOR else TAMANHO_MAX_TEXTO
     if not texto or len(texto) > limite:
         extra = "" if limite == TAMANHO_MAX_GESTOR else (
@@ -454,10 +464,11 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
         return
     # Estudo com pesquisa na web (Analista de Tendências, Estrategista): no Max, só na conta do Thomas. Para as
     # outras contas, ou pergunta simples ("o que é a Matriz BCG?"), o agente responde pelos modelos gratuitos.
-    if config.usa_max(usuario["sub"]) and estudos.e_estudo(agente.id, texto):
+    if config.usa_max(usuario["sub"]) and estudos.precisa_escolher(agente.id, texto):  # rápida ou completa?
+        return await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, **estudos.opcoes_de_escolha(texto)})
+    if config.usa_max(usuario["sub"]) and estudos.e_estudo(agente.id, texto, bool(anexos_ids)):
         await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "liberar": True, "titulo": "Estudo iniciado",
-                                      "texto": "Vou pesquisar na web (notícias, dados de mercado e concorrentes) e "
-                                               "trazer o estudo aqui, com as fontes. Leva alguns minutos."})
+                                      "texto": estudos.aviso_inicio(agente.id, texto)})  # análise: sem web
         await estudos.iniciar(usuario["sub"], andar, agente, texto,
                               estudos.empresa_do_estudo(agente.id, texto, empresa))
         return
@@ -551,7 +562,7 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
     # 29/10/2026); quem pode usar o Prospectador se controla no painel de usuários. O resto é conversa.
     if agente.id == comercial.AGENTE and comercial.e_pedido_de_trabalho(texto):
         if not config.usa_max(usuario["sub"]):
-            return await erro("A prospecção (pesquisa na web e leads no Monday) é exclusiva da conta do Thomas. "
+            return await erro("A prospecção (pesquisa na web e leads no Monday) ainda não está liberada para a sua conta. "
                               "Aqui você pode tirar dúvidas sobre a persona e a estratégia.", **alvo)
         if not (comercial.PEDE_CRIACAO.search(texto) or comercial.PEDE_PERSONA.search(texto)):
             await gerenciador.enviar(ws, {"tipo": "aviso", **alvo, "liberar": True, "titulo": "Prospecção iniciada",

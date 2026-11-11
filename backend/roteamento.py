@@ -121,6 +121,20 @@ def sem_groq_no_planejamento(etapas: list[Etapa], agente_id: str, texto: str) ->
     return [e for e in etapas if not e.modelo.startswith("groq/")]
 
 
+# --- Vídeo negado e peça em páginas (brainstorm de 11/11/2026, editor_video-09) -----------------------------------
+# A tarefa 272 (capa e slide 2 de carrossel, "sem vídeo") caiu no Editor de Vídeo: a regra de vídeo pegava a própria
+# negação e o nome "Editor de Vídeo" no texto do Gestor. Sem IA: a negação e o nome do agente saem antes de procurar.
+VIDEO_NEGADO = re.compile(r"\b(?:sem|nenhum|nenhuma|nada de|n[aã]o(?: [eé]| quero| precisa(?: de)?| usar| fa[cç]a)?)"
+                          r"\s+(?:(?:o|um|uma|de|em)\s+)?(?:v[ií]deos?|reels?|mp4|anima[cç][aã]o|motion)\b", re.I)
+NOME_DO_EDITOR = re.compile(r"\beditor(?:a)? de v[ií]deo\b", re.I)
+PECA_EM_PAGINAS = re.compile(r"\b(slides?|capas?|carross[eé]is|carrossel|p[aá]ginas?)\b", re.I)
+
+
+def sem_video_negado(texto: str) -> str:
+    """O texto sem "sem vídeo", "nenhum vídeo"... e sem o nome do Editor de Vídeo (para as regras de formato)."""
+    return NOME_DO_EDITOR.sub(" ", VIDEO_NEGADO.sub(" ", texto or ""))
+
+
 def _utilizaveis(etapas: list[Etapa]) -> list[Etapa]:
     return [e for e in etapas if config.modelo_disponivel(e.modelo) and saude.disponivel(e.modelo)]
 

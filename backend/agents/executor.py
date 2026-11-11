@@ -114,7 +114,9 @@ class ConsultarCerebro(BaseTool):
     externo: bool = False  # gratuito de fora: trecho financeiro ou com nome de cliente não chega a ele
 
     def _run(self, pergunta: str) -> str:
-        resposta = cerebro.consultar(pergunta, self.agente, self.tarefa_id)
+        # Gratuito de fora: o Cérebro já tira só o trecho ou a linha sigilosa (conserto 17); o bloqueio inteiro
+        # abaixo fica de rede de segurança (sobra sigilosa ou tarefa que já viu sigilo por outra rota).
+        resposta = cerebro.consultar(pergunta, self.agente, self.tarefa_id, externo=self.externo)
         if self.externo and sigilosa("", "", resposta, self.tarefa_id):
             return ("Esse conhecimento é sigiloso (CRM, carteira de clientes ou financeiro) e não pode ser usado aqui. "
                     "Responda sem ele e diga ao usuário que esse detalhe fica com a Diretoria.")
@@ -181,8 +183,40 @@ def _llm(modelo: str, limite_s: int) -> LLM:
         return LLM(model=f"openai/{modelo.removeprefix('mistral/')}", base_url=config.MISTRAL_BASE_URL,
                    api_key=config.MISTRAL_API_KEY, timeout=90, max_retries=0)
     if modelo.startswith("ollama/"):
-        return LLM(model=modelo, base_url=config.OLLAMA_BASE_URL, timeout=limite_s, max_retries=0)
+        return _sem_raciocinio(LLM(model=modelo, base_url=config.OLLAMA_BASE_URL, timeout=limite_s, max_retries=0))
     return LLM(model=modelo, timeout=90, max_retries=0)
+
+
+# Modelo local sem "raciocínio" (brainstorm de 11/11/2026, despachante-26): o qwen3 pensa antes de responder por
+# padrão e, no 4B desta máquina, 0 de 6 tarefas concluíram desde 28/10 (6, 15 e 30 min presos na placa de vídeo).
+# "/no_think" no fim da última mensagem do usuário desliga o pensamento no qwen3; outros modelos ignoram.
+SEM_RACIOCINIO = "/no_think"
+PENSAMENTO = re.compile(r"<think>.*?</think>\s*", re.S | re.I)
+
+
+def _sem_pensar(mensagens):
+    if isinstance(mensagens, str):
+        return mensagens if mensagens.rstrip().endswith(SEM_RACIOCINIO) else f"{mensagens}\n\n{SEM_RACIOCINIO}"
+    mensagens = [dict(m) for m in mensagens]
+    for mensagem in reversed(mensagens):
+        if mensagem.get("role") == "user" and isinstance(mensagem.get("content"), str):
+            if not mensagem["content"].rstrip().endswith(SEM_RACIOCINIO):
+                mensagem["content"] = f"{mensagem['content']}\n\n{SEM_RACIOCINIO}"
+            break
+    return mensagens
+
+
+def _sem_raciocinio(llm: LLM) -> LLM:
+    """Toda chamada deste LLM (agente do CrewAI ou chamada direta, como em repetir_lodges) vai com "/no_think", e o
+    bloco <think> vazio que o qwen3 ainda devolve sai da resposta."""
+    original = llm.call
+
+    def call(mensagens, *args, **kwargs):
+        resposta = original(_sem_pensar(mensagens), *args, **kwargs)
+        return PENSAMENTO.sub("", resposta) if isinstance(resposta, str) else resposta
+
+    object.__setattr__(llm, "call", call)  # dict: como o "thinking" do Claude acima
+    return llm
 
 
 class MaxOcupado(Exception):

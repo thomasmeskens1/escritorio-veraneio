@@ -24,6 +24,7 @@ import encaminhamento
 import espera
 import max_texto
 import monday
+import painel_coletas
 import relatorios
 import saude
 import tarefas
@@ -51,6 +52,8 @@ async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str, anexos
                       contexto: str = "", ao_criar=None, empresa: str = "casa_veraneio") -> int:
     """`contexto`: dados extras para o agente (ex.: item do Monday citado), fora do texto exibido no chat.
     `ao_criar(tarefa_id)`: roda antes da execução (ex.: vincular a tarefa ao item do Monday)."""
+    if (email := _newsletter_para_o_email(andar, agente, texto)):
+        agente, contexto = email, "\n\n".join(filter(None, [contexto, NOTA_NEWSLETTER]))
     dificuldade = classificar(agente.id, texto)
     tarefa_id = tarefas.criar(login, andar, agente.id, texto, dificuldade.value, empresa)
     if anexos_ids:
@@ -71,6 +74,21 @@ async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str, anexos
     _execucoes[tarefa_id] = execucao
     execucao.add_done_callback(lambda _: _execucoes.pop(tarefa_id, None))
     return tarefa_id
+
+
+# Item NEWSLETTER do Monday (botão Enviar ou "Produzir a semana") ia ao Gestor, e na etapa de projeto o Brevo não entra:
+# o "rascunho no Brevo" prometido nunca saía (brainstorm de 11/11/2026, email_marketing-05). Vai direto ao E-mail
+# Marketing, como tarefa comum, com as ferramentas dele.
+FORMATO_NEWSLETTER = re.compile(r"FORMATO DA PE[ÇC]A \(obrigat[óo]rio\):\s*NEWSLETTER\b")
+NOTA_NEWSLETTER = ("ITEM NEWSLETTER DO MONDAY: use a descrição do item como briefing e crie o RASCUNHO da campanha no "
+                   "Brevo (nunca dispare). Na resposta, traga o número do rascunho, o assunto, o pré-header e o que falta "
+                   "(lista, fotos, disparo).")
+
+
+def _newsletter_para_o_email(andar: str, agente: Agente, texto: str) -> Agente | None:
+    if agente.id != "gestor" or not FORMATO_NEWSLETTER.search(texto or ""):
+        return None
+    return buscar_agente(andar, "email_marketing")
 
 
 def _planilha(tarefa_id: int, texto: str, empresa: str) -> str | None:
@@ -249,8 +267,8 @@ async def _executar_imediata(tarefa_id: int, agente: Agente, dificuldade: Dificu
         monday.andamento(tarefa_id, "adiada")
         await gerenciador.enviar_para_usuario(tarefa["usuario"], {
             "tipo": "tarefa_adiada", "andar": tarefa["andar"], "agente": agente.id, "tarefa_id": tarefa_id,
-            "texto": f"Os modelos imediatos não concluíram a tarefa a tempo. Ela foi para a {destino}; "
-                     "a resposta chega assim que for processada.",
+            "texto": "Seu pedido entrou na fila e vai ser feito assim que um modelo ficar livre. Pode fechar o "
+                     "escritório: a resposta chega aqui e na Caixa de entrada. Não precisa enviar de novo.",
         })
     finally:
         await atividade.liberar(agente.id)
@@ -259,6 +277,8 @@ async def _executar_imediata(tarefa_id: int, agente: Agente, dificuldade: Dificu
 async def _concluir(tarefa_id: int, modelo: str, resultado) -> None:
     if tarefas.parada(tarefa_id):  # o usuário parou enquanto o modelo trabalhava: descarta a resposta
         return
+    # Números do painel: data da coleta e consultas feitas escritas pelo sistema, não pelo modelo (analista_metricas-34)
+    resultado.texto = await asyncio.to_thread(painel_coletas.com_rodape, tarefa_id, resultado.texto)
     tarefas.atualizar(tarefa_id, status="concluida", modelo=modelo, resposta=resultado.texto,
                       tokens_entrada=resultado.tokens_entrada, tokens_saida=resultado.tokens_saida, custo_usd=resultado.custo_usd)
     if tarefas.obter(tarefa_id)["status"] != "concluida":  # parada entre a checagem e a gravação: nada é entregue
@@ -549,7 +569,8 @@ async def _processar_proxima() -> int:
             await _entregar(tarefas.obter(linha["id"]))
             continue
         etapas = _etapas_fila(Dificuldade(linha["dificuldade"]), linha["usuario"], agente.id)
-        if agente.status == Status.trabalhando or not etapas:
+        # Ocupação que vazou não segura mais a fila sem prazo (despachante-02): confere antes de pular o agente.
+        if (agente.status == Status.trabalhando and not await atividade.destravar_se_ocioso(agente.id)) or not etapas:
             continue  # agente ocupado ou nenhum modelo no ar agora: fica para a próxima rodada
 
         tarefas.atualizar(linha["id"], status="executando")

@@ -31,6 +31,7 @@ import fichas
 import monday
 import segredos
 import tarefas
+import texto_aprovado
 import uso_max
 from auth import validar_token
 from conexoes import gerenciador
@@ -190,13 +191,15 @@ def produtor_da_peca(texto: str, pedido: str = "") -> str:
     páginas PODEM ser vídeo), e isso mandava todo carrossel ao Editor de Vídeo (teste real, #84 -> #86, 28/10/2026).
     """
     import monday  # import tardio: monday depende da produção
+    from roteamento import PECA_EM_PAGINAS, sem_video_negado  # "sem vídeo" não é vídeo (editor_video-09)
 
     texto = texto or ""
     sem_descricoes = texto
     for descricao in monday.TIPOS.values():
         sem_descricoes = sem_descricoes.replace(descricao, "")
+    sem_descricoes = sem_video_negado(sem_descricoes)
     formato = (m.group(1) if (m := FORMATO_DECLARADO.search(texto)) else "")
-    if formato in ("REELS", "SHORTS"):
+    if formato in ("REELS", "SHORTS", "TIKTOK", "YOUTUBE"):  # TIKTOK e YOUTUBE (decisão 10) também são vídeo
         return "editor_video"
     if formato == "POST":
         return "criador_imagens"
@@ -204,7 +207,9 @@ def produtor_da_peca(texto: str, pedido: str = "") -> str:
         base = pedido or sem_descricoes
         for descricao in monday.TIPOS.values():
             base = base.replace(descricao, "")
-        return "editor_video" if E_VIDEO.search(base) else "criador_imagens"
+        return "editor_video" if E_VIDEO.search(sem_video_negado(base)) else "criador_imagens"
+    if pedido and PECA_EM_PAGINAS.search(pedido) and not E_VIDEO.search(sem_video_negado(pedido)):
+        return "criador_imagens"  # slide, capa ou carrossel sem pedir vídeo: o texto do Gestor não decide (#272)
     return "editor_video" if E_VIDEO.search(sem_descricoes) else "criador_imagens"
 
 
@@ -505,19 +510,24 @@ def _retomar_orfaos() -> list[str]:
 
 
 @rotas.get("/proxima")
-async def proxima(sem_producao: bool = False, authorization: str = Header("")):
+async def proxima(sem_producao: bool = False, faltando: str = "", authorization: str = Header("")):
     """Reserva o próximo item: anexo/texto (alguém esperando) > produção > demais trabalhos. Ambos nulos = fila vazia.
-    `sem_producao`: o Drive do PC está fora; o trabalhador só atende trabalhos (as peças esperam na fila)."""
+    `sem_producao`: o Drive do PC está fora; o trabalhador só atende trabalhos (as peças esperam na fila).
+    `faltando`: o que falta do Drive (despachante-10); faltando só o acervo, sai a peça que não o usa."""
+    import drive_pc  # Drive incompleto: aviso a quem espera, no painel e no Telegram
+
     _exigir_operador(authorization)
     max_texto.registrar_contato()  # o trabalhador está ligado
+    drive_pc.registrar(faltando, sem_producao)
     for agente in _retomar_orfaos():  # produção que ficou pela metade não prende mais o agente nem o Max
         log.warning("Produção interrompida de %s voltou para a fila.", agente)
         await atividade.liberar(agente)
+    await drive_pc.avisar_quem_espera()
     if (trabalho := _reservar_trabalho(("anexo", "texto"))):
         return {"producao": None, "trabalho": trabalho}
-    if sem_producao:
+    if sem_producao and not drive_pc.so_acervo():
         return {"producao": None, "trabalho": None}
-    linha = _db().execute(
+    linha = drive_pc.proxima_sem_acervo() if sem_producao else _db().execute(
         "SELECT * FROM tarefas WHERE status = 'producao' ORDER BY id LIMIT 1").fetchone()
     if not linha:
         return {"producao": None, "trabalho": _reservar_trabalho(tuple(sorted(TIPOS_TRABALHO - {"anexo"})))}
@@ -550,6 +560,7 @@ async def _montar_producao(linha) -> dict:
     info = _db().execute("SELECT * FROM producao_info WHERE tarefa_id = ?", (linha["id"],)).fetchone()
     base = info and info["base_tarefa_id"]
     pasta_base = base and _db().execute("SELECT pasta FROM producao_info WHERE tarefa_id = ?", (base,)).fetchone()
+    raiz = base and tarefas.obter(_producao_raiz(base))  # ajuste: o projeto do Gestor está no pedido original
     return {
         "tarefa_id": linha["id"], "agente": linha["agente"], "andar": linha["andar"],
         "pasta_andar": PASTAS_ANDAR.get(linha["andar"], linha["andar"].upper()),
@@ -570,6 +581,9 @@ async def _montar_producao(linha) -> dict:
         # Correções aprovadas e os últimos ajustes pedidos nas peças deste produtor (ajustes.py).
         "regras": "\n\n".join(p for p in (correcoes.regras_da_producao(linha["agente"], linha["empresa"]),
                                           ajustes.para_contexto(linha["agente"], linha["empresa"])) if p),
+        # Legenda/texto do Copywriter aprovado na conversa: vai como TEXTO FIXO ("copie, não reescreva") e o
+        # trabalhador confere os números antes da pasta FINAL (Onda 1 de novembro, copywriter-02).
+        "texto_aprovado": texto_aprovado.da_producao(linha, raiz["texto"] if raiz else ""),
     }
 
 

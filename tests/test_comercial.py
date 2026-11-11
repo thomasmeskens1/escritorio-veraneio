@@ -25,7 +25,8 @@ def test_validar_tira_conhecidos_e_sem_canal():
     aceitos, recusados = c.validar([
         {"empresa": "Empresa Ficticia", "email": "contato@empresaficticia.com.br"},
         {"empresa": "Outra", "site": "https://conhecida.com.br", "telefone": "(19) 3333-4444"},
-        {"empresa": "Nova SA", "site": "novasa.com.br", "email": "maria@novasa.com.br", "telefone": "(19) 3333-4444"},
+        {"empresa": "Nova SA", "site": "novasa.com.br", "email": "maria@novasa.com.br", "telefone": "(19) 3333-4444",
+         "fontes": ["https://novasa.com.br/contato"]},
         {"empresa": "Sem Canal", "email": "a@gmail.com"},
     ], nomes, dominios)
     assert [a["empresa"] for a in aceitos] == ["Nova SA"] and aceitos[0]["email"] == ""

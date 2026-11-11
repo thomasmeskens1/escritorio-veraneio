@@ -3,7 +3,10 @@
 import hashlib
 import hmac
 import json
+import logging
 import secrets
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -14,6 +17,7 @@ import config
 # Provisório até o banco do Sprint 8. Fica fora do git (veja .gitignore).
 ARQUIVO_USUARIOS = Path(__file__).resolve().parent / "dados" / "usuarios.json"
 ITERACOES = 600_000
+log = logging.getLogger("veraneio.auth")
 
 
 def gerar_hash(senha: str) -> str:
@@ -101,6 +105,66 @@ def autenticar(login: str, senha: str) -> dict | None:
     if not _senha_confere(senha, registro["senha"]) or registro.get("ativo", True) is False:
         return None
     return {"login": login, "nome": registro["nome"], "role": registro["role"]}
+
+
+# Trava por conta (brainstorm de novembro, construtor-07): a trava por (login, IP) do main.py não pega quem troca de
+# rede. 15 senhas erradas na mesma conta em 1 h, venham de onde vierem, travam a conta por 30 min (nem a senha certa
+# entra, senão a trava não serve) e avisam no Telegram. Vale também para login inexistente: a resposta igual não
+# revela quais contas existem. Efeito aceito: alguém de fora consegue travar uma conta por 30 min.
+MAX_FALHAS_CONTA = 15
+JANELA_FALHAS_CONTA_S = 3600
+BLOQUEIO_CONTA_S = 30 * 60
+_falhas_conta: dict[str, list[float]] = {}  # login -> horários das falhas (time.monotonic)
+_conta_travada_ate: dict[str, float] = {}
+_trava_contas = threading.Lock()
+
+
+def conta_travada(login: str, agora: float | None = None) -> bool:
+    agora = time.monotonic() if agora is None else agora
+    with _trava_contas:
+        return _conta_travada_ate.get(login.strip().lower(), 0) > agora
+
+
+def registrar_falha_conta(login: str, agora: float | None = None) -> bool:
+    """Conta uma senha errada; True se a conta acabou de travar."""
+    login, agora = login.strip().lower(), time.monotonic() if agora is None else agora
+    with _trava_contas:
+        if len(_falhas_conta) > 1000:  # logins aleatórios não fazem o registro crescer sem limite
+            for chave in [c for c, ts in _falhas_conta.items() if not ts or agora - ts[-1] >= JANELA_FALHAS_CONTA_S]:
+                del _falhas_conta[chave]
+            for chave in [c for c, ate in _conta_travada_ate.items() if ate <= agora]:
+                del _conta_travada_ate[chave]
+        falhas = [t for t in _falhas_conta.get(login, []) if agora - t < JANELA_FALHAS_CONTA_S] + [agora]
+        if len(falhas) < MAX_FALHAS_CONTA:
+            _falhas_conta[login] = falhas
+            return False
+        _falhas_conta.pop(login, None)
+        _conta_travada_ate[login] = agora + BLOQUEIO_CONTA_S
+    if login in carregar_usuarios():
+        _disparar_aviso(login)
+    return True
+
+
+def _disparar_aviso(login: str) -> None:
+    threading.Thread(target=_avisar_trava, args=(login,), daemon=True).start()  # o login não espera o Telegram
+
+
+def limpar_falhas_conta(login: str) -> None:
+    """Login certo: as senhas erradas anteriores da conta deixam de contar."""
+    with _trava_contas:
+        _falhas_conta.pop(login.strip().lower(), None)
+
+
+def _avisar_trava(login: str) -> None:
+    import alarme_telegram  # import tardio: o alarme só entra quando há o que avisar
+    if not alarme_telegram.ativo():
+        return
+    try:
+        alarme_telegram.enviar(f"🔒 Escritório Veraneio: a conta {login} foi travada por {BLOQUEIO_CONTA_S // 60} min "
+                               f"depois de {MAX_FALHAS_CONTA} senhas erradas em 1 h. Se não foi a própria pessoa, "
+                               "troque a senha dela no painel de usuários.")
+    except Exception:  # aviso nunca derruba o login
+        log.warning("Não consegui avisar no Telegram a trava da conta", exc_info=True)
 
 
 def criar_token(usuario: dict) -> str:

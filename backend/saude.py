@@ -267,8 +267,12 @@ def avisos_da_operacao() -> list[str]:
         avisos.append(f"Só {len(no_ar)} modelo(s) gratuito(s) no ar agora: as tarefas podem cair no modelo local "
                       "(lento). Veja \"Modelos fora da rota\" abaixo.")
     import cerebro_prova  # prova semanal do Cérebro (cerebro-06): retreino descartado, nota em queda, gabarito velho
+    import drive_pc  # Drive do PC incompleto há 20 min ou mais (despachante-10)
+    import painel_coletas  # coleta do painel analítico parada (analista_metricas-07)
 
-    return avisos + avisos_da_caixa_de_areia() + cerebro_prova.avisos()
+    if (drive := drive_pc.aviso()):
+        avisos.append(drive)
+    return avisos + avisos_da_caixa_de_areia() + cerebro_prova.avisos() + painel_coletas.avisos()
 
 
 def avisos_da_caixa_de_areia() -> list[str]:
