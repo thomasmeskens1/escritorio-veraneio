@@ -139,7 +139,13 @@ def criar_da_previa(tarefa_id: int, texto: str) -> str:
                                                          "criado_por": tarefa["usuario"] if tarefa else ""}
         criados.append(lead["empresa"].strip().upper())
         c._evento(tarefa_id, "item_monday", criados[-1])
-    c._previa(numero).write_text(json.dumps(previa, ensure_ascii=False), encoding="utf-8")
+    # Notas do piloto (prospectador-09) dadas enquanto os leads eram criados não se perdem: vêm do arquivo atual.
+    import prospeccao_piloto
+
+    with prospeccao_piloto._trava:
+        atual = json.loads(c._previa(numero).read_text(encoding="utf-8"))
+        previa.update({k: atual[k] for k in ("notas", "notas_historico") if k in atual})
+        c._previa(numero).write_text(json.dumps(previa, ensure_ascii=False), encoding="utf-8")
     texto = (f"Criei {len(criados)} lead(s) da prévia #{numero} no grupo [Corp] Prospecção Ativa, com Origem "
              f"\"Prospecção Ativa\", Tipo \"Corporativo\" e as fontes no Histórico: {', '.join(criados)}."
              if criados else f"Nenhum lead da prévia #{numero} foi criado.")

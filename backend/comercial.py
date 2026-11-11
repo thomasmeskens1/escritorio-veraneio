@@ -466,6 +466,12 @@ def criar_da_previa(tarefa_id: int, texto: str) -> str:
 
 
 def executar(tarefa_id: int, texto: str) -> str:
+    import prospeccao_piloto
+
+    # Nota do piloto ("nota 4 para o lead 2 da prévia #12", prospectador-09) antes da criação: o "prévia #12" dela
+    # casaria com PEDE_CRIACAO e criaria os leads citados no Monday.
+    if prospeccao_piloto.e_nota(texto):
+        return prospeccao_piloto.nota_pelo_chat(tarefa_id, texto)
     if APROVA_PERSONA.search(texto):
         import persona_corporativo
 

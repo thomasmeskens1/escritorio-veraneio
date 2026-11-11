@@ -222,6 +222,9 @@ app.include_router(desdobrar.rotas)  # botão Desdobrar: 4:5 e 9:16 pelo molde (
 from conferente_rotas import rotas as rotas_conferencia  # noqa: E402
 app.include_router(rotas_conferencia)  # "Corrigir o mecânico" da legenda no chat (Onda 2 de novembro, copywriter-03)
 app.include_router(plano_tabela.rotas)  # planejamento em tabela gravado no Monday pelo código (social_media-05)
+import prospeccao_piloto  # noqa: E402  (notas do piloto da prospecção, Onda 2, prospectador-09)
+
+app.include_router(prospeccao_piloto.rotas)
 
 
 class Credenciais(BaseModel):

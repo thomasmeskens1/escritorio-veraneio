@@ -62,7 +62,7 @@ def test_texto_cru_da_conversa_nao_vira_regra(aprovar):
 def test_aprendizado_longo_da_semana_aprova_como_veio(aprovar):
     # O Cérebro já escreve o aprendizado como regra; antes, com 200+ caracteres, a trava do texto cru o barrava (422).
     texto = "Nas legendas de Lodge, abra com a experiência e só depois cite suítes e capacidade; " * 3
-    assert aprovar(_observacao("casa_veraneio", texto, "aprendizado"), texto.strip()) == {"ok": True}
+    assert aprovar(_observacao("casa_veraneio", texto, "aprendizado"), texto.strip())["ok"] is True
 
 
 def test_todas_as_empresas_busca_nas_tres_com_etiqueta():

@@ -112,6 +112,7 @@ function renderizarPerfil() {
     if (ficha) corpo.append(ficha);
     corpo.append(criarFatos(dados));
     if (dados.tipo === 'ia') corpo.append(criarRotinas(chatAberto.andar, chatAberto.agente));
+    if (chatAberto.agente === 'prospectador' && typeof criarPilotoProspeccao === 'function') corpo.append(criarPilotoProspeccao()); // js/piloto_prospeccao.js
     if (Array.isArray(ajustes) && ajustes.length) corpo.append(criarAjustesAgente(ajustes));
     if (dados.tipo === 'ia' || dados.pode_treinar) corpo.append(criarTreino(k, dados));
   }
