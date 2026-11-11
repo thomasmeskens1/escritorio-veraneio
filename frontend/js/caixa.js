@@ -25,11 +25,12 @@ async function atualizarCaixa() {
   } catch {
     return; // mantém o que já estava na tela
   }
-  const total = dadosCaixa.aprovar.length + dadosCaixa.concluidos.length;
+  await atualizarAprovacoes(); // fila única de aprovações (js/aprovacoes.js)
+  const total = nAprovarCaixa() + dadosCaixa.concluidos.length;
   contadorCaixa.hidden = !total;
   contadorCaixa.textContent = total > 99 ? '99+' : String(total);
-  contadorCaixa.classList.toggle('urgente', dadosCaixa.aprovar.length > 0);
-  botaoCaixa.title = `Caixa de entrada: ${dadosCaixa.aprovar.length} para aprovar, ${dadosCaixa.concluidos.length} concluídos`;
+  contadorCaixa.classList.toggle('urgente', nAprovarCaixa() > 0);
+  botaoCaixa.title = `Caixa de entrada: ${nAprovarCaixa()} para aprovar, ${dadosCaixa.concluidos.length} concluídos`;
   if (popupFormulario?.querySelector('.janela-caixa')) renderizarCaixa();
 }
 
@@ -76,11 +77,16 @@ function renderizarCaixa() {
     const ativa = b.dataset.aba === abaCaixa;
     b.classList.toggle('ativa', ativa);
     b.setAttribute('aria-selected', String(ativa));
-    const n = dadosCaixa[b.dataset.aba].length;
+    const n = b.dataset.aba === 'aprovar' ? nAprovarCaixa() : dadosCaixa[b.dataset.aba].length;
     b.querySelector('.caixa-aba-n').textContent = n ? ` (${n})` : '';
   });
   const itens = dadosCaixa[abaCaixa];
   const lista = novoEl('ul', 'caixa-lista');
+  const fila = abaCaixa === 'aprovar' ? criarListaAprovacoes() : null; // js/aprovacoes.js
+  if (!itens.length && fila) {
+    corpo.replaceChildren(fila);
+    return;
+  }
   if (!itens.length) {
     corpo.replaceChildren(novoEl('p', 'rotinas-nota', abaCaixa === 'aprovar'
       ? 'Nada esperando você. Quando um agente pedir um formulário ou uma decisão de produção, aparece aqui.'
@@ -102,7 +108,7 @@ function renderizarCaixa() {
     li.append(linha);
     lista.append(li);
   });
-  const partes = [lista];
+  const partes = fila ? [fila, lista] : [lista];
   if (abaCaixa === 'concluidos') {
     const todos = novoEl('button', 'botao-secundario caixa-todos', 'Marcar todos como lidos');
     todos.type = 'button';
@@ -147,7 +153,7 @@ function abrirCaixa() {
   fundo.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); fecharFormularioPopup(); } });
   document.body.append(fundo);
   popupFormulario = fundo;
-  abaCaixa = dadosCaixa.aprovar.length || !dadosCaixa.concluidos.length ? 'aprovar' : 'concluidos';
+  abaCaixa = nAprovarCaixa() || !dadosCaixa.concluidos.length ? 'aprovar' : 'concluidos';
   renderizarCaixa();
   atualizarCaixa();
   fechar.focus();
@@ -158,6 +164,7 @@ function limparCaixa() {
   clearInterval(timerCaixa);
   clearTimeout(atrasoCaixa);
   dadosCaixa = { aprovar: [], concluidos: [] };
+  limparAprovacoes();
   contadorCaixa.hidden = true;
 }
 

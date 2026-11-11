@@ -1,0 +1,97 @@
+/* Fila única de aprovações na Caixa de entrada e ficha de pedido na tela do agente (Onda 2 de novembro). */
+
+.aprovacoes-lista { margin-bottom: 10px; }
+
+.aprovacao-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid #343a40;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.aprovacao-item.vencido {
+  border-color: rgba(250, 82, 82, 0.6);
+  background: rgba(250, 82, 82, 0.08);
+}
+
+.aprovacao-item.informativo .caixa-motivo { color: #868e96; }
+
+.aprovacao-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.aprovacao-texto {
+  max-height: 260px;
+  margin: 4px 0 0;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid #343a40;
+  border-radius: 6px;
+  background: #212529;
+  color: #dee2e6;
+  font: inherit;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+}
+
+.aprovacao-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.aprovacao-campo small,
+.ficha-pedido small {
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #868e96;
+}
+
+.ficha-pedido {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #343a40;
+  border-radius: 8px;
+}
+
+.ficha-pedido h4 {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #ced4da;
+}
+
+.ficha-pedido ul {
+  margin: 2px 0 0;
+  padding-left: 18px;
+  color: #dee2e6;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.ficha-obrigatorio li { font-weight: 600; }
+
+.ficha-opcional li { color: #adb5bd; }
+
+.ficha-nota,
+.ficha-geral {
+  margin: 0;
+  color: #adb5bd;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.ficha-prontos {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

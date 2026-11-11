@@ -127,3 +127,29 @@ def aprovar(texto: str, login: str) -> str:
 
     cerebro.indexar_oficiais()  # a persona aprovada passa a valer para o Prospectador e o Cérebro do Corporativo
     return f"Persona nova aprovada (rascunho #{numero}): o manual 14 foi trocado e já vale no Cérebro.{guardada}"
+
+
+# --- Fila "Para aprovar" (Onda 2, N2-construtor-12) -------------------------------------------------------------
+
+def rascunhos_pendentes() -> list[dict]:
+    """Rascunhos que esperam o Thomas: número, criado_em, pedido_por e o texto."""
+    itens = []
+    for numero, arquivo in _rascunhos():
+        try:
+            meta = json.loads(arquivo.with_suffix(".json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            meta = {}
+        itens.append({"numero": numero, "criado_em": meta.get("criado_em", ""), "pedido_por": meta.get("pedido_por", ""),
+                      "texto": arquivo.read_text(encoding="utf-8")})
+    return itens
+
+
+def recusar(numero: int, login: str) -> str:
+    """O manual 14 continua valendo; o rascunho fica guardado, renomeado (nada é apagado). Só o Thomas."""
+    if (login or "").strip().lower() != config.DONO_MAX:
+        return "Só o Thomas decide a persona nova. O rascunho continua guardado para ele revisar."
+    achado = [arquivo for n, arquivo in _rascunhos() if n == numero]
+    if not achado:
+        return f"Não achei o rascunho de persona #{numero}."
+    achado[0].rename(PASTA / f"14_persona_recusada_{numero}_{_agora().strftime('%Y-%m-%d_%H%M%S')}.md")
+    return f"Rascunho de persona #{numero} recusado: o manual 14 continua como estava, e o rascunho ficou guardado."

@@ -19,6 +19,7 @@ import acesso
 import agentes_persona
 import atividade
 import config
+import pedido_obra
 import tarefas
 from agents.perfis import PERFIS
 from auth import carregar_usuarios, validar_token
@@ -302,7 +303,9 @@ async def criar(spec: dict, criado_por: str, tarefa_id: int | None = None) -> di
     agente_id = _snake(str((spec or {}).get("id") or "")) or _snake(str((spec or {}).get("nome") or ""))
     if (anterior := _ja_proposto(tarefa_id)):
         return {**_da_linha(anterior), "repetido": True}
-    ajuste = _db().execute("SELECT 1 FROM agentes_criados WHERE id = ? AND criado_por = ? AND ativo = 1 AND "
+    if pedido_obra.da_tarefa(tarefa_id) or pedido_obra.com_ferramentas(spec or {}, tarefa_id):  # N2-construtor-01
+        return await pedido_obra.registrar(spec or {}, criado_por, tarefa_id)
+    ajuste =_db().execute("SELECT 1 FROM agentes_criados WHERE id = ? AND criado_por = ? AND ativo = 1 AND "
                            "situacao = ?", (agente_id, criado_por, PROPOSTA)).fetchone()
     hoje = _db().execute("SELECT COUNT(*) FROM agentes_criados WHERE criado_em >= ?", (_agora()[:10],)).fetchone()[0]
     if not ajuste and hoje >= LIMITE_POR_DIA:
@@ -352,6 +355,10 @@ def criar_em_thread(spec: dict, criado_por: str, tarefa_id: int | None = None) -
         return f"Não autorizado: {erro} Explique isso ao usuário; não tente de novo."
     except (TimeoutError, concurrent.futures.TimeoutError):
         return "Erro: a criação demorou demais. Avise o usuário para tentar novamente."
+    if registro.get("obra"):
+        return (f"Este agente precisa de ferramentas: virou o PEDIDO DE OBRA #{registro['id']} para o Thomas, que o "
+                "monta no Claude Code. Nada entrou no escritório e não há proposta para aprovar; não chame "
+                "criar_agente de novo. Diga isso ao usuário e resuma o que o agente fará e o que NÃO fará.")
     if registro.get("repetido"):
         return (f"Este agente já foi registrado nesta tarefa ({registro['nome']}, id {registro['id']}); não chame "
                 "criar_agente de novo. Apenas confirme ao usuário que a proposta está pronta para ele revisar.")
@@ -435,7 +442,9 @@ DISSE_QUE_CRIOU = re.compile(r"\b(?<!n[aã]o )(?<!n[aã]o foi )(?:foi |est[aá] 
 
 
 def conferir_resposta(tarefa_id: int, texto: str) -> str:
-    linha = _db().execute("SELECT * FROM agentes_criados WHERE tarefa_id = ? AND situacao IN (?, ?)",
+    if (obra := pedido_obra.rodape(tarefa_id)):  # o pedido de obra vai inteiro no chat (N2-construtor-01)
+        return f"{texto}{obra}"
+    linha =_db().execute("SELECT * FROM agentes_criados WHERE tarefa_id = ? AND situacao IN (?, ?)",
                           (tarefa_id, PROPOSTA, APROVADO)).fetchone() if tarefa_id else None
     if not linha:
         # "O Designer já existe no setor Criação" fala de quem já está no prédio: não é falso sucesso.

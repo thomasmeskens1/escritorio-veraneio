@@ -134,6 +134,11 @@ class _Especificacao(BaseModel):
     goal: str = Field(description="Objetivo do agente")
     backstory: str = Field(description="História/experiência do agente")
     aparencia: dict = Field(description="Objeto com pele, cabelo {estilo, cor}, roupa {estilo, cor}, calca e acessorio")
+    # Pedido de obra (N2-construtor-01): só para agente que precisa de ferramenta.
+    ferramentas: list[str] = Field(default_factory=list, description="Ferramentas que ele precisa (Max, Monday, ...)")
+    nao_faz: str = Field("", description="O que ele NÃO faz")
+    exemplos: list[dict] = Field(default_factory=list,
+                                 description="3 objetos {pedido, resposta_esperada} (só para agente com ferramentas)")
 
 
 class CriarAgente(BaseTool):

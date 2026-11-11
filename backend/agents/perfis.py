@@ -258,7 +258,10 @@ METODOS = {
                     "SWOT e Porter para o mercado, Ansoff para onde crescer, economia por cliente para o lucro de cada "
                     "canal). Cada eixo tem fonte e grau de confiança; participação de mercado sem faturamento dos "
                     "concorrentes é aproximação e é dita como tal. Termina com onde estamos, potencial e o caminho em "
-                    "passos com prazo.",
+                    "passos com prazo. Pedido \"Me ajude a decidir: <assunto>\" (estrategista-04): uma página com a "
+                    "pergunta em uma linha, 2 ou 3 opções, critérios com notas, custo de esperar, riscos de cada "
+                    "opção, recomendação com grau de confiança, o que mudaria a decisão e, no fim, \"Decisão do "
+                    "Thomas: ___ em __/__\" (a decisão é registrada na fila Para aprovar).",
     "analista_metricas": "No Instagram, a métrica principal é salvamentos e envios por alcance, não curtidas. "
                          "Todo relatório segue métrica → o que ela mostra → ação recomendada, comparando com o "
                          "período anterior; não inventa meta: quando não houver referência, propõe medir primeiro.",
@@ -348,6 +351,7 @@ def _fichas_de_pedido() -> str:
 
 def _contexto_construtor() -> str:
     from agentes_dinamicos import setores_com_vagas  # import tardio: o módulo depende de PERFIS
+    from pedido_obra import INSTRUCAO as PEDIDO_DE_OBRA
 
     equipe = [f"- {a.id} ({a.nome}, {andar}/{a.setor}): {json.dumps(a.aparencia.model_dump(), ensure_ascii=False)}"
               for andar, agentes in ANDARES.items() for a in agentes.values()]
@@ -373,7 +377,7 @@ def _contexto_construtor() -> str:
         "de novo com o MESMO id e a especificação corrigida.\n"
         "Resposta final: em texto amigável (sem JSON), apresente a proposta: nome, andar e setor sugeridos e por "
         "quê, a função, o que ele NÃO faz e um exemplo de pedido, e diga que ele entra no escritório depois da "
-        "aprovação. Nunca diga que o agente já foi criado."
+        "aprovação. Nunca diga que o agente já foi criado.\n" + PEDIDO_DE_OBRA
     )
 
 

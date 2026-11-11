@@ -20,6 +20,7 @@ import andamento
 import anexos
 import agentes_dinamicos
 import aprendizado
+import aprovacoes
 import atividade
 import avaliacoes
 import borda
@@ -31,6 +32,7 @@ import empresas
 import encaminhamento
 import espera
 import estudos
+import fichas_pedido
 import modelos_uso
 import monday
 import cerebro
@@ -209,6 +211,8 @@ app.include_router(triagem.rotas)
 app.include_router(caixa.rotas)
 app.include_router(insatisfacoes.rotas)
 app.include_router(folha_aprovacao.rotas)  # folha de aprovação da peça (Onda 2, designer-10)
+app.include_router(aprovacoes.rotas)  # uma fila só de aprovações (Onda 2 de novembro, construtor-12)
+app.include_router(fichas_pedido.rotas)  # ficha do manual 16 na tela do agente (Onda 2 de novembro, professor-07)
 app.include_router(documentos_entrega.rotas)  # planilha do catálogo e .docx da resposta (Onda 3, item 8)
 app.include_router(cerebro_modelos.rotas)  # modelos de estilo aprovados (Onda 3, cerebro-12)
 app.include_router(repetir_lodges.rotas)   # "Repetir para…" até 5 Lodges (Onda 3, copywriter-04)

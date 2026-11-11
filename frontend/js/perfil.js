@@ -40,6 +40,7 @@ function limparPerfis() {
   Object.keys(rotinas).forEach((k) => delete rotinas[k]);
   Object.keys(errosRotinas).forEach((k) => delete errosRotinas[k]);
   Object.assign(conhecimento, { dados: null, erro: '', oculto: false });
+  limparFichasPedido();
   resultadoTreino = null;
 }
 
@@ -107,6 +108,8 @@ function renderizarPerfil() {
   } else {
     if (dados.descricao) corpo.append(novoEl('p', 'perfil-descricao', dados.descricao));
     if (dados.exemplo) corpo.append(criarExemplo(dados.exemplo));
+    const ficha = criarFichaPedido(chatAberto.andar, chatAberto.agente); // manual 16 (js/fichas_pedido.js)
+    if (ficha) corpo.append(ficha);
     corpo.append(criarFatos(dados));
     if (dados.tipo === 'ia') corpo.append(criarRotinas(chatAberto.andar, chatAberto.agente));
     if (Array.isArray(ajustes) && ajustes.length) corpo.append(criarAjustesAgente(ajustes));
