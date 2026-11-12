@@ -40,6 +40,8 @@ import kit_postar
 import painel_analitico
 import pasta_final
 import pasta_da_peca
+import pptx_diferenca
+import pptx_receita
 import planilha_lodges
 import redes_empresas
 import site_casaveraneio
@@ -424,9 +426,9 @@ def instrucao_versao(producao: dict, versao: int) -> str:
     return (f"Este pedido é um AJUSTE (versão {versao}) da peça #{producao['base']['tarefa_id']}. Nesta pasta estão "
             "os arquivos de trabalho da versão anterior (HTML, editável, fotos copiadas, cenas): reaproveite-os e "
             "aplique SOMENTE o ajuste pedido, sem refazer o resto. Gere de novo APENAS os arquivos finais que o ajuste "
-            "muda: ajuste na arte = nova arte (e o editável dela); NÃO gere legenda nova se o pedido não for sobre a "
+            "muda: ajuste na arte = nova arte (o PPTX editável o sistema refaz sozinho); NÃO gere legenda nova se o pedido não for sobre a "
             f"legenda. Os novos finais vão para {PASTA_FINAL}/ com o sufixo _v{versao} (ex.: arte_v{versao}.png, "
-            f"EDITÁVEL/<peça>_v{versao}_editavel.pptx); não apague as versões anteriores.")
+            f"EDITÁVEL/CENAS/); não apague as versões anteriores.")
 
 
 # Tipo de entrega decidido pelo backend (producao.tipo_de_entrega; brainstorm de 31/10/2026, despachante-02 e
@@ -463,6 +465,8 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
         motion_tipografico.instrucao(producao["agente"], producao.get("empresa") or "casa_veraneio",
                                      producao.get("entrega") or ""),
         receita.instrucao(producao["agente"], producao.get("entrega") or ""),
+        # PPTX devolvido pela equipe entre os anexos: o que mudou contra a receita (pptx_diferenca.py, Onda 3).
+        pptx_diferenca.instrucao(pasta, [pasta / PASTA_ANEXOS / nome for nome in anexos or []]),
         "Contexto: Escritório Veraneio, equipe de marketing da Casa Veraneio. Responda em português do Brasil.",
         f"Conversa recente:\n{historico}" if historico else "",
         f"Pedido: {producao['texto']}",
@@ -487,9 +491,9 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
         f"Grave SOMENTE dentro da pasta atual ({pasta}), que é o rascunho desta peça. Arquivos de trabalho (HTML, "
         "fundos, recortes, logos, cópias de fotos, cenas brutas) ficam FORA da subpasta "
         f"{PASTA_FINAL}/. Só o que estiver em {PASTA_FINAL}/ vai para o Drive (não use \"MARKETING > THOMAS\" citado "
-        f"nas diretrizes). Em {PASTA_FINAL}/ entregue: (1) a arte final (PNG, MP4 ou PDF); (2) o editável em "
-        f"{PASTA_FINAL}/EDITÁVEL/, gerado com python-pptx conforme as diretrizes (em vídeo, também "
-        f"{PASTA_FINAL}/EDITÁVEL/CENAS/; o manifest agora é a receita.json, descrita acima); (3) a legenda, quando a peça tiver (stories não têm), em "
+        f"nas diretrizes). Em {PASTA_FINAL}/ entregue: (1) a arte final (PNG, MP4 ou PDF); (2) em vídeo, as cenas em "
+        f"{PASTA_FINAL}/EDITÁVEL/CENAS/ (NÃO gere PPTX do editável: o sistema gera sozinho da receita.json, descrita "
+        "acima, mesmo que as diretrizes peçam PPTX); (3) a legenda, quando a peça tiver (stories não têm), em "
         "\"Legenda - <peça>.docx\", gerada com python-docx, no lugar do Google Doc. Não use Higgsfield nem outra IA "
         "de imagem.",
         "Se esta pasta já tiver arquivos de uma tentativa anterior interrompida, reaproveite-os e faça só o que falta.",
@@ -809,6 +813,13 @@ def produzir(producao: dict) -> None:
         if linha_receita:
             resumo = f"{resumo}\n\n{linha_receita}"
             log(f"   {linha_receita}")
+        # PPTX do editável gerado pelo código da receita conferida (Onda 3; pptx_receita.py): leve, 1 slide por cena.
+        nome_pptx, linha_pptx = pptx_receita.na_producao(rascunho, rascunho / PASTA_FINAL, PASTA_MARCAS)
+        if nome_pptx:
+            novos = sorted({*novos, nome_pptx})
+        if linha_pptx:
+            resumo = f"{resumo}\n\n{linha_pptx}"
+            log(f"   {linha_pptx}")
         if faltaram:
             resumo = (f"{resumo}\n\n⚠ Referência(s) do Monday que não chegaram ao Max: {'; '.join(faltaram)}. Se "
                       "eram necessárias, envie o arquivo por uma pasta do Drive e peça um ajuste.")
