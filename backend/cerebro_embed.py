@@ -33,7 +33,7 @@ _trava = threading.Lock()  # protege o cache das perguntas
 _cache: dict[str, np.ndarray] = {}  # pergunta -> vetor (agentes repetem perguntas)
 CACHE_MAX = 512
 _ultima_falha = 0.0
-_ultimo_uso = 0.0  # último embed que deu certo (o modelo segue carregado por MANTER_CARREGADO)
+_ultimo_uso: float | None = None  # último embed que deu certo; None: nenhum desde a subida (modelo frio)
 _ok: bool | None = None  # None: ainda não testado
 _aquecendo = threading.Event()
 
@@ -53,7 +53,9 @@ def _marcar(ok: bool) -> None:
 
 def frio() -> bool:
     """O modelo provavelmente já saiu da memória do Ollama (sem uso há mais de MANTER_CARREGADO)."""
-    return time.monotonic() - _ultimo_uso > MANTER_CARREGADO_S
+    # None na subida: o relógio monotônico começa perto de zero depois de religar o Docker (12/11/2026), então
+    # "sem uso desde 0.0" parecia uso recente e a 1ª busca não esperava a recarga.
+    return _ultimo_uso is None or time.monotonic() - _ultimo_uso > MANTER_CARREGADO_S
 
 
 def _pedir(entradas: list[str], timeout: float) -> list:

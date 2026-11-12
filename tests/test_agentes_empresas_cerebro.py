@@ -217,7 +217,7 @@ def test_busca_fria_espera_a_recarga_e_mantem_o_modelo_por_30_min(monkeypatch):
 
     monkeypatch.setattr(embed.httpx, "post", lambda url, json, timeout: pedidos.append((json, timeout)) or Resposta())
     monkeypatch.setattr(embed, "_ok", None)
-    monkeypatch.setattr(embed, "_ultimo_uso", 0.0)
+    monkeypatch.setattr(embed, "_ultimo_uso", None)  # nenhum uso desde a subida
     embed._cache.clear()
     assert embed.gerar(["pergunta fria"], consulta=True) is not None
     assert pedidos[-1][1] == embed.TIMEOUT_FRIO and pedidos[-1][0]["keep_alive"] == embed.MANTER_CARREGADO
