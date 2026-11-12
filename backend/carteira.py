@@ -112,6 +112,12 @@ def tem_nomes(texto: str) -> bool:
     return bool((palavras or frases) and _trechos(texto, palavras, frases))
 
 
+def ve_carteira(login: str) -> bool:
+    """Quem vê listas nominais da carteira e do funil: qualquer usuário logado (decisão 11, Thomas, 04/11/2026; o
+    andar Comercial já passou no acesso.pode_usar). Um lugar só para mudar se a regra apertar."""
+    return bool(login)
+
+
 def rodape(login: str) -> str:
     """Marca d'água das respostas com nomes da carteira ou contatos de leads (prospectador-37, ajuste do crítico): uma
     lista copiada leva o aviso de uso interno e quem a gerou. O registro de quem pediu já é a tabela tarefas."""

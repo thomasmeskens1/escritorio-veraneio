@@ -54,6 +54,7 @@ import producao
 import producao_semana
 import relatorios
 import repetir_lodges
+import revisao_proposta
 import reranker
 import saude
 import tarefas
@@ -602,6 +603,8 @@ async def tratar_mensagem(ws: WebSocket, usuario: dict, bruto: str) -> None:
                                   anexos=anexos.caminhos(anexos_ids, usuario["sub"]),
                                   base=base_producao, ao_criar=ao_criar)
     else:
+        if anexos_ids and (revisao := revisao_proposta.contexto_anexo(agente.id, texto)):  # proposta anexada
+            contexto = f"{contexto or ''}\n\n{revisao}".strip()
         await orquestrador.nova_tarefa(usuario["sub"], andar, agente, texto, anexos_ids, contexto=contexto, empresa=empresa,
                                        ao_criar=ao_criar)
 
