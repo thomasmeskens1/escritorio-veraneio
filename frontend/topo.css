@@ -403,3 +403,35 @@
 .caixa-contador.urgente {
   background: #fa5252;
 }
+
+/* Comando de voz (js/voz.js): microfone ligado em caramelo; balão da Vera no canto inferior esquerdo. */
+.topo-voz.ligado {
+  border-color: #f4a261;
+  color: #f4a261;
+  background: #3a3026;
+}
+
+.topo-voz:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.vera-balao {
+  position: fixed;
+  left: max(16px, env(safe-area-inset-left, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 10px 14px;
+  background: #212529;
+  border: 1px solid #f4a261;
+  border-radius: 10px;
+  color: #f1f3f5;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 40%);
+}
+
+.vera-balao.vera-erro {
+  border-color: #e63946;
+}

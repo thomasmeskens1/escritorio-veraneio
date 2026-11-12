@@ -304,6 +304,7 @@ function adicionarMensagem(andar, agente, mensagem) {
     mostrarFormularioPendente(andar, agente);
   }
   if (formularioDaMensagem(mensagem)) atualizarPendencias(); // "!" no agente
+  if (typeof vozNovaMensagem === 'function') vozNovaMensagem(andar, agente, mensagem); // pedido falado: lê a resposta
 }
 
 // Atualiza cabeçalho, indicador "pensando" e bloqueio de envio.
