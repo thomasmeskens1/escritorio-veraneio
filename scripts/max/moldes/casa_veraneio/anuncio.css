@@ -1,0 +1,32 @@
+/* "Desdobrar para anúncio" da Casa Veraneio (Onda 3, 12/11/2026; gestor_trafego-13, designer-21, email_marketing-06).
+   Vem DEPOIS do base.css e só muda zonas e tamanhos; cores, fontes e degradê Verde são os do base.css.
+   Medidas espelhadas em backend/marcas_regras.json ("anuncio"), conferidas por tests/test_onda3_anuncio.py. */
+
+/* 9:16 de anúncio (Meta Reels/Stories, manual 08 §3): a interface cobre ~14% em cima e ~35% embaixo; texto, selo e
+   logo entre ~300 e ~1250 px de altura (regra prática que atende a todas as plataformas) */
+.anuncio.f916 { --topo: 300px; --base: 680px; --deg-base: 1200px; --ficha-foto: 620px; --contagem: 200px; }
+
+/* 1,91:1 (1200x628, Meta e Google) e cabeçalho de e-mail (1200x600, exibido a 600 px): tudo na horizontal */
+.f191, .femail { --margem: 64px; --topo: 52px; --base: 48px; --logo: 84px; --logo-fim: 96px;
+                 --deg-topo: 360px; --deg-base: 300px; --titulo: 64px; --subtitulo: 40px; --contagem: 96px;
+                 --ficha-titulo: 46px; --fim-titulo: 64px; }
+.femail { --titulo: 68px; --subtitulo: 42px; }  /* lido a 600 px: nada abaixo de ~22 px no original */
+.f191 .capa-topo .kicker, .femail .capa-topo .kicker { margin-bottom: 12px; font-size: 22px; }
+.f191 .contagem-texto, .femail .contagem-texto { font-size: 32px; }
+.f191 .selo-local, .femail .selo-local { font-size: 32px; }
+
+/* ficha na horizontal: foto à esquerda, dados e faixa à direita */
+.f191 .ficha, .femail .ficha { display: grid; grid-template-columns: 54% 46%; grid-template-rows: 1fr auto; }
+.f191 .ficha-foto, .femail .ficha-foto { grid-row: 1 / 3; height: auto; }
+.f191 .painel, .femail .painel { padding: 28px 48px; gap: 8px; }
+.f191 .numeros, .femail .numeros { gap: 48px; margin-top: 8px; }
+.f191 .numero, .femail .numero { font-size: 44px; }
+.f191 .faixa, .femail .faixa { padding: 18px 48px; gap: 20px; }
+.f191 .cta, .femail .cta { font-size: 20px; }
+
+/* fechamento na horizontal: mais compacto para caber em ~600 px de altura */
+.f191 .fim .kicker, .femail .fim .kicker { margin-bottom: 14px; font-size: 22px; }
+.f191 .filete, .femail .filete { margin: 20px auto 16px; }
+.f191 .linhas li, .femail .linhas li { font-size: 22px; }
+.f191 .fim .cta, .femail .fim .cta { font-size: 22px; margin-top: 18px; }
+.f191 .fim .logo, .femail .fim .logo { margin-top: 24px; }
