@@ -24,6 +24,8 @@ CEREBRO = DRIVE / "CÉREBRO"   # toda gravação de conhecimento vai para cá
 # Acervo de fotos/vídeos dos lodges: SOMENTE LEITURA.
 ACERVO = Path(os.getenv("ESCRITORIO_ACERVO",
                         r"G:\Drives compartilhados\(NOVO) CASA VERANEIO\LODGES\FOTOS E VIDEOS LODGES"))
+# Material do MARKETING da Casa Veraneio (LODGES por categoria e SABORES CV): SOMENTE LEITURA (acervo_marketing.py).
+MARKETING = Path(os.getenv("ESCRITORIO_MARKETING", r"G:\Drives compartilhados\(NOVO) CASA VERANEIO\MARKETING"))
 # Pasta de trabalho do Claude Code FORA do repositório: lá ele não herda o .claude/ nem o CLAUDE.md do projeto
 # (que liberam MCP) e as ferramentas de arquivo ficam presas a ela (--restricted).
 TRABALHO = Path(os.getenv("ESCRITORIO_TRABALHO", Path(os.environ.get("LOCALAPPDATA", Path.home())) / "EscritorioVeraneio"))

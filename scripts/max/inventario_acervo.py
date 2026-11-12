@@ -187,8 +187,13 @@ def inventariar(imovel: str, acervo: Path | None = None, sonda=sondar, arquivo_c
     if not pastas:
         return ficha
     cache = _ler_cache(arquivo_cache)
+    marketing = []
+    if acervo == comum.ACERVO:  # material do Marketing (LODGES por categoria) do mesmo Lodge: citado, não lido
+        import acervo_marketing
+
+        marketing = [str(p) for p in acervo_marketing.pastas_do_lodge(int(numero.group(1)))]
     ficha.update(pasta=pastas[0].relative_to(acervo).as_posix(), outras_pastas=[
-        p.relative_to(acervo).as_posix() for p in pastas[1:]], **ler_pasta(pastas[0], sonda, cache))
+        p.relative_to(acervo).as_posix() for p in pastas[1:]] + marketing, **ler_pasta(pastas[0], sonda, cache))
     try:
         arquivo_cache.parent.mkdir(parents=True, exist_ok=True)
         arquivo_cache.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")

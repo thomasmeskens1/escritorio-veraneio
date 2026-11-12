@@ -22,6 +22,7 @@ import traceback
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
+import acervo_marketing
 import caixa_saida
 import catalogo_fotos_empresas
 import catalogo_lodges
@@ -373,7 +374,7 @@ def copiar_referencias(rascunho: Path, empresa: str) -> None:
     o Max tentava grep e python -I, que a caixa de areia barra, e o vídeo falhava sem arquivo."""
     destino = rascunho / REFERENCIAS
     destino.mkdir(parents=True, exist_ok=True)
-    indices = [comum.CEREBRO / "catalogo_lodges.md", catalogo_fotos_empresas.INDICE_VERO,
+    indices = [comum.CEREBRO / "catalogo_lodges.md", acervo_marketing.INDICE, catalogo_fotos_empresas.INDICE_VERO,
                catalogo_fotos_empresas.INDICE_CORP]
     pastas = [PASTA_MARCAS / "FONTES", PASTA_MARCAS / LOGOS.get(empresa, ("-",))[0]]
     for indice in indices:
@@ -410,7 +411,11 @@ def regras_acervo() -> str:
             f"{REFERENCIAS}/catalogo_lodges.md, para ler com Read). Para usar um arquivo, COPIE-o com python (shutil.copy2) "
             f"para a subpasta {PASTA_ACERVO}/ da pasta atual e trabalhe na cópia (se já houver cópia de uma versão "
             "anterior, reaproveite). Nunca grave, mova, renomeie ou "
-            "apague nada no acervo. Arquivos grandes: copie um por vez, só os que vai usar.")
+            "apague nada no acervo. Arquivos grandes: copie um por vez, só os que vai usar. "
+            f"Na Casa Veraneio também vale o material do Marketing, SOMENTE LEITURA, com as mesmas regras: "
+            f"{acervo_marketing.LODGES} (fotos e vídeos editados, por categoria: praia, campo, montanha...) e "
+            f"{acervo_marketing.SABORES} (Sabores CV, a série de gastronomia: chefs, receitas e mesa posta, bom para "
+            f"cardápio, compras e cozinheira). Índice copiado em {REFERENCIAS}/{acervo_marketing.INDICE.name}.")
 
 
 def instrucao_versao(producao: dict, versao: int) -> str:
@@ -509,13 +514,14 @@ def pastas_de_fotos(empresa: str) -> tuple[list[Path], list[Path]]:
     recebia o acervo e as pastas das três empresas; a separação existia só no texto do prompt."""
     vero, corp = list(catalogo_fotos_empresas.PASTAS_VERO), [catalogo_fotos_empresas.FOTOS_EVENTOS]
     acervo = [comum.ACERVO]
+    marketing = [p for p in (acervo_marketing.LODGES, acervo_marketing.SABORES) if p.is_dir()]
     if empresa == "casa_vero":
         return vero, corp
     if empresa == "cv_corporativo":  # o acervo dos Lodges só nos espaços "PODE (mesma casa)", como diz o índice
         return corp + acervo, vero
     if empresa == "casa_veraneio":  # Lodge que também é imóvel da Casa Vero: as pastas do Vero valem
-        return acervo + vero, corp
-    return [], acervo + vero + corp
+        return acervo + marketing + vero, corp
+    return [], acervo + marketing + vero + corp
 
 
 def comando_producao(empresa: str = "casa_veraneio") -> list[str]:
@@ -893,6 +899,7 @@ def catalogo_em_segundo_plano() -> None:
     def rodar():
         try:
             catalogo_lodges.rodar()
+            acervo_marketing.rodar()  # LODGES por categoria e SABORES CV do MARKETING (Casa Veraneio)
             planilha_lodges.rodar()
             sites_empresas.rodar()  # Corporativo e Casa Vero, cada um com a sua etiqueta de empresa
             catalogo_fotos_empresas.rodar()  # fotos da Casa Vero e do Corporativo (índices em CÉREBRO)
