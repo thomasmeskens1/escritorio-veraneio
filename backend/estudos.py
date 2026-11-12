@@ -63,9 +63,13 @@ REGRAS = (
 def e_estudo(agente_id: str, texto: str, com_anexo: bool = False) -> bool:
     """Com anexo, a análise de negócio ("analise esta proposta" + PDF) segue pelo caminho normal, que lê o anexo e já
     é sigiloso para o Estrategista (Max ou modelo local, nunca gratuito de fora nem web)."""
+    import revisao_proposta
+
     padrao = AGENTES.get(agente_id)
     if com_anexo and agente_id == "estrategista" and ANALISE_NEGOCIO.search(texto or ""):
         return False
+    if revisao_proposta.e_pedido(agente_id, texto):  # "Revisar proposta" colada: análise sem web (estrategista-19)
+        return True
     return bool(padrao and padrao.search(texto) and not SO_EXPLICACAO.search(texto) and not RAPIDA.match(texto))
 
 
@@ -101,8 +105,12 @@ def oferta_de_aprofundar(agente_id: str, pedido: str) -> str:
 
 def analise_sem_web(agente_id: str, texto: str) -> tuple[bool, str]:
     """(roda sem web?, motivo para o registro). Pedido que cita cliente da carteira nunca vai à web."""
+    import revisao_proposta
+
     if agente_id != "estrategista":
         return False, ""
+    if revisao_proposta.e_pedido(agente_id, texto):  # a proposta colada pode falar de "mercado": nunca vai à web
+        return True, "revisão de proposta"
     if ANALISE_NEGOCIO.search(texto or "") and not ESTUDO_DE_MERCADO.search(texto or ""):
         return True, ""
     import carteira
@@ -114,6 +122,11 @@ def analise_sem_web(agente_id: str, texto: str) -> tuple[bool, str]:
 
 def aviso_inicio(agente_id: str, texto: str) -> str:
     """Texto do aviso no chat quando o estudo começa."""
+    import revisao_proposta
+
+    if revisao_proposta.e_pedido(agente_id, texto):
+        return ("Vou revisar a proposta (clareza, tom do Corporativo, objeções, CTA e prazos), sem pesquisa na web, e "
+                "devolver aqui com as sugestões marcadas. Leva alguns minutos.")
     if agente_id == "estrategista" and ANALISE_NEGOCIO.search(texto or "") and not ESTUDO_DE_MERCADO.search(texto or ""):
         return ("Vou analisar com os dados do negócio (persona, Cérebro e o que você mandou), sem pesquisa na web, e "
                 "trazer a análise aqui. Leva alguns minutos.")
@@ -229,11 +242,16 @@ def prompt(agente_id: str, texto: str, empresa: str, historico: list = (), finan
         partes.append(carteira.ocultar(_cerebro(texto, empresa, financeiro)))
         if (persona := comercial._persona()):  # manual 14: a quem vendemos no Corporativo
             partes.append("PERSONA DO CLIENTE CORPORATIVO (manual 14):\n" + carteira.ocultar(persona)[:MAX_DADOS])
-        partes.append(
-            "COMO FAZER A ANÁLISE: não há pesquisa na web neste pedido. Raciocine só sobre os dados do pedido, da "
-            "persona, do painel e do Cérebro acima. Entregue: 1) leitura do caso (o que o pedido mostra); 2) pontos "
-            "fortes e riscos; 3) o que ajustar (preço, escopo, argumento, próximo contato), com o porquê; 4) os "
-            "próximos passos. O que depender de dado que não está aqui fica PENDENTE.")
+        import revisao_proposta
+
+        if revisao_proposta.e_pedido(agente_id, texto):  # estrategista-19: manual 11 + checklist da revisão
+            partes += revisao_proposta.blocos(carteira.ocultar)
+        else:
+            partes.append(
+                "COMO FAZER A ANÁLISE: não há pesquisa na web neste pedido. Raciocine só sobre os dados do pedido, da "
+                "persona, do painel e do Cérebro acima. Entregue: 1) leitura do caso (o que o pedido mostra); 2) "
+                "pontos fortes e riscos; 3) o que ajustar (preço, escopo, argumento, próximo contato), com o porquê; "
+                "4) os próximos passos. O que depender de dado que não está aqui fica PENDENTE.")
     else:
         # o estudo pesquisa na web: nomes de clientes nunca vão junto (estrategista-29)
         partes.append(carteira.ocultar(_painel(financeiro)))
@@ -274,7 +292,12 @@ def executar(tarefa_id: int, agente_id: str, texto: str, empresa: str, historico
                                       LIMITE_ANALISE_S if sem_web else LIMITE_S, web=not sem_web)
     if not resposta.strip():
         raise RuntimeError("O Claude Code não devolveu o estudo.")
-    return empresas.sem_precos(segredos.limpar(resposta.strip()), empresa, texto)
+    resposta = empresas.sem_precos(segredos.limpar(resposta.strip()), empresa, texto)
+    import revisao_proposta
+
+    if revisao_proposta.e_pedido(agente_id, texto):  # valores da proposta: só para quem já pode vê-los
+        resposta = revisao_proposta.sem_valores(resposta, linha["usuario"] if linha else "")
+    return resposta
 
 
 async def iniciar(login: str, andar: str, agente, texto: str, empresa: str) -> int:

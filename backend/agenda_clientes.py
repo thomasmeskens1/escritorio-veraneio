@@ -56,7 +56,9 @@ def secoes(agente_id: str, texto: str) -> list[str]:
 
 
 def e_pedido(agente_id: str, texto: str) -> bool:
-    return bool(secoes(agente_id, texto))
+    import funil_parado  # mutirão do funil parado (estrategista-20): mesmo caminho, sem IA
+
+    return bool(secoes(agente_id, texto)) or funil_parado.e_pedido(agente_id, texto)
 
 
 # --- Quem vê o quê -------------------------------------------------------------------------------------------
@@ -440,12 +442,16 @@ def executar(login: str, texto: str, agente_id: str = "prospectador", hoje: date
 async def iniciar(login: str, andar: str, agente, texto: str) -> int:
     """Responde na hora, sem modelo de IA. Não passa pelo _concluir: a lista não vira conhecimento no Cérebro."""
     import comercial
+    import funil_parado
     import orquestrador
 
+    funil = funil_parado.e_pedido(agente.id, texto) and not secoes(agente.id, texto)
     tarefa_id = tarefas.criar(login, andar, agente.id, texto, "simples", comercial.EMPRESA)
-    tarefas.registrar_evento(tarefa_id, "recebida", agente.id, detalhe="Agenda de clientes (cálculo no sistema)")
+    tarefas.registrar_evento(tarefa_id, "recebida", agente.id, detalhe="Mutirão do funil parado (cálculo no sistema)"
+                             if funil else "Agenda de clientes (cálculo no sistema)")
     try:
-        resposta = await asyncio.to_thread(executar, login, texto, agente.id)
+        resposta = await asyncio.to_thread(funil_parado.executar, login) if funil else \
+            await asyncio.to_thread(executar, login, texto, agente.id)
         tarefas.atualizar(tarefa_id, status="concluida", modelo=MODELO, resposta=resposta)
         tarefas.registrar_evento(tarefa_id, "concluida", agente.id, MODELO)
     except Exception as erro:
