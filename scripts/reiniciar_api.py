@@ -18,8 +18,10 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parents[1]
 MANUTENCAO = RAIZ / "backend" / "dados" / "manutencao"
 CONSULTA = ("import sqlite3; db = sqlite3.connect('file:/var/lib/escritorio/escritorio.db?mode=ro', uri=True); "
-            "print(db.execute(\"SELECT COUNT(*) FROM tarefas WHERE status IN ('executando','producao','produzindo',"
-            "'adiada')\").fetchone()[0] + db.execute(\"SELECT COUNT(*) FROM trabalhos_max WHERE status IN "
+            "print(db.execute(\"SELECT COUNT(*) FROM tarefas WHERE status IN ('executando','producao','produzindo') "
+            "OR (status = 'adiada' AND (proxima_tentativa IS NULL OR proxima_tentativa <= "
+            "strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '+10 minutes')))\").fetchone()[0] + "
+            "db.execute(\"SELECT COUNT(*) FROM trabalhos_max WHERE status IN "
             "('pendente','executando','reservado')\").fetchone()[0])")
 SEM_JANELA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 

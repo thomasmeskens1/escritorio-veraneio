@@ -46,6 +46,11 @@ ELOGIO_CURTO = re.compile(r"\b(perfeit[oa]|excelente|aprovad[oa]|ótimo|otimo|sh
 NEGA_ELOGIO = re.compile(r"\bn[aã]o\s+(\w+\s+){0,2}(ficou|gostei|curti|salv|guard)", re.IGNORECASE)
 ELOGIO_COM_AJUSTE = re.compile(r"\b(mas|por[ée]m|s[oó] que)\b.{0,60}?\b(troc|mud|ajust|tir|coloc|corrij|corrig|"
                                r"faltou|refa[cç]|diminu|aument)", re.IGNORECASE)
+# Direcionamento para as próximas peças no meio da mensagem (tarefa 287, 12/11/2026, João: "quero que considerem os
+# direcionamentos ... para quando forem produzir outros pedidos futuros"): vira observação como a correção.
+DIRECIONAMENTO = re.compile(r"\b(considerem|considere|levem em conta|leve em conta|tenham em mente|guardem|lembrem|"
+                            r"memorizem|aprendam)\b.{0,120}?\b(pr[oó]xim\w*|futur\w*|daqui (?:pra|para) frente)",
+                            re.IGNORECASE | re.DOTALL)
 TAMANHO_CURTO = 150
 BORDA_COMENTARIO = 250  # o comentário da pessoa fica no começo ou no fim; o meio é o texto colado
 
@@ -123,7 +128,7 @@ def registrar_se_correcao(usuario: str, andar: str, agente_id: str, texto: str) 
     """Guarda a observação quando um usuário corrige OU elogia uma resposta recente deste agente. Desde 29/10/2026
     vale para TODOS os usuários (Thomas); quem aprova e vira regra é só a Diretoria. Roda em segundo plano (main.py):
     nunca atrasa a resposta."""
-    if CORRECAO.search(texto or ""):
+    if CORRECAO.search(texto or "") or DIRECIONAMENTO.search(texto or ""):
         tipo = "correcao"
     elif e_elogio(texto):
         tipo = "elogio"

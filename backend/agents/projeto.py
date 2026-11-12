@@ -79,19 +79,46 @@ def _nome(agente_id: str) -> str:
     return equipe().get(agente_id, agente_id)
 
 
+def _objeto_plano(texto: str) -> dict | None:
+    """O JSON do plano como objeto: o primeiro {...} completo com "etapas" (pode vir com sobras em volta)."""
+    decodificador = json.JSONDecoder()
+    for achado in re.finditer(r"\{", texto or ""):
+        try:
+            valor, _fim = decodificador.raw_decode(texto, achado.start())
+        except ValueError:
+            continue
+        if isinstance(valor, dict) and "etapas" in valor:
+            return valor
+    return None
+
+
+def plano_vazio(texto: str) -> bool:
+    """O Gestor leu o pedido e concluiu que não há o que produzir agora ("etapas": [] com o entendimento)."""
+    objeto = _objeto_plano(texto)
+    return bool(objeto is not None and objeto.get("etapas") == [] and str(objeto.get("entendimento") or "").strip())
+
+
 def _extrair_plano(texto: str) -> tuple[list[dict], str]:
-    """(etapas, título curto do projeto). Etapas: agente, instrução e fase (mesma fase = rodam juntas)."""
-    bloco = re.search(r"\[.*\]", texto, re.DOTALL)
-    if not bloco:
-        raise saude.FalhaDoModelo("O Gestor não devolveu um plano em JSON.")
+    """(etapas, título curto do projeto). Etapas: agente, instrução e fase (mesma fase = rodam juntas).
+    12/11/2026 (tarefa 287): lia do primeiro "[" ao último "]" e pegava o "opcoes": [] do começo do objeto, o que dava
+    "JSON inválido" em todos os modelos; agora lê o objeto inteiro e só cai na lista solta em resposta antiga."""
     # Aceita o id ("gestor_trafego") ou o nome ("Gestor de Tráfego"), sem diferenciar maiúsculas/acentos.
     time = equipe()
     ids_por_chave = {**{_chave(i): i for i in time}, **{_chave(n): i for i, n in time.items()}}
     plano = []
-    try:
-        passos = json.loads(bloco.group(0))
-    except ValueError as erro:  # JSON quebrado é resposta ruim do modelo: o próximo modelo tenta
-        raise saude.FalhaDoModelo(f"O Gestor devolveu um plano com JSON inválido ({erro}).") from erro
+    objeto = _objeto_plano(texto)
+    if objeto is not None and isinstance(objeto.get("etapas"), list):
+        passos = objeto["etapas"]
+    else:
+        bloco = re.search(r"\[.*\]", texto, re.DOTALL)
+        if not bloco:
+            raise saude.FalhaDoModelo("O Gestor não devolveu um plano em JSON.")
+        try:
+            passos = json.loads(bloco.group(0))
+        except ValueError as erro:  # JSON quebrado é resposta ruim do modelo: o próximo modelo tenta
+            raise saude.FalhaDoModelo(f"O Gestor devolveu um plano com JSON inválido ({erro}).") from erro
+    if not isinstance(passos, list):
+        raise saude.FalhaDoModelo("O Gestor devolveu um plano sem lista de etapas.")
     for passo in passos:
         agente = ids_por_chave.get(_chave(passo.get("agente", ""))) if isinstance(passo, dict) else None
         if agente:
@@ -298,6 +325,10 @@ def _plano(pasta: Path, pedido: str, contexto: str, executar: Executar, ficha: s
             _gravar(pasta / "duvida.txt", duvida)
             _gravar(arquivo, "[]")
             return []
+        if plano_vazio(resposta):  # só um direcionamento ou recado: responde sem acionar a equipe (tarefa 287)
+            _gravar(pasta / "sem_etapas.txt", entendimento or "Nada a produzir agora.")
+            _gravar(arquivo, "[]")
+            return []
         plano, titulo = _extrair_plano(resposta)
         _sucesso(pasta, pedido, entendimento, executar, resposta)
         if ideacao:  # rede de segurança: nada de produção num pedido de ideias
@@ -356,10 +387,13 @@ def _empresa(tarefa_id: int) -> str | None:
 
 # Revisão de 30/10/2026 (item 1.9): o plano do #232 (Lodge 35) foi feito por um gratuito fraco que caiu; o Max
 # assumiu e reaproveitou plano e etapas salvos sem reinterpretar o pedido. Plano de modelo fraco não é herdado.
+SEM_ETAPAS = ("Entendido, não acionei a equipe nem produzi nada agora.\n\nO que entendi: {entendimento}\n\n"
+              "Direcionamentos para as próximas peças viram regra da equipe depois que a Diretoria os aprova em "
+              "Observações, no Cérebro.")
 MODELOS_FORTES = ("claude-code/", "anthropic/", "claude-")
 REFEITOS_QUANDO_FORTE_ASSUME = ("plano.json", "plano.md", "entendimento.txt", "duvida.txt", "titulo.txt",
                                 "requisitos.md", "final.md", "passagem.md", "plano_modelo.txt", "sucesso.md",
-                                "pergunta.json", "plano_tabela.json")
+                                "pergunta.json", "plano_tabela.json", "sem_etapas.txt")
 
 
 def _forte(modelo: str) -> bool:
@@ -400,6 +434,11 @@ def executar_projeto(tarefa_id: int, pedido: str, contexto: str, executar: Execu
         final = pasta / "final.md"
         if not final.exists():
             _gravar(final, pergunta_gestor.texto_da_pergunta(pasta, entendimento, duvida))  # formulário com opções
+        return final.read_text(encoding="utf-8")
+    if (anotado := _lido(pasta, "sem_etapas.txt")):
+        final = pasta / "final.md"
+        if not final.exists():
+            _gravar(final, SEM_ETAPAS.format(entendimento=anotado))
         return final.read_text(encoding="utf-8")
     sucesso = _sucesso(pasta, pedido, entendimento, executar)  # já gravada no plano; projeto antigo pede agora
     fase = lambda n, p: p.get("fase", n)  # plano antigo (sem fases): uma etapa por vez
