@@ -6,6 +6,7 @@ from pathlib import Path
 
 import comum
 import desdobrar_formatos
+import edicao_rapida_pc
 import inventario_acervo
 import site_casaveraneio
 from comum import log
@@ -128,7 +129,8 @@ def executar_documento(payload: dict) -> str:
 EXECUTORES = {"anexo": executar_anexo, "site": executar_site, "texto": executar_texto,
               "prospeccao": executar_prospeccao, "documento": executar_documento,
               "desdobrar": desdobrar_formatos.executar,  # botão "Desdobrar": 4:5 e 9:16 pelo molde, em código (sem Max)
-              "inventario": inventario_acervo.executar}  # material do imóvel antes do plano: ffprobe, sem Max (Onda 2)
+              "inventario": inventario_acervo.executar,  # material do imóvel antes do plano: ffprobe, sem Max (Onda 2)
+              "edicao_rapida": edicao_rapida_pc.executar}  # "Editar textos" e "Outra música": em código, sem Max (Onda 3)
 
 
 _em_execucao: int | None = None  # trabalho rodando agora (um por vez)

@@ -79,6 +79,7 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
   if (tipo === 'agente' && tarefa_id && /^✅ Pedido concluído/.test(texto) && /\.png\b/i.test(texto)) {
     div.append(criarBotaoDesdobrar(tarefa_id)); // arte pronta: 4:5 e 9:16 pelo molde (backend/desdobrar.py)
   }
+  if (tipo === 'agente') div.append(...criarBotoesEdicaoRapida(tarefa_id, texto)); // sem o Max (js/edicao_rapida.js)
   if (opcoes?.length) div.append(criarOpcoes(opcoes));
   const semana = tipo === 'agente' && opcoesDaPauta(texto);
   if (semana?.length) div.append(criarOpcoes(semana));
