@@ -58,6 +58,7 @@ import reranker
 import saude
 import tarefas
 import triagem
+import uso_material
 import usuarios_admin
 from agents.perfis import empresa_da_escola
 from api_painel import rotas as rotas_painel
@@ -218,6 +219,7 @@ app.include_router(fichas_pedido.rotas)  # ficha do manual 16 na tela do agente 
 app.include_router(documentos_entrega.rotas)  # planilha do catálogo e .docx da resposta (Onda 3, item 8)
 app.include_router(cerebro_modelos.rotas)  # modelos de estilo aprovados (Onda 3, cerebro-12)
 app.include_router(repetir_lodges.rotas)   # "Repetir para…" até 5 Lodges (Onda 3, copywriter-04)
+app.include_router(uso_material.rotas)  # memória do material usado nas peças (Onda 3, criador_imagens-06)
 app.include_router(desdobrar.rotas)  # botão Desdobrar: 4:5 e 9:16 pelo molde (Onda 3, item 3)
 from conferente_rotas import rotas as rotas_conferencia  # noqa: E402
 app.include_router(rotas_conferencia)  # "Corrigir o mecânico" da legenda no chat (Onda 2 de novembro, copywriter-03)

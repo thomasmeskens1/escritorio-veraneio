@@ -107,21 +107,58 @@ def arquivo_da_faixa(faixa: dict) -> Path | None:
     return None
 
 
-def _usos() -> dict:
+def _ler_uso() -> dict:
+    """{"ultimo": {arquivo: quando}, "historico": [{arquivo, empresa, peca, em, origem}]}. O formato antigo
+    ({arquivo: quando}) vira o "ultimo". Nada é apagado do histórico (decisão 17)."""
     try:
-        return json.loads(USO.read_text(encoding="utf-8"))
+        dados = json.loads(USO.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return {}
+        dados = {}
+    if not isinstance(dados, dict):
+        dados = {}
+    if "historico" not in dados:
+        dados = {"ultimo": {k: v for k, v in dados.items() if isinstance(v, (int, float))}, "historico": []}
+    return dados
 
 
-def _registrar_uso(arquivo: str) -> None:
-    usos = _usos()
-    usos[arquivo] = time.time()
+def _usos() -> dict:
+    return _ler_uso().get("ultimo") or {}
+
+
+def _registrar_uso(arquivo: str, empresa: str = "", peca: str = "", origem: str = "sonoplasta") -> None:
+    dados = _ler_uso()
+    dados["ultimo"][arquivo] = agora = time.time()
+    dados["historico"].append({"arquivo": arquivo, "empresa": empresa, "peca": peca, "em": agora, "origem": origem})
     try:
         USO.parent.mkdir(parents=True, exist_ok=True)
-        USO.write_text(json.dumps(usos, ensure_ascii=False, indent=2), encoding="utf-8")
+        USO.write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError:
         pass
+
+
+def registrar_uso(arquivo: str, empresa: str, peca: str = "", origem: str = "fora") -> None:
+    """Mixagem feita fora do Sonoplasta (Reels tipográfico, mixagem à mão) também entra no rodízio (sonoplasta-17)."""
+    if arquivo:
+        _registrar_uso(arquivo, empresa, peca, origem)
+
+
+RODIZIO_PECAS = 3       # sonoplasta-17 (ajuste do crítico): faixas das últimas 3 produções da marca perdem pontos
+PENALIDADE_RODIZIO = 3.0  # menos que o estilo citado pelo nome (5): o pedido explícito ainda ganha
+
+
+def recentes(empresa: str, pecas: int = RODIZIO_PECAS) -> set[str]:
+    """Faixas usadas nas últimas `pecas` produções da empresa (vários vídeos da mesma peça contam uma vez)."""
+    vistas, faixas = [], set()
+    for uso in reversed(_ler_uso()["historico"]):
+        if uso.get("empresa") != empresa:
+            continue
+        chave = uso.get("peca") or f"_{uso.get('em')}"
+        if chave not in vistas:
+            if len(vistas) >= pecas:
+                break
+            vistas.append(chave)
+        faixas.add(uso.get("arquivo"))
+    return faixas
 
 
 def pontuar(faixa: dict, pedido: str) -> float:
@@ -144,8 +181,10 @@ def escolher(empresa: str, pedido: str = "", evitar: set[str] = frozenset(),
     faixas = [f for f in faixas if f.get("arquivo") not in evitar] or faixas
     if not faixas:
         return None, False
-    usos = _usos()
-    return max(faixas, key=lambda f: (round(pontuar(f, pedido), 3), -usos.get(f["arquivo"], 0.0))), aprovadas
+    usos, vizinhas = _usos(), recentes(empresa)
+    return max(faixas, key=lambda f: (round(pontuar(f, pedido) - (PENALIDADE_RODIZIO if f.get("arquivo") in vizinhas
+                                                                  else 0.0), 3),
+                                      -usos.get(f["arquivo"], 0.0))), aprovadas
 
 
 # ---------------------------------------------------------------- mixagem
@@ -283,7 +322,7 @@ def versao_com_som(video: Path, empresa: str, pedido: str = "", rascunho: Path |
     if not faixa or not (arquivo := arquivo_da_faixa(faixa)):
         raise RuntimeError("nenhuma faixa da biblioteca desta empresa está disponível")
     mixar(video, arquivo, saida, empresa, vinheta_em(rascunho, video.name), desde)
-    _registrar_uso(faixa["arquivo"])
+    _registrar_uso(faixa["arquivo"], empresa, rascunho.name if rascunho else video.parent.name)
     return saida, faixa, aprovada
 
 
