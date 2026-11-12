@@ -30,6 +30,7 @@ import saude
 import fichas
 import monday
 import pasta_peca
+import referencias_pedido
 import segredos
 import tarefas
 import texto_aprovado
@@ -344,6 +345,8 @@ class Conclusao(BaseModel):
     so_texto: bool = False   # pedido só de texto: o resumo É a entrega (sem arquivo nem pasta no Drive)
     uso: uso_max.Uso | None = None  # números de consumo do Max (trabalhador novo; o antigo não envia)
     origens: list[dict] = []  # de onde veio cada foto, take e faixa (uso_material.py; Onda 3, criador_imagens-06)
+    estudo_referencias: str = ""  # o que a produção aprendeu com a pasta de REFERÊNCIAS (vai para aprovação)
+    pasta_referencias: str = ""   # nome da pasta estudada
 
 
 class Falha(BaseModel):
@@ -680,6 +683,12 @@ async def concluir(tarefa_id: int, conclusao: Conclusao, authorization: str = He
         uso_material.registrar(tarefa_id, (tarefas.obter(tarefa_id) or {})["empresa"], conclusao.origens)
     except Exception:  # noqa: BLE001 - o registro nunca derruba a conclusão
         log.exception("origens da produção %s não registradas", tarefa_id)
+    if conclusao.estudo_referencias:  # pasta de REFERÊNCIAS: o aprendizado espera a Diretoria (referencias_pedido.py)
+        try:
+            referencias_pedido.registrar_estudo(tarefa_id, segredos.limpar(conclusao.estudo_referencias),
+                                                conclusao.pasta_referencias)
+        except Exception:  # noqa: BLE001 - o registro nunca derruba a conclusão
+            log.exception("estudo de referências da produção %s não registrado", tarefa_id)
     monday.andamento(tarefa_id, "produzida", f"🎨 {'Texto pronto' if so_texto else 'Criativos prontos'} (Claude Code)."
                                              f"\n\n{conclusao.resumo.strip()[:3000]}\n\n{local}")
     return {"ok": True}

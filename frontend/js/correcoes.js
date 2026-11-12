@@ -23,7 +23,7 @@ async function carregarCorrecoes(andar, agente) {
 
 // Tipos de observação (backend/correcoes.py, avaliacoes.py e consolidacao_semanal.py).
 const rotuloObservacao = (tipo) => ({ elogio: '👍 Elogio', aprendizado: '🧠 Aprendizado da semana',
-  pergunta: '❓ Pergunta da semana' }[tipo] || '✏️ Correção');
+  pergunta: '❓ Pergunta da semana', estudo: '🔎 Estudo de referência' }[tipo] || '✏️ Correção');
 
 // Pergunta da semana (backend/cerebro_lacunas.py): a resposta do Thomas vira conhecimento ensinado na empresa da
 // pergunta; "Fora do alcance" tira da lista sem ensinar nada.
@@ -146,7 +146,8 @@ function abrirCorrecao(o) {
   if (o.resposta_anterior) {
     const resposta = novoEl('div', 'reg-mensagem reg-resposta');
     resposta.append(novoEl('strong', null, ['aprendizado', 'pergunta'].includes(o.tipo) ? 'Evidência da semana'
-      : `Resposta do ${o.agente_nome} que motivou`), novoEl('p', null, o.resposta_anterior));
+      : o.tipo === 'estudo' ? 'De onde veio' : `Resposta do ${o.agente_nome} que motivou`),
+    novoEl('p', null, o.resposta_anterior));
     corpo.append(resposta);
   }
   if (o.tipo === 'pergunta') return abrirPergunta(o, fundo, janela, barra, corpo);
@@ -157,6 +158,7 @@ function abrirCorrecao(o) {
   regra.rows = 3;
   regra.value = o.tipo === 'elogio' ? `Seguir este padrão aprovado por ${o.autor || 'a equipe'}: ${o.correcao}` : o.correcao;
   if (o.tipo === 'aprendizado') mensagem.firstChild.textContent = 'Aprendizado proposto pelo Cérebro (consolidação semanal)';
+  if (o.tipo === 'estudo') mensagem.firstChild.textContent = 'O que a produção aprendeu com a pasta de referências (só entra no Cérebro se aprovado)';
   // Revisão de 30/10/2026: a regra vale só para a empresa da tarefa, a menos que a caixa seja marcada.
   const todas = novoEl('label', 'form-rotulo correcao-empresas');
   const caixaTodas = novoEl('input');

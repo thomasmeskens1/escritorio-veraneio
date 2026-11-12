@@ -40,6 +40,7 @@ import kit_postar
 import painel_analitico
 import pasta_final
 import pasta_da_peca
+import pasta_referencias
 import pptx_diferenca
 import pptx_receita
 import planilha_lodges
@@ -480,6 +481,7 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
         (f"O usuário enviou estes arquivos junto com o pedido (copiados na subpasta {PASTA_ANEXOS}/):\n"
          f"{lista_anexos}\nAbra-os com Read e USE-OS na peça (fotos como imagens do layout, PDFs como fonte "
          "de textos e dados), conforme o pedido. Não altere os originais.") if lista_anexos else "",
+        producao.get("instrucao_referencias") or "",  # pasta de REFERÊNCIAS citada: estudo ou uso (pasta_referencias.py)
         diretrizes(producao["agente"], producao.get("empresa") or "casa_veraneio"),
         # Correções aprovadas pela equipe (backend/correcoes.py; brainstorm de 31/10/2026, editor_video-09): antes
         # chegavam só aos agentes do chat, e o Max que monta o PNG/MP4 repetia o que a equipe já tinha recusado.
@@ -530,7 +532,8 @@ def pastas_de_fotos(empresa: str) -> tuple[list[Path], list[Path]]:
     return [], acervo + marketing + vero + corp
 
 
-def comando_producao(empresa: str = "casa_veraneio") -> list[str]:
+def comando_producao(empresa: str = "casa_veraneio", extras: tuple | list = ()) -> list[str]:
+    """`extras`: pasta de REFERÊNCIAS com uso liberado no popup (pasta_referencias.py), só leitura como o acervo."""
     # --restricted (comum.ISOLAMENTO) tira o Bash se --tools não o citar; arquivos só na pasta da peça + acervo.
     return [comum.claude_exe(), "-p", "--output-format", "json", "--permission-mode", "acceptEdits",
             "--max-turns", "120", "--tools", "Read,Write,Edit,Glob,Bash",  # 4 stories com editáveis passam de 40
@@ -542,7 +545,7 @@ def comando_producao(empresa: str = "casa_veraneio") -> list[str]:
             # acceptEdits podiam mudar índices e fichas da base oficial. Logos, fontes e índices são lidos e copiados
             # pelo python, que a caixa de areia deixa ler e não deixa gravar fora da pasta da peça.
             # só as fotos da empresa da peça (somente leitura)
-            *[a for pasta in pastas_de_fotos(empresa)[0] for a in ("--add-dir", str(pasta))]]
+            *[a for pasta in [*pastas_de_fotos(empresa)[0], *extras] for a in ("--add-dir", str(pasta))]]
 
 
 # Conferência técnica depois do render (ideia do OpenMontage): medida e duração de cada arquivo final contra o
@@ -662,7 +665,8 @@ def entrega_aceita(producao: dict, novos: list[str]) -> bool:
 def rodar_producao(producao: dict, rascunho: Path, prompt: str, ambiente: dict, antes: dict) -> str:
     """Uma rodada do Claude Code na pasta da peça; devolve o resumo dele."""
     try:  # o pedido vai pela entrada padrão (texto longo, com quebras de linha)
-        return comum.rodar_claude(comando_producao(producao.get("empresa") or "casa_veraneio"), prompt, rascunho,
+        return comum.rodar_claude(comando_producao(producao.get("empresa") or "casa_veraneio",
+                                                   producao.get("pastas_referencias_uso") or ()), prompt, rascunho,
                                   TEMPO_LIMITE, ambiente, ao_progresso=lambda linhas: comum.chamar(
                                       "POST", f"/api/producao/{producao['tarefa_id']}/progresso", {"linhas": linhas}),
                                   tipo="producao")
@@ -747,9 +751,20 @@ def produzir(producao: dict) -> None:
     versao = int(versao_arquivo.read_text()) + 1 if producao.get("base") and versao_arquivo.exists() else 1
     log(f"Produção #{producao['tarefa_id']} ({producao['agente']}) v{versao} -> {relativa}")
 
+    dir_ffmpeg = ffmpeg_dir()
+    # Pasta de REFERÊNCIAS citada (12/11/2026): folhas de estudo; no "só estudo" a caixa de areia barra os originais.
+    refs = pasta_referencias.Referencias()
+    try:
+        refs = pasta_referencias.preparar(pasta_referencias.achar(producao, producao.get("empresa") or "casa_veraneio"),
+                                          rascunho, dir_ffmpeg)
+    except Exception as erro:  # noqa: BLE001 - Drive fora ou arquivo estranho: a peça segue sem o estudo
+        log(f"   pasta de referências não preparada ({erro})")
+    producao["instrucao_referencias"] = pasta_referencias.instrucao(refs)
+    producao["pastas_referencias_uso"] = [str(p) for p in refs.add_dirs]
     ambiente = {**comum.ambiente_seguro(),
-                **comum.caixa_de_areia(rascunho, pastas_de_fotos(producao.get("empresa") or "casa_veraneio")[1])}
-    if (dir_ffmpeg := ffmpeg_dir()):
+                **comum.caixa_de_areia(rascunho, [*pastas_de_fotos(producao.get("empresa") or "casa_veraneio")[1],
+                                                  *refs.bloquear])}
+    if dir_ffmpeg:
         ambiente["PATH"] = dir_ffmpeg + os.pathsep + ambiente.get("PATH", "")
     ambiente[logos_empresas.VARIAVEL] = empresa = producao.get("empresa") or "casa_veraneio"  # o motion.py usa
     so_texto = False
@@ -799,6 +814,8 @@ def produzir(producao: dict) -> None:
             so_texto = True  # pedido só de texto: o texto do Max é a entrega
         if linha_som:
             resumo = f"{resumo}\n\n{linha_som}"
+        novos, linha_refs = pasta_referencias.conferir_finais(refs, rascunho / PASTA_FINAL, novos)
+        resumo = "\n\n".join(filter(None, [resumo, linha_refs, *refs.avisos]))
         # Logo de outra empresa na peça ou pasta com prefixo de outra empresa: aviso vermelho antes do Drive.
         nome_da_peca = pasta_da_peca.raiz_da_peca(entrega).name  # subpasta v2/: o prefixo está na pasta da peça
         if (marca := logos_empresas.linha_do_resumo(logos_empresas.conferir(rascunho, empresa, nome_da_peca,
@@ -883,7 +900,10 @@ def produzir(producao: dict) -> None:
     # Daqui em diante a peça já está no Drive (e no Monday): nunca vira "falha"; insiste em avisar a conclusão.
     link = "" if so_texto else link_drive.link_da_pasta(entrega, DRIVE)  # botão "Visualizar" ("" se não sincronizou)
     corpo = {"resumo": resumo, "pasta": relativa, "arquivos": arquivos, "link": link, "so_texto": so_texto,
-             "uso": comum.uso_acumulado(), "origens": origens}
+             "uso": comum.uso_acumulado(), "origens": origens,
+             # Aprendizado do estudo da pasta de REFERÊNCIAS: vira observação para a Diretoria aprovar.
+             "estudo_referencias": pasta_referencias.aprendizado(rascunho) if refs.pastas else "",
+             "pasta_referencias": ", ".join(p.name for p in refs.pastas)}
     caixa_saida.guardar(producao["tarefa_id"], corpo)  # despachante-07: guardada até o backend confirmar
     for tentativa in range(6):
         try:

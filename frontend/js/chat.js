@@ -649,6 +649,7 @@ async function enviarTarefa(evento) {
     return;
   }
   if (!garantirEmpresa(andar, agente, texto)) return; // sem empresa: a citada no pedido ou o formulário (js/empresa.js)
+  if (!garantirUsoReferencias(texto)) return; // pasta de REFERÊNCIAS citada: estudo ou uso? (js/pasta_referencias.js)
   // Lida antes do upload (revisão de 30/10/2026, 2.22): trocar de chat durante o envio dos anexos não muda a empresa.
   const empresa = empresaDaConversa(andar, agente);
 

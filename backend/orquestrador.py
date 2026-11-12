@@ -27,6 +27,7 @@ import monday
 import painel_coletas
 import plano_tabela
 import relatorios
+import referencias_pedido
 import saude
 import tarefas
 from conexoes import gerenciador
@@ -55,6 +56,8 @@ async def nova_tarefa(login: str, andar: str, agente: Agente, texto: str, anexos
     `ao_criar(tarefa_id)`: roda antes da execução (ex.: vincular a tarefa ao item do Monday)."""
     if (email := _newsletter_para_o_email(andar, agente, texto)):
         agente, contexto = email, "\n\n".join(filter(None, [contexto, NOTA_NEWSLETTER]))
+    # Pasta de REFERÊNCIAS do Drive citada (12/11/2026): o agente do chat não abre o Drive; a produção estuda a pasta.
+    contexto = "\n\n".join(filter(None, [contexto, referencias_pedido.nota_para_agente(texto)]))
     dificuldade = classificar(agente.id, texto)
     tarefa_id = tarefas.criar(login, andar, agente.id, texto, dificuldade.value, empresa)
     if anexos_ids:
@@ -428,6 +431,8 @@ async def _produzir_pecas(linha, consolidado: str) -> bool:
         briefing = (f"Produza a peça final do projeto #{linha['id']}, coordenado pelo Gestor. Siga o plano, os "
                     f"textos e as especificações abaixo, sem inventar dados.\n\nPedido original: {linha['texto']}"
                     f"\n\nResultado consolidado do Gestor:\n{consolidado[:16000]}")
+        if (citada := referencias_pedido.linha_para_producao(linha)):  # link numa mensagem anterior (tarefa 291)
+            briefing = f"{briefing}\n\n{citada}"
         def vincular(producao_id: int) -> None:
             # A entrega volta ao chat onde o usuário pediu (o do Gestor, se ele pediu direto ao Gestor).
             encaminhamento.registrar(producao_id, *(encaminhamento.origem(linha["id"]) or (linha["andar"], "gestor")),
