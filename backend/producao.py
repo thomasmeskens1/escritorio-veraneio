@@ -33,6 +33,7 @@ import pasta_peca
 import segredos
 import tarefas
 import texto_aprovado
+import uso_material
 import uso_max
 from auth import validar_token
 from conexoes import gerenciador
@@ -342,6 +343,7 @@ class Conclusao(BaseModel):
     link: str = ""           # pasta no Google Drive (botão "Visualizar"); vazio se o Drive ainda não sincronizou
     so_texto: bool = False   # pedido só de texto: o resumo É a entrega (sem arquivo nem pasta no Drive)
     uso: uso_max.Uso | None = None  # números de consumo do Max (trabalhador novo; o antigo não envia)
+    origens: list[dict] = []  # de onde veio cada foto, take e faixa (uso_material.py; Onda 3, criador_imagens-06)
 
 
 class Falha(BaseModel):
@@ -593,7 +595,17 @@ async def _montar_producao(linha) -> dict:
         "texto_aprovado": texto_aprovado.da_producao(linha, raiz["texto"] if raiz else ""),
         # Prazo "fechar até" vigente (Onda 2, Reels tipográfico): a contagem regressiva só entra com ele.
         "prazo_comercial": _prazo_comercial(linha["empresa"], linha["texto"]),
+        # O que já saiu do mesmo Lodge nos últimos 30 dias, para variar capa e trechos (uso_material.py, Onda 3).
+        "ja_usados": _ja_usados(linha["empresa"], linha["texto"]),
     }
+
+
+def _ja_usados(empresa: str, texto: str) -> str:
+    try:
+        return uso_material.para_contexto(empresa, texto)
+    except Exception as erro:  # noqa: BLE001 - sem a lista, a peça segue
+        log.warning("material já usado não lido: %s", erro)
+        return ""
 
 
 def _prazo_comercial(empresa: str, texto: str) -> dict | None:
@@ -664,6 +676,10 @@ async def concluir(tarefa_id: int, conclusao: Conclusao, authorization: str = He
     except Descartada:
         return {"ok": True, "descartada": True}
     uso_max.registrar("producao", "concluido", conclusao.uso, tarefa_id=tarefa_id, chars_saida=len(conclusao.resumo))
+    try:  # origem de cada foto, take e faixa da peça entregue (uso_material.py; Onda 3)
+        uso_material.registrar(tarefa_id, (tarefas.obter(tarefa_id) or {})["empresa"], conclusao.origens)
+    except Exception:  # noqa: BLE001 - o registro nunca derruba a conclusão
+        log.exception("origens da produção %s não registradas", tarefa_id)
     monday.andamento(tarefa_id, "produzida", f"🎨 {'Texto pronto' if so_texto else 'Criativos prontos'} (Claude Code)."
                                              f"\n\n{conclusao.resumo.strip()[:3000]}\n\n{local}")
     return {"ok": True}

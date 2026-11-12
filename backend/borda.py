@@ -34,6 +34,7 @@ CAMINHOS_INTERNOS = re.compile(
     r"^/api/producao/proxima/?$"
     r"|^/api/producao/\d+/(?:progresso|concluir|bloqueios|devolver|falhar|folha)/?$"
     r"|^/api/producao/trabalhos/\d+/(?:concluir|status|falhar)/?$"
+    r"|^/api/uso-material/\d+/conferir/?$"  # avisos de material repetido (uso_material.py, Onda 3)
     r"|^/api/cerebro/ingerir/?$"
     r"|^/api/integracoes/monday/criativos/\d+/?$")
 

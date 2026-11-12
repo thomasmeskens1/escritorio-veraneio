@@ -48,6 +48,7 @@ import site_casaveraneio
 import sites_empresas
 import sonoplasta
 import trabalhos_max
+import origem_material
 from comum import DRIVE, log
 
 RENDERIZADOR = Path(__file__).with_name("renderizar_png.py").as_posix()
@@ -467,6 +468,7 @@ def montar_prompt(producao: dict, pasta: Path, anexos: list[str] | None = None, 
         receita.instrucao(producao["agente"], producao.get("entrega") or ""),
         # PPTX devolvido pela equipe entre os anexos: o que mudou contra a receita (pptx_diferenca.py, Onda 3).
         pptx_diferenca.instrucao(pasta, [pasta / PASTA_ANEXOS / nome for nome in anexos or []]),
+        origem_material.instrucao(producao),  # fonte original de cada foto e o que já saiu do Lodge (Onda 3)
         "Contexto: Escritório Veraneio, equipe de marketing da Casa Veraneio. Responda em português do Brasil.",
         f"Conversa recente:\n{historico}" if historico else "",
         f"Pedido: {producao['texto']}",
@@ -766,7 +768,7 @@ def produzir(producao: dict) -> None:
         referencias = baixar_referencias(producao, rascunho, faltaram)
         antes = entregaveis(rascunho)
         comum.ler_bloqueios(rascunho)  # sobra de uma rodada anterior não conta nesta
-        resumo, novos, aviso, linha_som = "", [], "", ""
+        resumo, novos, aviso, linha_som, origens = "", [], "", "", []
         for tentativa in (1, 2):
             inicio = time.monotonic()
             try:
@@ -820,6 +822,11 @@ def produzir(producao: dict) -> None:
         if linha_pptx:
             resumo = f"{resumo}\n\n{linha_pptx}"
             log(f"   {linha_pptx}")
+        # Origem de cada foto, take e faixa (origem_material.py, Onda 3): vai com o /concluir; repetição só avisa.
+        origens, linha_uso = origem_material.na_producao(producao, rascunho, rascunho / PASTA_FINAL, novos)
+        if linha_uso:
+            resumo = f"{resumo}\n\n{linha_uso}"
+            log(f"   {linha_uso}")
         if faltaram:
             resumo = (f"{resumo}\n\n⚠ Referência(s) do Monday que não chegaram ao Max: {'; '.join(faltaram)}. Se "
                       "eram necessárias, envie o arquivo por uma pasta do Drive e peça um ajuste.")
@@ -876,7 +883,7 @@ def produzir(producao: dict) -> None:
     # Daqui em diante a peça já está no Drive (e no Monday): nunca vira "falha"; insiste em avisar a conclusão.
     link = "" if so_texto else link_drive.link_da_pasta(entrega, DRIVE)  # botão "Visualizar" ("" se não sincronizou)
     corpo = {"resumo": resumo, "pasta": relativa, "arquivos": arquivos, "link": link, "so_texto": so_texto,
-             "uso": comum.uso_acumulado()}
+             "uso": comum.uso_acumulado(), "origens": origens}
     caixa_saida.guardar(producao["tarefa_id"], corpo)  # despachante-07: guardada até o backend confirmar
     for tentativa in range(6):
         try:

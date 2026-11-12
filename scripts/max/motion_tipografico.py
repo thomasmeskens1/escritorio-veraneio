@@ -295,7 +295,7 @@ def renderizar(arquivo: Path, com_previa: bool = False, hoje: date | None = None
 
 def com_som(video: Path, empresa: str, pedido: str = "reels tipografico corporativo animado") -> tuple[Path, dict]:
     """Versão _com_som com uma faixa APROVADA da marca, sem passar pelo trabalhador (exemplo local). Só lê o
-    catálogo do Drive e não mexe no rodízio do Sonoplasta."""
+    catálogo do Drive; a faixa usada entra no rodízio do Sonoplasta (sonoplasta-17)."""
     import sonoplasta
     itens = json.loads((sonoplasta.BIBLIOTECA / "catalogo.json").read_text(encoding="utf-8"))
     faixa, aprovada = sonoplasta.escolher(empresa, pedido, itens=itens)
@@ -303,6 +303,7 @@ def com_som(video: Path, empresa: str, pedido: str = "reels tipografico corporat
         raise RuntimeError("nenhuma faixa APROVADA desta marca disponível")
     saida = video.with_name(f"{video.stem}{sonoplasta.SUFIXO}{video.suffix}")
     sonoplasta.mixar(video, arquivo, saida, empresa, sonoplasta.vinheta_em(video.parent.parent, video.name))
+    sonoplasta.registrar_uso(faixa.get("arquivo", ""), empresa, video.parent.parent.name, "tipografico")  # sonoplasta-17
     return saida, faixa
 
 
