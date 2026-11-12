@@ -49,9 +49,10 @@ def test_campanha_de_outra_empresa_nao_e_lida(brevo):
     assert "não li o conteúdo" in texto and "Separamos" not in texto
 
 
-def test_e_mail_marketing_recebe_as_duas_ferramentas(brevo):
+def test_e_mail_marketing_recebe_as_ferramentas(brevo):
     nomes = [f.name for f in fb.para("email_marketing", "casa_veraneio", 0)]
-    assert nomes == ["criar_rascunho_brevo", "ler_rascunho_brevo"]
+    # trocar_assunto_brevo: Onda 3 (email_marketing-02), só assunto e pré-header
+    assert nomes == ["criar_rascunho_brevo", "ler_rascunho_brevo", "trocar_assunto_brevo"]
     assert fb.para("copywriter", "casa_veraneio", 0) == []
 
 

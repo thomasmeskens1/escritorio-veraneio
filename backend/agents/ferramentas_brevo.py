@@ -213,6 +213,7 @@ class CriarRascunhoBrevo(BaseTool):
     description: str = ("Cria a campanha de e-mail como RASCUNHO no Brevo (nunca envia, agenda nem escolhe lista; o "
                         "Thomas revisa e dispara; cada imóvel já vai com a foto da página dele no site). Use depois de escrever o e-mail completo no padrão "
                         "do manual. Nos ajustes do mesmo e-mail, chame de novo: o mesmo rascunho é atualizado. "
+                        "Se o ajuste muda SÓ o assunto ou o pré-header, use trocar_assunto_brevo (não esta). "
                         "Devolve o número do rascunho ou o erro.")
     args_schema: type[BaseModel] = _Rascunho
     empresa: str = "casa_veraneio"
@@ -271,6 +272,9 @@ def para(agente_id: str, empresa: str, tarefa_id: int = 0) -> list[BaseTool]:
     criar o rascunho e LER um rascunho pelo número (só leitura, email_marketing-01)."""
     if agente_id != "email_marketing" or not _chave():
         return []
-    from agents.brevo_leitura import LerRascunhoBrevo  # import tardio: o módulo importa este
+    from agents.brevo_assunto import TrocarAssuntoBrevo  # imports tardios: os módulos importam este
+    from agents.brevo_leitura import LerRascunhoBrevo
 
-    return [CriarRascunhoBrevo(empresa=empresa, tarefa_id=tarefa_id), LerRascunhoBrevo(empresa=empresa)]
+    # Trocar só assunto/pré-header sem criar outro rascunho (email_marketing-02, Onda 3).
+    return [CriarRascunhoBrevo(empresa=empresa, tarefa_id=tarefa_id), LerRascunhoBrevo(empresa=empresa),
+            TrocarAssuntoBrevo(empresa=empresa, tarefa_id=tarefa_id)]

@@ -46,6 +46,7 @@ MODELO_MAX = "claude-code/max"
 TIPOS_TRABALHO = {"anexo", "site", "prospeccao", "documento", "inventario"}  # prospeccao: pesquisa na web do
 # Prospectador (comercial.py); documento: planilha/.docx da resposta gravada no Drive pelo trabalhador
 # (documentos_entrega.py); inventario: material do imóvel lido sem IA antes do plano (inventario.py, Onda 2)
+TIPOS_RAPIDOS: set[str] = set()  # trabalhos de segundos com alguém esperando, antes das peças (edicao_rapida.py, Onda 3)
 
 # Pasta de cada andar dentro de "ESCRITÓRIO VERANEIO" no Drive.
 PASTAS_ANDAR = {"marketing": "MARKETING", "comercial": "COMERCIAL", "porao": "PORÃO", "terreo": "TÉRREO", "cobertura": "COBERTURA"}
@@ -529,6 +530,8 @@ async def proxima(sem_producao: bool = False, faltando: str = "", authorization:
         return {"producao": None, "trabalho": trabalho}
     if sem_producao and not drive_pc.so_acervo():
         return {"producao": None, "trabalho": None}
+    if TIPOS_RAPIDOS and (trabalho := _reservar_trabalho(tuple(sorted(TIPOS_RAPIDOS)))):
+        return {"producao": None, "trabalho": trabalho}
     linha = drive_pc.proxima_sem_acervo() if sem_producao else _db().execute(
         "SELECT * FROM tarefas WHERE status = 'producao' ORDER BY id LIMIT 1").fetchone()
     if not linha:

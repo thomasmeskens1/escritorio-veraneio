@@ -148,6 +148,19 @@ def escolher(empresa: str, pedido: str = "", evitar: set[str] = frozenset(),
     return max(faixas, key=lambda f: (round(pontuar(f, pedido), 3), -usos.get(f["arquivo"], 0.0))), aprovadas
 
 
+def outra_aprovada(empresa: str, ja_usadas: list[str], pedido: str = "",
+                   itens: list[dict] | None = None) -> dict | None:
+    """Botão "Outra música" (Onda 3, sonoplasta-02): só faixa APROVADA da marca, nunca a que está no vídeo agora
+    (a última de `ja_usadas`) e, enquanto houver, nenhuma que a peça já usou. None = não há outra aprovada."""
+    marca = MARCAS.get(empresa)
+    aprovadas = [f for f in (catalogo() if itens is None else itens)
+                 if marca and f.get("marca") == marca and f.get("status") == APROVADA and f.get("arquivo")]
+    atual = ja_usadas[-1] if ja_usadas else None
+    candidatas = ([f for f in aprovadas if f["arquivo"] not in ja_usadas]
+                  or [f for f in aprovadas if f["arquivo"] != atual])
+    return escolher(empresa, pedido, itens=candidatas)[0] if candidatas else None
+
+
 # ---------------------------------------------------------------- mixagem
 
 def tem_som(video: Path) -> bool:
