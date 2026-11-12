@@ -77,7 +77,7 @@ function criarMensagem({ autor, texto, tipo, meta, anexos, tarefa_id, opcoes, fo
   if (tipo === 'agente' && relatorio && LINK_RELATORIO.test(relatorio)) div.append(criarBotaoRelatorio(relatorio));
   if (tipo === 'agente' && tarefa_id && /^✅ Pedido concluído/.test(texto)) div.append(criarBotaoAjuste(tarefa_id));
   if (tipo === 'agente' && tarefa_id && /^✅ Pedido concluído/.test(texto) && /\.png\b/i.test(texto)) {
-    div.append(criarBotaoDesdobrar(tarefa_id)); // arte pronta: 4:5 e 9:16 pelo molde (backend/desdobrar.py)
+    div.append(criarBotaoDesdobrar(tarefa_id), criarBotaoDesdobrar(tarefa_id, true)); // 4:5/9:16 e anúncio (backend/desdobrar.py)
   }
   if (opcoes?.length) div.append(criarOpcoes(opcoes));
   const semana = tipo === 'agente' && opcoesDaPauta(texto);
@@ -239,18 +239,21 @@ function criarBotaoAjuste(tarefaId) {
 
 // Entrega de arte: "Desdobrar 4:5 e 9:16" gera os outros formatos a partir do molde da peça, em código (sem refazer
 // a arte); peça feita fora dos moldes vai para o Max como ajuste. O aviso de pronto chega depois neste chat.
-function criarBotaoDesdobrar(tarefaId) {
+// anuncio: "Desdobrar para anúncio" (1:1, 1,91:1, 9:16 de anúncio e cabeçalho de e-mail na pasta ANÚNCIO/).
+function criarBotaoDesdobrar(tarefaId, anuncio = false) {
   const botao = document.createElement('button');
   botao.type = 'button';
   botao.className = 'botao-secundario msg-ajuste msg-desdobrar';
-  botao.textContent = 'Desdobrar 4:5 e 9:16';
-  botao.title = 'Gera as versões 4:5 (1080x1350) e 9:16 (1080x1920) desta peça, na pasta FORMATOS/';
+  botao.textContent = anuncio ? 'Desdobrar para anúncio' : 'Desdobrar 4:5 e 9:16';
+  botao.title = anuncio
+    ? 'Gera 1:1 (1080x1080), 1,91:1 (1200x628), 9:16 de anúncio e o cabeçalho de e-mail (1200 px), na pasta ANÚNCIO/'
+    : 'Gera as versões 4:5 (1080x1350) e 9:16 (1080x1920) desta peça, na pasta FORMATOS/';
   botao.addEventListener('click', async () => {
     if (!sessao || botao.disabled) return;
     botao.disabled = true;
     let texto;
     try {
-      const resposta = await fetch(`/api/producao/${tarefaId}/desdobrar`, {
+      const resposta = await fetch(`/api/producao/${tarefaId}/${anuncio ? 'desdobrar-anuncio' : 'desdobrar'}`, {
         method: 'POST', headers: { Authorization: `Bearer ${sessao.token}` },
       });
       const dados = await resposta.json().catch(() => ({}));

@@ -40,6 +40,10 @@ EMPRESAS = ("casa_veraneio",)  # Corp e Vero: identidade ainda em rascunho (deci
 # Só largura 1080 (feed 3:4, 4:5, 1:1 e 9:16); a classe ajusta zonas mortas, degradês e tamanhos no base.css.
 FORMATOS = {"1080x1440": "f34", "1080x1350": "f45", "1080x1920": "f916", "1080x1080": "f11"}
 FORMATO_PADRAO = "1080x1440"
+# "Desdobrar para anúncio" (gestor_trafego-13, email_marketing-06): classes extras de moldes/casa_veraneio/anuncio.css,
+# com a área coberta pela interface dos anúncios (manual 08 §3) e o cabeçalho de e-mail (1200 px, exibido a 600 px).
+FORMATOS_ANUNCIO = {"1080x1080": "f11 anuncio", "1200x628": "f191 anuncio", "1080x1920": "f916 anuncio",
+                    "1200x600": "femail anuncio"}
 FOCOS = {"esquerda": "20% 50%", "centro": "50% 50%", "direita": "80% 50%", "topo": "50% 20%", "base": "50% 80%"}
 LOGOS = {"branca": "logo_branca.png", "caramelo": "logo_caramelo_texto_creme.png"}
 LOGO_DO_MOLDE = {"capa": "branca", "ficha": "branca", "fechamento": "caramelo"}
@@ -117,19 +121,21 @@ def campos(slide: dict) -> dict:
     }
 
 
-def montar_html(slide: dict, formato: str = FORMATO_PADRAO, empresa: str = "casa_veraneio") -> str:
+def montar_html(slide: dict, formato: str = FORMATO_PADRAO, empresa: str = "casa_veraneio", anuncio: bool = False) -> str:
     """HTML do slide (a foto e o logo como foto.<ext> e logo_*.png, ao lado do HTML)."""
     if empresa not in EMPRESAS:
         raise ValueError("Moldes só da Casa Veraneio por enquanto (Corp e Vero aguardam a identidade aprovada).")
-    if formato not in FORMATOS:
-        raise ValueError(f"Formato fora dos moldes: {formato} (use {', '.join(FORMATOS)})")
+    classes = FORMATOS_ANUNCIO if anuncio else FORMATOS
+    if formato not in classes:
+        raise ValueError(f"Formato fora dos moldes: {formato} (use {', '.join(classes)})")
     conferir(slide)
     pasta = PASTA_MOLDES / empresa
     corpo = Template((pasta / f"{slide['molde']}.html").read_text(encoding="utf-8")).substitute(campos(slide))
     largura, altura = formato.split("x")
+    extra = '<link rel="stylesheet" href="anuncio.css">' if anuncio else ""
     return ("<!doctype html><html lang=\"pt-BR\"><head><meta charset=\"utf-8\"><link rel=\"stylesheet\" "
-            f"href=\"base.css\"><style>html,body{{width:{largura}px;height:{altura}px}}</style></head>"
-            f"<body class=\"{FORMATOS[formato]} molde-{slide['molde']}\">{corpo}</body></html>")
+            f"href=\"base.css\">{extra}<style>html,body{{width:{largura}px;height:{altura}px}}</style></head>"
+            f"<body class=\"{classes[formato]} molde-{slide['molde']}\">{corpo}</body></html>")
 
 
 def _dentro(base: Path, relativo: str, campo: str) -> Path:
@@ -152,7 +158,8 @@ def carregar(arquivo: Path) -> dict:
 def _preparar_pasta(pasta: Path, marcas: Path) -> None:
     """base.css, fontes e logos ao lado dos HTMLs (o renderizador só serve a pasta do HTML)."""
     pasta.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(PASTA_MOLDES / "casa_veraneio" / "base.css", pasta / "base.css")
+    for css in ("base.css", "anuncio.css"):
+        shutil.copy2(PASTA_MOLDES / "casa_veraneio" / css, pasta / css)
     for nome in FONTES:
         if (marcas / "FONTES" / nome).is_file() and not (pasta / nome).exists():
             shutil.copy2(marcas / "FONTES" / nome, pasta / nome)
@@ -162,8 +169,10 @@ def _preparar_pasta(pasta: Path, marcas: Path) -> None:
 
 
 def renderizar(arquivo: Path, formato: str | None = None, pasta_saida: Path | None = None, sufixo: str = "",
-               marcas: Path | None = None, renderizador=renderizar_png.renderizar) -> list[Path]:
-    """Renderiza todos os slides do molde.json; devolve os PNGs gerados. `formato`/`pasta_saida`/`sufixo`: desdobrar."""
+               marcas: Path | None = None, renderizador=renderizar_png.renderizar, anuncio: bool = False,
+               slides: int | None = None) -> list[Path]:
+    """Renderiza os slides do molde.json; devolve os PNGs gerados. `formato`/`pasta_saida`/`sufixo`/`anuncio`/`slides`
+    (só os N primeiros): desdobrar."""
     arquivo = Path(arquivo).resolve()
     base, dados = arquivo.parent, carregar(arquivo)
     formato = formato or dados.get("formato") or FORMATO_PADRAO
@@ -172,8 +181,8 @@ def renderizar(arquivo: Path, formato: str | None = None, pasta_saida: Path | No
     _preparar_pasta(trabalho, marcas or pasta_marcas())
     gerados = []
     try:
-        for n, slide in enumerate(dados["slides"], 1):
-            pagina = montar_html(slide, formato, dados.get("empresa") or "casa_veraneio")
+        for n, slide in enumerate(dados["slides"][:slides], 1):
+            pagina = montar_html(slide, formato, dados.get("empresa") or "casa_veraneio", anuncio)
             if slide.get("foto"):
                 foto = _dentro(base, slide["foto"], "foto")
                 if not foto.is_file():

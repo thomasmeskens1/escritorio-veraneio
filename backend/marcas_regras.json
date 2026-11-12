@@ -33,6 +33,12 @@
     "logo_fechamento_px": 135,
     "zonas_916": {"topo_px": 250, "base_px": 340}
   },
+  "anuncio": {
+    "_fonte": "manual 08 §2 e §3 (Meta Ads e Google): formatos de anúncio e área coberta pela interface no 9:16 (regra prática: texto entre ~300 e ~1250 px); cabeçalho de e-mail 1200 px exibido a 600 px (email_marketing-06); scripts/max/moldes/casa_veraneio/anuncio.css",
+    "formatos": {"quadrado": "1080x1080", "horizontal": "1200x628", "vertical": "1080x1920"},
+    "zonas_916": {"topo_px": 300, "base_px": 680, "laterais_px": 80},
+    "email_cabecalho": "1200x600"
+  },
   "video": {
     "_fonte": "manuais 05 §5 e 06 §2 (Thomas, 04/11/2026); motion.py",
     "velocidade_min": 0.5,
