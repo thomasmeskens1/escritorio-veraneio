@@ -103,9 +103,19 @@ def test_conferente_barra_whatsapp_e_valor_e_pede_confirmacao_no_resto(sem_esper
     _limpar()
 
 
-def test_limite_de_caracteres_e_campo_desconhecido(sem_espera):
+def test_acima_do_padrao_pede_confirmacao(sem_espera):
     tarefa_id = _peca()
-    for mudanca in (_mudanca("x" * 60), er.Mudanca(n=1, campo="lodge", depois="1"),
+    pedido = er.PedidoTextos(mudancas=[_mudanca("x" * 60)])
+    resposta = asyncio.run(er.pedir_textos(tarefa_id, pedido, USUARIO))
+    assert resposta["confirmar"] and "acima do padrão" in resposta["avisos"][0] and "trabalho_id" not in resposta
+    pedido.confirmar = True
+    assert asyncio.run(er.pedir_textos(tarefa_id, pedido, USUARIO))["trabalho_id"]
+    _limpar()
+
+
+def test_teto_de_caracteres_e_campo_desconhecido(sem_espera):
+    tarefa_id = _peca()
+    for mudanca in (_mudanca("x" * 200), er.Mudanca(n=1, campo="lodge", depois="1"),
                     er.Mudanca(n=1, campo="linhas", depois=["a"] * 9)):
         with pytest.raises(HTTPException) as erro:
             asyncio.run(er.pedir_textos(tarefa_id, er.PedidoTextos(mudancas=[mudanca]), USUARIO))

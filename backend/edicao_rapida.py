@@ -37,7 +37,9 @@ AGENTES_TEXTOS = {"criador_imagens"}
 ESPERA_LER_S = 40          # o formulário espera o PC ler o molde.json
 LEITURA_VALE = timedelta(minutes=10)
 ESPERA_S = 2 * 3600
-# Limite de caracteres por campo (configurável: o manual 08 ainda não fixa números; o molde quebra linha sozinho).
+# Padrão de caracteres por campo, aprovado pelo Thomas em 12/11/2026 como ponto de partida: quem edita pode passar
+# dele confirmando (validar); acima de TETO vezes o padrão, barra.
+TETO = 2
 LIMITES = {"kicker": 40, "titulo": 42, "subtitulo": 70, "local": 50, "cta": 45, "linha": 60, "linhas": 4,
            "contagem_numero": 4, "contagem_texto": 40}
 CAMPOS = ("kicker", "titulo", "subtitulo", "local", "cta", "linhas", "contagem")
@@ -142,30 +144,43 @@ def _textos(valor) -> list[str]:
     return [str(valor or "")]
 
 
-def validar(mudancas: list[Mudanca]) -> list[str]:
-    """Problemas de formato e de tamanho (o formulário já avisa; aqui vale para qualquer chamada)."""
-    problemas = []
+def validar(mudancas: list[Mudanca]) -> tuple[list[str], list[str]]:
+    """(problemas que barram, textos acima do padrão). Os LIMITES são o padrão aprovado (Thomas, 12/11/2026), não
+    regra absoluta: passar deles pede só a confirmação de quem edita. Barram o formato errado e o que passa de
+    TETO vezes o padrão (o molde não comporta)."""
+    problemas, acima = [], []
     if not mudancas or len(mudancas) > 40:
-        return ["nenhuma mudança enviada" if not mudancas else "mudanças demais de uma vez (até 40)"]
+        return ["nenhuma mudança enviada" if not mudancas else "mudanças demais de uma vez (até 40)"], []
+
+    def medir(nome: str, tamanho: int, limite: int, unidade: str) -> None:
+        if tamanho > limite * TETO:
+            problemas.append(f"{nome}: no máximo {limite * TETO} {unidade} (tem {tamanho})")
+        elif tamanho > limite:
+            acima.append(f"{nome}: {tamanho} {unidade}, acima do padrão de {limite}; pode cortar ou quebrar a linha")
+
     for m in mudancas:
         nome = f"slide {m.n}, {m.campo}"
         if m.campo not in CAMPOS:
             problemas.append(f"{nome}: campo desconhecido")
         elif m.campo == "linhas":
-            if not isinstance(m.depois, list) or len(m.depois) > LIMITES["linhas"]:
-                problemas.append(f"{nome}: até {LIMITES['linhas']} linhas")
-            elif any(len(str(l)) > LIMITES["linha"] for l in m.depois):
-                problemas.append(f"{nome}: cada linha com até {LIMITES['linha']} caracteres")
+            if not isinstance(m.depois, list):
+                problemas.append(f"{nome}: texto inválido")
+                continue
+            medir(nome, len(m.depois), LIMITES["linhas"], "linhas")
+            medir(f"{nome} (linha mais longa)", max((len(str(l)) for l in m.depois), default=0), LIMITES["linha"],
+                  "caracteres")
         elif m.campo == "contagem":
-            numero, texto = _textos(m.depois or {}) if isinstance(m.depois or {}, dict) else ("x" * 99, "")
-            if len(numero) > LIMITES["contagem_numero"] or len(texto) > LIMITES["contagem_texto"]:
-                problemas.append(f"{nome}: número com até {LIMITES['contagem_numero']} e texto com até "
-                                 f"{LIMITES['contagem_texto']} caracteres")
+            if not isinstance(m.depois or {}, dict):
+                problemas.append(f"{nome}: texto inválido")
+                continue
+            numero, texto = _textos(m.depois or {})
+            medir(f"{nome} (número)", len(numero), LIMITES["contagem_numero"], "caracteres")
+            medir(f"{nome} (texto)", len(texto), LIMITES["contagem_texto"], "caracteres")
         elif not isinstance(m.depois, str) and m.depois is not None:
             problemas.append(f"{nome}: texto inválido")
-        elif len(m.depois or "") > LIMITES[m.campo]:
-            problemas.append(f"{nome}: até {LIMITES[m.campo]} caracteres (tem {len(m.depois or '')})")
-    return problemas
+        else:
+            medir(nome, len(m.depois or ""), LIMITES[m.campo], "caracteres")
+    return problemas, acima
 
 
 def conferir_textos(mudancas: list[Mudanca], empresa: str) -> tuple[list[str], list[str]]:
@@ -179,11 +194,13 @@ def conferir_textos(mudancas: list[Mudanca], empresa: str) -> tuple[list[str], l
 
 async def pedir_textos(tarefa_id: int, pedido: PedidoTextos, usuario: dict) -> dict:
     linha, pasta = conferir_peca(tarefa_id, usuario, "textos")
-    if (problemas := validar(pedido.mudancas)):
+    problemas, acima = validar(pedido.mudancas)
+    if problemas:
         raise HTTPException(status_code=422, detail="Confira os textos: " + "; ".join(problemas[:6]) + ".")
     barram, avisos = conferir_textos(pedido.mudancas, linha["empresa"])
     if barram:
         raise HTTPException(status_code=422, detail="O conferente barrou: " + "; ".join(barram) + ".")
+    avisos = acima + avisos
     if avisos and not pedido.confirmar:
         return {"ok": False, "confirmar": True, "avisos": avisos,
                 "texto": "O conferente de texto encontrou pontos para você olhar antes de gravar."}

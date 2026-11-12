@@ -11,7 +11,8 @@ Serve para três coisas, todas SÓ AVISO (nunca barra a entrega):
   para variar;
 - mostrar quando um Lodge precisa de foto ou filmagem nova (o mesmo material voltando sempre).
 
-Limites configuráveis em dados/uso_material.json: {"aviso_dias": 60, "contexto_dias": 30, "ativo": true}. Nada
+Limites configuráveis em dados/uso_material.json: {"aviso_dias": 60, "contexto_dias": 30, "ativo": true}, aprovados pelo
+Thomas em 12/11/2026 como padrão: qualquer colaborador pode pedir outro material ou outro prazo na peça. Nada
 aqui apaga registro (decisão 17: prazos de guarda em aberto).
 """
 
@@ -248,7 +249,7 @@ def para_contexto(empresa: str | None, texto: str, dias: int | None = None) -> s
                           f"{_trecho(i['de'], i['duracao_s'])}; peça #{i['tarefa_id']}, {ha})")
         resto = f"\n- ...e mais {len(itens) - MAX_NO_CONTEXTO}" if len(itens) > MAX_NO_CONTEXTO else ""
         partes.append(f"JÁ USADO NO {imovel.upper()} NOS ÚLTIMOS {dias} DIAS (varie: prefira outra capa e outros "
-                      "trechos; repetir pode, se for de propósito):\n" + "\n".join(linhas) + resto)
+                      "trechos; é só o padrão: se o pedido citar este material ou outro prazo, siga o pedido):\n" + "\n".join(linhas) + resto)
     return "\n\n".join(partes)
 
 

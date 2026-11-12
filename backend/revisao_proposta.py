@@ -6,7 +6,8 @@ análise de negócio (estrategista-18): Max sem ferramentas, com os nomes de cli
 (Max ou modelo local), com estas mesmas instruções no contexto.
 O Estrategista confere clareza, tom do Corporativo (manual 11 e persona do manual 14), objeções sem resposta, CTA e
 prazos, e devolve a proposta com as sugestões marcadas. Nota baixa não bloqueia o envio: é sugestão.
-Valores: a resposta não repete os valores; se repetir, só a Diretoria os vê (VALORES_SO_DIRETORIA, configurável).
+Valores: a resposta não repete os valores; se repetir, só quem tem acesso ao andar Comercial (e a Diretoria) os vê
+(Thomas, 12/11/2026).
 """
 
 import re
@@ -18,9 +19,9 @@ PEDIDO = re.compile(r"\brevis(?:ar|e|em|[aã]o|ando)\b.{0,40}\bpropostas?\b|\bpr
                     r"\b(?:confer(?:ir|e)|checar?|cheque)\b.{0,30}\bpropostas?\b.{0,30}\bantes de enviar\b", re.I)
 MANUAL_CORP = "11_casa_veraneio_corporativo.md"
 MAX_MANUAL = 6000
-# Decisão 11 (04/11/2026) abriu orçamentos a todos; o padrão de outubro (valor não aparece por padrão) segue aqui até
-# o Thomas dizer o contrário.
-VALORES_SO_DIRETORIA = True
+# Thomas, 12/11/2026: valores das propostas só para quem tem acesso ao setor Comercial (andar liberado no painel de
+# usuários); a Diretoria sempre vê.
+ANDAR_VALORES = "comercial"
 OCULTO_VALOR = "[valor]"
 VALOR = re.compile(r"R\$\s*\d[\d.,]*(?:\s*(?:mil|milh[oõ]es|milh[aã]o|k)\b)?|\b\d[\d.,]*\s*(?:mil\s+)?reais\b", re.I)
 
@@ -66,11 +67,12 @@ def contexto_anexo(agente_id: str, texto: str) -> str:
 
 
 def ve_valores(login: str) -> bool:
-    if not VALORES_SO_DIRETORIA:
-        return bool(login)
+    if not login:
+        return False
+    import acesso
     from auth import ve_financeiro
 
-    return ve_financeiro(login)
+    return ve_financeiro(login) or acesso.pode_ver_andar({"sub": login}, ANDAR_VALORES)
 
 
 def sem_valores(texto: str, login: str) -> str:

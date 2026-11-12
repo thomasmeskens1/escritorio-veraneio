@@ -70,11 +70,12 @@ function campoDeTexto(id, rotulo, valor, limite, multilinha) {
   campo.id = id;
   nome.htmlFor = id;
   campo.value = valor;
-  if (multilinha) campo.rows = 3; else campo.maxLength = limite;
+  // Padrão aprovado, não regra fixa (Thomas, 12/11/2026): dá para passar dele confirmando; o teto é o dobro.
+  if (multilinha) campo.rows = 3; else campo.maxLength = limite * 2;
   const contador = novoEl('small', 'rotinas-nota');
   const contar = () => {
     const maior = Math.max(0, ...campo.value.split('\n').map((l) => l.length));
-    contador.textContent = `${maior}/${limite}${multilinha ? ' por linha' : ''}`;
+    contador.textContent = `${maior}/${limite}${multilinha ? ' por linha' : ''}${maior > limite ? ' (acima do padrão: pede confirmação)' : ''}`;
   };
   campo.addEventListener('input', contar);
   contar();

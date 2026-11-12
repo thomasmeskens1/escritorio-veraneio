@@ -63,7 +63,17 @@ def test_valores_so_para_quem_ja_pode_ver(monkeypatch):
     assert r.sem_valores(resposta, "usuario.teste@exemplo.com") == resposta
 
 
+def test_valores_para_quem_tem_o_andar_comercial(monkeypatch):
+    import acesso
+    import auth
+
+    monkeypatch.setattr(auth, "ve_financeiro", lambda login: False)
+    monkeypatch.setattr(acesso, "pode_ver_andar", lambda usuario, andar: andar == "comercial" and usuario["sub"] == "a")
+    assert r.ve_valores("a") and not r.ve_valores("b") and not r.ve_valores("")
+
+
 def test_executar_revisao_no_max_sem_web_e_sem_valor(monkeypatch, carteira_falsa):
+    import acesso
     import auth
 
     pedidos = []
@@ -74,6 +84,7 @@ def test_executar_revisao_no_max_sem_web_e_sem_valor(monkeypatch, carteira_falsa
 
     monkeypatch.setattr(comercial, "pedir_ao_max", max_falso)
     monkeypatch.setattr(auth, "ve_financeiro", lambda login: False)
+    monkeypatch.setattr(acesso, "pode_ver_andar", lambda usuario, andar: False)  # sem o andar Comercial
     tarefa_id = tarefas.criar("usuario.teste@exemplo.com", "comercial", "estrategista", PROPOSTA, "complexa",
                               "cv_corporativo")
     resposta = estudos.executar(tarefa_id, "estrategista", PROPOSTA, "cv_corporativo", [])
