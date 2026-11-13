@@ -1,0 +1,79 @@
+/* Escritório 3D (migração do visual, Fase 1, Thomas 13/11/2026). Vale só com o visual 3D (html[data-visual="3d"],
+   decidido por js/visual.js); quem está no 2D não vê diferença. Cores e fontes do protótipo aprovado. */
+
+@font-face { font-family: "Mulish"; src: url("assets/fontes/mulish.woff2") format("woff2"); font-weight: 200 1000; font-style: normal; font-display: swap; }
+@font-face { font-family: "Playfair Display"; src: url("assets/fontes/playfair.woff2") format("woff2"); font-weight: 400 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Playfair Display"; src: url("assets/fontes/playfair-italico.woff2") format("woff2"); font-weight: 400 900; font-style: italic; font-display: swap; }
+
+[data-visual="3d"] {
+  --v3-verde: #00361b;
+  --v3-caramelo: #d9a15b;
+  --v3-creme: #f5efe3;
+  --v3-tinta: #1d2a22;
+  --v3-vidro: rgba(0, 54, 27, 0.86);
+  --v3-texto: "Mulish", "Segoe UI", system-ui, sans-serif;
+  --v3-titulo: "Playfair Display", Georgia, "Times New Roman", serif;
+}
+[data-visual="3d"] body { background: #cfe3ea; }
+[data-visual="3d"] #cena3d { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
+
+/* Nomes dos agentes e dos setores sobre a cena */
+[data-visual="3d"] .etiquetas { position: fixed; inset: 0; pointer-events: none; z-index: 3; }
+[data-visual="3d"] .etiqueta {
+  position: absolute; transform: translate(-50%, -100%); white-space: nowrap; pointer-events: auto; cursor: pointer;
+  background: rgba(255, 255, 255, 0.93); color: var(--v3-verde); border: 1px solid rgba(0, 54, 27, 0.2);
+  border-radius: 999px; padding: 2px 9px 2px 7px; font: 700 0.7rem var(--v3-texto);
+  display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: transform 0.12s ease;
+}
+[data-visual="3d"] .etiqueta:disabled { cursor: default; }
+[data-visual="3d"] .etiqueta .ponto { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+[data-visual="3d"] .etiqueta-uso { font-weight: 600; color: #8a5a1f; }
+[data-visual="3d"] .etiqueta-uso::before { content: "· "; }
+[data-visual="3d"] .etiqueta.hover { transform: translate(-50%, -100%) scale(1.08); z-index: 2; }
+[data-visual="3d"] .etiqueta.pendente::after { content: "!"; display: grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; background: #e03131; color: #fff; font-size: 0.66rem; margin-left: 2px; }
+[data-visual="3d"] .etiqueta.bloqueado { opacity: 0.55; }
+[data-visual="3d"] .etiqueta.bloqueado::before { content: "🔒"; font-size: 0.62rem; }
+[data-visual="3d"] .setor-nome {
+  position: absolute; transform: translate(-50%, -50%); font: 700 0.62rem var(--v3-texto); letter-spacing: 0.16em;
+  text-transform: uppercase; color: rgba(245, 239, 227, 0.95); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55); white-space: nowrap;
+  transition: transform 0.15s ease;
+}
+[data-visual="3d"] .setor-nome.destaque { transform: translate(-50%, -50%) scale(1.5); color: #fff; background: rgba(0, 54, 27, 0.85); padding: 3px 8px; border-radius: 6px; z-index: 2; }
+
+/* Elevador (os botões do sistema, no visual do protótipo) */
+[data-visual="3d"] #elevador {
+  background: var(--v3-vidro); border: 1px solid rgba(217, 161, 91, 0.45); border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 30, 15, 0.25); padding: 10px; gap: 6px; width: 196px; font-family: var(--v3-texto);
+}
+[data-visual="3d"] #elevador h2 { margin: 2px 6px 4px; font-size: 0.68rem; letter-spacing: 0.14em; color: var(--v3-caramelo); font-weight: 700; }
+[data-visual="3d"] .andar {
+  background: transparent; border: 1px solid transparent; border-radius: 9px; color: var(--v3-creme);
+  font: 600 0.86rem var(--v3-texto); padding: 8px 10px;
+}
+[data-visual="3d"] .andar:hover:not(.bloqueado), [data-visual="3d"] .andar:focus-visible { background: transparent; border-color: rgba(217, 161, 91, 0.6); outline: none; }
+[data-visual="3d"] .andar.ativo { background: var(--v3-caramelo); color: var(--v3-verde); border-color: var(--v3-caramelo); }
+[data-visual="3d"] .andar .icone { background: rgba(245, 239, 227, 0.12); color: inherit; }
+[data-visual="3d"] .andar.ativo .icone { background: rgba(0, 54, 27, 0.15); }
+
+/* Ações da vista (embaixo, no centro) */
+[data-visual="3d"] .acoes-3d {
+  position: fixed; z-index: 5; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
+  display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 32px); padding: 8px;
+  background: var(--v3-vidro); border: 1px solid rgba(217, 161, 91, 0.45); border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 30, 15, 0.25); backdrop-filter: blur(6px);
+}
+[data-visual="3d"] .botao-3d {
+  appearance: none; border: 1px solid transparent; background: transparent; color: var(--v3-creme);
+  font: 600 0.86rem var(--v3-texto); padding: 8px 12px; border-radius: 9px; cursor: pointer;
+}
+[data-visual="3d"] .botao-3d:hover, [data-visual="3d"] .botao-3d:focus-visible { border-color: rgba(217, 161, 91, 0.6); outline: none; }
+[data-visual="3d"] .botao-3d[aria-pressed="true"] { background: var(--v3-caramelo); color: var(--v3-verde); }
+
+@media (max-width: 640px) {
+  [data-visual="3d"] #elevador { width: auto; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  [data-visual="3d"] .acoes-3d { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-visual="3d"] .etiqueta, [data-visual="3d"] .setor-nome { transition: none; }
+}

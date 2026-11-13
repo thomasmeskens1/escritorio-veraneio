@@ -18,8 +18,7 @@
   <link rel="stylesheet" href="mapa.css">
   <link rel="stylesheet" href="onboarding.css">
   <link rel="stylesheet" href="aprovacoes.css">
-  <!-- Phaser servido pelo próprio sistema (mesmo arquivo do cdnjs, hash conferido): a CSP só aceita scripts locais -->
-  <script src="vendor/phaser-3.80.1.min.js"></script>
+  <link rel="stylesheet" href="escritorio3d.css">
 </head>
 <body>
   <!-- Tela de login (visível até existir uma sessão válida) -->
@@ -309,21 +308,9 @@
     <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
   </div>
 
-  <script src="js/cenario/iso.js"></script>
-  <script src="js/cenario/avatar_partes.js"></script>
-  <script src="js/cenario/avatar.js"></script>
-  <script src="js/cenario/paredes.js"></script>
-  <script src="js/cenario/moveis.js"></script>
-  <script src="js/cenario/estacoes.js"></script>
-  <script src="js/cenario/decoracao.js"></script>
-  <script src="js/cenario/cenarios_setores.js"></script>
-  <script src="js/cenario/estacoes_setores.js"></script>
-  <script src="js/cenario/setores.js"></script>
-  <script src="js/cenario/cerebro.js"></script>
-  <script src="js/cenario/laboratorio.js"></script>
-  <script src="js/escritorio.js"></script>
-  <script src="js/destaque_setor.js"></script>
-  <script src="js/visitas.js"></script>
+  <!-- Escritório 2D (Phaser) ou 3D (three.js), conforme o usuário: js/visual.js escreve os scripts certos aqui.
+       Phaser e three.js são servidos pelo próprio sistema (hash conferido): a CSP só aceita scripts locais. -->
+  <script src="js/visual.js"></script>
   <script src="js/formularios.js"></script>
   <script src="js/modelos_pedido.js"></script>
   <script src="js/triagem.js"></script>
