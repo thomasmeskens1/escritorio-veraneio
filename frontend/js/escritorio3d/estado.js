@@ -171,7 +171,7 @@ function sincronizar3d() {
   });
   aplicarPendencias();
   const meu = document.getElementById('vista-reuniao');
-  if (meu) meu.hidden = !sessao?.master; // Sala de Reunião: por enquanto só o Thomas testa (13/11/2026)
+  if (meu) meu.hidden = !sessao; // Sala de Reunião liberada para todos (Fase 6, Thomas 13/11/2026)
 }
 
 // Etiqueta: bolinha de status, nome, "Em uso"/"Trabalhando para" e cadeado (agente sem acesso).
