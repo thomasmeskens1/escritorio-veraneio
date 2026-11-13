@@ -38,7 +38,7 @@ VOCABULARIO = ("Olá Vera. Escritório Veraneio, Casa Veraneio, Casa Veraneio Co
                "Analista de Tendências, Prospectador, Estrategista, Recepcionista, Professor, Despachante, Construtor, "
                "Cérebro, estagiário, Monday, Drive, Reels, stories, carrossel, post, legenda, briefing, check-in, "
                "enxoval, hotel privativo, proposta, funil, lead, campanha, Instagram.")
-VOZ_PADRAO = {"voz": "pf_dora", "mistura": [], "velocidade": 1.0}
+VOZ_PADRAO = {"voz": "pf_dora", "mistura": [], "velocidade": 1.0, "tom": 0}
 
 _whisper = None
 _kokoro = None
@@ -101,7 +101,10 @@ def config_voz() -> dict:
 
 
 def falar(texto: str) -> bytes:
-    """Kokoro: a voz base e, se configurada, a mistura de timbre (ex.: [["af_heart", 0.3]])."""
+    """Kokoro: a voz base e, se configurada, a mistura de timbre (ex.: [["af_heart", 0.6]]) e o tom em semitons.
+
+    Tom sem perder a naturalidade: gera com a velocidade dividida por r e grava o WAV com a taxa multiplicada por r,
+    então a voz sobe (ou desce) r vezes e o ritmo volta ao normal (opções de 13/11/2026)."""
     global _kokoro
     voz = config_voz()
     with _trava_kokoro:
@@ -112,8 +115,9 @@ def falar(texto: str) -> bytes:
         estilo = _kokoro.get_voice_style(voz["voz"])
         resto = 1 - sum(peso for _, peso in voz["mistura"])
         estilo = estilo * resto + sum(_kokoro.get_voice_style(nome) * peso for nome, peso in voz["mistura"])
-        amostras, taxa = _kokoro.create(texto, voice=estilo, speed=float(voz["velocidade"]), lang="pt-br")
-    return wav_de_pcm(amostras, taxa)
+        fator = 2 ** (float(voz["tom"]) / 12)
+        amostras, taxa = _kokoro.create(texto, voice=estilo, speed=float(voz["velocidade"]) / fator, lang="pt-br")
+    return wav_de_pcm(amostras, int(round(taxa * fator)))
 
 
 @rotas.post("/transcrever")

@@ -51,6 +51,12 @@ def test_voz_configuravel_com_mistura(monkeypatch, tmp_path):
     wav = voz_local.falar("Olá, Thomas.")
     assert wav[:4] == b"RIFF" and pedido["speed"] == 0.9 and pedido["lang"] == "pt-br"
     assert np.allclose(pedido["voice"], 0.7)  # 70% Dora + 30% da outra voz
+    arquivo.write_text(json.dumps({"tom": 12}), encoding="utf-8")  # uma oitava acima
+    wav = voz_local.falar("Olá.")
+    import io, wave
+    with wave.open(io.BytesIO(wav)) as w:
+        assert w.getframerate() == 48000  # mesma fala, tocada 2x mais rápido...
+    assert pedido["speed"] == 0.5  # ...porque foi gerada 2x mais devagar: ritmo normal, tom acima
 
 
 @pytest.fixture
