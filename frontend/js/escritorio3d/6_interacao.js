@@ -30,7 +30,7 @@ function projetar(el, pos) {
 function atualizarEtiquetas() {
   const perto = orbita.raio < 50;
   avatares.forEach((a) => {
-    const mostrar = perto && andarFoco === a.andar.id && !a.caminho && a.raiz.visible && a.raiz.parent?.parent?.userData?.andar?.id === andarFoco;
+    const mostrar = perto && !a.caminho && a.raiz.visible && a.raiz.parent?.parent?.userData?.andar?.id === andarFoco; // no andar onde está (visitas e tour, como no 2D)
     a.etiqueta.hidden = !mostrar;
     if (mostrar) { a.marcador.getWorldPosition(v); v.y += 0.2; a.etiqueta.hidden = !projetar(a.etiqueta, v.clone()); }
   });

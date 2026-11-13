@@ -154,3 +154,20 @@
   [data-visual="3d"] .topo-acoes > * { flex: none; }
   [data-visual="3d"] .topo-titulo p { display: none; }
 }
+
+/* ---------- Fase 4: tour da Recepcionista (mesma caixa de diálogo do 2D, na paleta 3D) ---------- */
+[data-visual="3d"] .onboarding-foco { border-color: var(--v3-caramelo); box-shadow: 0 0 0 9999px rgba(0, 18, 9, 0.55), 0 0 18px rgba(217, 161, 91, 0.55); }
+[data-visual="3d"] .onboarding-caixa {
+  background: linear-gradient(180deg, #11291c, #0c1f15); border-color: var(--v3-caramelo); color: var(--v3-creme); font-family: var(--v3-texto);
+}
+[data-visual="3d"] .onboarding-retrato svg { background: var(--v3-verde); border-color: var(--v3-caramelo); }
+[data-visual="3d"] .onboarding-nome { color: var(--v3-caramelo); }
+[data-visual="3d"] .onboarding-nome span { color: #9fb3a6; }
+[data-visual="3d"] .onboarding-texto { color: var(--v3-creme); }
+[data-visual="3d"] .onboarding-caixa.caminhando .onboarding-texto::before { color: #9fb3a6; }
+[data-visual="3d"] .onboarding-seta { color: var(--v3-caramelo); }
+[data-visual="3d"] .onboarding-progresso { color: #9fb3a6; }
+[data-visual="3d"] .onboarding-acoes .botao-primario { background: var(--v3-caramelo); color: var(--v3-verde); }
+[data-visual="3d"] .onboarding-acoes .botao-secundario { background: transparent; color: var(--v3-caramelo); border: 1px solid var(--v3-caramelo); }
+[data-visual="3d"] .onboarding-chamada { background: rgba(217, 161, 91, 0.12); border-color: rgba(217, 161, 91, 0.45); color: var(--v3-creme); }
+[data-visual="3d"] .onboarding-chamada .botao-primario { background: var(--v3-caramelo); color: var(--v3-verde); }

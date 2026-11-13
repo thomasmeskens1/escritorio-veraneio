@@ -29,7 +29,7 @@ const CORES_STATUS = { dormindo: 0x868e96, disponivel: 0x40c057, trabalhando: 0x
 const TIPOS_AGENTE = ['ia', 'sistema', 'estagiario'];
 const VISUAIS = ['humano', 'cerebro'];
 const SCRIPTS_3D = ['vendor/three-0.158.0.min.js', 'js/escritorio3d/1_motor.js', 'js/escritorio3d/2_avatares.js',
-  'js/escritorio3d/3_moveis.js', 'js/escritorio3d/4_predio.js', 'js/escritorio3d/5_camera_reuniao.js', 'js/escritorio3d/6_interacao.js'];
+  'js/escritorio3d/3_moveis.js', 'js/escritorio3d/4_predio.js', 'js/escritorio3d/5_camera_reuniao.js', 'js/escritorio3d/6_interacao.js', 'js/escritorio3d/tour.js'];
 
 let cena = null; // a cena 3D, depois de carregada (os outros módulos só conferem se ela existe)
 let jogo = null; // só existe no 2D (Phaser)
@@ -350,10 +350,3 @@ function encerrarEscritorio() {
   }
 }
 
-// O tour da Recepcionista anda pelo prédio 2D; no 3D ele chega na Fase 4 da migração. Até lá, avisa em vez de
-// quebrar (o tour do 2D usa o motor Phaser).
-document.addEventListener('DOMContentLoaded', () => {
-  window.iniciarOnboarding = () => mostrarToast('terreo', 'recepcionista',
-    'O tour pelo prédio 3D chega na próxima fase da migração. Para fazer o tour agora, abra o sistema com ?visual=2d no endereço.', 'Tour');
-  window.encerrarOnboarding = () => {};
-});

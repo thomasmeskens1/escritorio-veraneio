@@ -105,7 +105,7 @@ function iniciarOnboarding() {
   };
   document.addEventListener('keydown', teclaOnboarding);
   window.addEventListener('resize', reposicionarFoco);
-  cena.events.on('update', seguirGuia);
+  cena.events?.on('update', seguirGuia); // só no 2D (Phaser); no 3D, js/escritorio3d/tour.js
   irParaPasso(0);
 }
 
@@ -114,9 +114,9 @@ function encerrarOnboarding() {
   clearInterval(onboarding.timerTexto);
   if (chatAberto && typeof fecharChat === 'function') fecharChat();
   removerGuia();
-  cena?.events.off('update', seguirGuia);
-  cena?.cameras.main.stopFollow();
-  cena?.cameras.main.zoomEffect.reset(); // interrompe uma aproximação em andamento
+  cena?.events?.off('update', seguirGuia);
+  cena?.cameras?.main.stopFollow();
+  cena?.cameras?.main.zoomEffect.reset(); // interrompe uma aproximação em andamento (2D)
   onboarding.raiz.remove();
   onboarding = null;
   document.removeEventListener('keydown', teclaOnboarding);
