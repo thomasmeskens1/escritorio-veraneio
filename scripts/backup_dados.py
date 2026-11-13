@@ -62,7 +62,8 @@ def fazer_backup() -> Path:
             for arquivo in sorted(DADOS.rglob("*")):
                 relativo = arquivo.relative_to(DADOS)
                 if (not arquivo.is_file() or arquivo.suffix in EXTENSOES_FORA or arquivo.name.startswith("escritorio.")
-                        or relativo.parts[0] in ("__pycache__", "segredos_restaurados")):
+                        # modelos: Whisper e Kokoro da voz (~800 MB), baixáveis de novo; não pesam no backup diário
+                        or relativo.parts[0] in ("__pycache__", "segredos_restaurados", "modelos")):
                     continue
                 if arquivo.name in FORA or any(p in arquivo.name.lower() for p in FORA_SE_NOME_TEM):
                     segredos[f"backend/dados/{relativo.as_posix()}"] = arquivo.read_bytes()
