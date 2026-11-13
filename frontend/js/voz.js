@@ -57,8 +57,30 @@ function textoParaFala(texto) {
   return limpo;
 }
 
+// Nota da voz pelo nome: neural/natural do Edge > Google > vozes femininas conhecidas > qualquer outra; masculinas por último.
+function notaDaVoz(nome) {
+  const n = String(nome || '');
+  let nota = 0;
+  if (/natural|neural|online/i.test(n)) nota += 50;
+  if (/google/i.test(n)) nota += 30;
+  if (/francisca|thalita|vit[oó]ria|leila|yara|manuela|brenda|elza|giovanna|let[ií]cia|raquel|luciana|maria|fernanda/i.test(n)) nota += 20;
+  if (/antonio|ant[oô]nio|daniel|donato|fabio|f[aá]bio|humberto|julio|j[uú]lio|nicolau|valerio|val[eé]rio|ricardo/i.test(n)) nota -= 60;
+  return nota;
+}
+
+function dividirEmFrases(texto, limite = 200) {
+  const frases = String(texto || '').match(/[^.!?]+[.!?]*/g) || [];
+  const blocos = [];
+  frases.map((f) => f.trim()).filter(Boolean).forEach((f) => {
+    const ultimo = blocos[blocos.length - 1];
+    if (ultimo && (ultimo + ' ' + f).length <= limite) blocos[blocos.length - 1] = `${ultimo} ${f}`;
+    else blocos.push(f);
+  });
+  return blocos.length ? blocos : [String(texto || '')];
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { normalizarFala, acharChamado, comandoVera, textoParaFala };
+  module.exports = { normalizarFala, acharChamado, comandoVera, textoParaFala, notaDaVoz, dividirEmFrases };
 }
 
 // --- Navegador -------------------------------------------------------------------------------
@@ -78,24 +100,50 @@ function veraBalao(texto, tipo = '') {
   el.className = `vera-balao ${tipo}`.trim();
 }
 
+// Voz da Vera: a mais natural entre as vozes femininas em português do Brasil que o navegador oferece (sem custo).
+// O Edge tem as vozes neurais "Francisca" e "Thalita (Natural)"; o Chrome, a "Google português do Brasil".
+let vozEscolhida = null;
+function escolherVoz() {
+  const vozes = (window.speechSynthesis?.getVoices() || []).filter((v) => /^pt[-_]BR$/i.test(v.lang));
+  vozEscolhida = vozes.sort((a, b) => notaDaVoz(b.name) - notaDaVoz(a.name))[0] || null;
+}
+if (typeof window !== 'undefined' && window.speechSynthesis) {
+  escolherVoz();
+  window.speechSynthesis.addEventListener?.('voiceschanged', escolherVoz);
+}
+
+// Frases curtas: o Chrome corta falas longas no meio e às vezes nunca avisa o fim (a Vera ficava "falando" para sempre
+// e não ouvia mais nada; 13/11/2026). Por isso: frases de até ~200 caracteres, referência guardada e um prazo de segurança.
+let falasAtuais = [];
 function veraFalar(texto, depois) {
   if (!texto || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-  const fala = new SpeechSynthesisUtterance(texto);
-  fala.lang = 'pt-BR';
-  const voz = window.speechSynthesis.getVoices().find((v) => v.lang === 'pt-BR');
-  if (voz) fala.voice = voz;
+  if (!vozEscolhida) escolherVoz();
   falando = true;
   try { escuta?.abort(); } catch { /* a escuta volta sozinha no fim da fala */ }
+  let terminou = false;
   const fim = () => {
+    if (terminou) return;
+    terminou = true;
+    clearTimeout(prazo);
+    falasAtuais = [];
     falando = false;
     if (escutaLigada) iniciarEscuta();
     depois?.();
   };
-  fala.onend = fim;
-  fala.onerror = fim;
+  const prazo = setTimeout(fim, 2500 + texto.length * 85);
+  falasAtuais = dividirEmFrases(texto).map((frase) => {
+    const fala = new SpeechSynthesisUtterance(frase);
+    fala.lang = 'pt-BR';
+    if (vozEscolhida) fala.voice = vozEscolhida;
+    fala.rate = 1.02;
+    return fala;
+  });
+  const ultima = falasAtuais[falasAtuais.length - 1];
+  ultima.onend = fim;
+  falasAtuais.forEach((f) => { f.onerror = fim; });
   veraBalao(`Vera: ${texto}`, 'vera-falando');
-  window.speechSynthesis.speak(fala);
+  falasAtuais.forEach((f) => window.speechSynthesis.speak(f));
 }
 
 function pararDeFalar() {
@@ -140,14 +188,20 @@ async function pedidoParaVera(texto) {
   }
 }
 
+// Depois do "Pois não?": o próximo trecho falado vira o pedido, com aviso na tela.
+function aguardarPedido(alvo) {
+  esperando = { alvo, ate: Date.now() + ESPERA_COMANDO_MS };
+  veraBalao('Pode falar: estou ouvindo o seu pedido.', 'vera-falando');
+}
+
 function executar(alvo, resto) {
   if (alvo === 'agente') {
-    if (!normalizarFala(resto)) return veraFalar('Pois não?', () => { esperando = { alvo, ate: Date.now() + ESPERA_COMANDO_MS }; });
+    if (!normalizarFala(resto)) return veraFalar('Pois não?', () => aguardarPedido(alvo));
     veraBalao(`Você: ${resto}`);
     return enviarNoChat(resto);
   }
   const comando = comandoVera(resto, agentesConhecidos());
-  if (comando.tipo === 'esperar') return veraFalar('Pois não?', () => { esperando = { alvo, ate: Date.now() + ESPERA_COMANDO_MS }; });
+  if (comando.tipo === 'esperar') return veraFalar('Pois não?', () => aguardarPedido(alvo));
   if (comando.tipo === 'parar') return pararDeFalar();
   if (comando.tipo === 'resumo') return resumoDoDia();
   if (comando.tipo === 'abrir') {

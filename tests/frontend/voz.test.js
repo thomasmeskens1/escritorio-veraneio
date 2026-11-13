@@ -34,6 +34,20 @@ test('comandos da Vera', () => {
   assert.deepStrictEqual(v.comandoVera('Faça um post do Lodge 3', AGENTES), { tipo: 'pedido', texto: 'Faça um post do Lodge 3' });
 });
 
+test('voz feminina mais natural primeiro', () => {
+  const nomes = ['Microsoft Daniel - Portuguese (Brazil)', 'Microsoft Maria - Portuguese (Brazil)',
+    'Google português do Brasil', 'Microsoft Francisca Online (Natural) - Portuguese (Brazil)'];
+  const ordem = [...nomes].sort((a, b) => v.notaDaVoz(b) - v.notaDaVoz(a));
+  assert.deepStrictEqual(ordem, [nomes[3], nomes[2], nomes[1], nomes[0]]);
+  assert.ok(v.notaDaVoz('Microsoft Antonio Online (Natural)') < v.notaDaVoz('Microsoft Maria'));
+});
+
+test('fala dividida em frases curtas', () => {
+  const blocos = v.dividirEmFrases('Primeira frase. Segunda frase! '.repeat(12));
+  assert.ok(blocos.length > 1 && blocos.every((b) => b.length <= 200));
+  assert.deepStrictEqual(v.dividirEmFrases('Pois não?'), ['Pois não?']);
+});
+
 test('resposta em fala: sem markdown e com corte avisado', () => {
   assert.strictEqual(v.textoParaFala('**Pronto** ✅\n- item um\nVeja https://x.com/a'), 'Pronto item um Veja link no chat');
   const longa = v.textoParaFala('Frase longa de teste. '.repeat(80));
