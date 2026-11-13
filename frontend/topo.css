@@ -177,6 +177,10 @@
 
 #usuario-logado {
   max-width: 220px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #f1f3f5;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;

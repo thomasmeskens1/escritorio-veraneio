@@ -98,7 +98,7 @@ function iniciarSessao(nova) {
   mostrarErroLogin('');
   telaLogin.hidden = true;
   document.getElementById('app').hidden = false;
-  document.getElementById('usuario-logado').textContent = `${sessao.usuario} · ${sessao.role}`;
+  document.getElementById('usuario-logado').textContent = sessao.usuario; // só o nome (maiúsculas e negrito no CSS), sem o cargo (Thomas, 13/11/2026)
   configurarModelos(); // ícone "Modelos de IA" só para a diretoria
   configurarUsuarios(); // ícone "Usuários" só para o master
   configurarMapa(); // ícone "Mapa do Cérebro" só para a diretoria
