@@ -77,3 +77,80 @@
 @media (prefers-reduced-motion: reduce) {
   [data-visual="3d"] .etiqueta, [data-visual="3d"] .setor-nome { transition: none; }
 }
+
+/* ---------- Fase 2: barra superior no visual do protótipo (mesmos botões e funções do 2D) ---------- */
+[data-visual="3d"] body { font-family: var(--v3-texto); }
+[data-visual="3d"] .topo {
+  background: rgba(0, 54, 27, 0.92); border-bottom: 1px solid rgba(217, 161, 91, 0.4); color: var(--v3-creme);
+  font-family: var(--v3-texto);
+}
+[data-visual="3d"] .topo-logo { background: transparent; border-color: var(--v3-caramelo); color: var(--v3-caramelo); font: 800 1rem var(--v3-titulo); }
+[data-visual="3d"] .topo-titulo h1 { font: 800 1rem var(--v3-titulo); color: var(--v3-creme); }
+[data-visual="3d"] .topo-titulo h1 span { font-style: italic; font-weight: 400; color: var(--v3-caramelo); }
+[data-visual="3d"] .topo-titulo p { color: var(--v3-caramelo); font-size: 0.76rem; }
+
+[data-visual="3d"] .contador {
+  background: rgba(245, 239, 227, 0.08); border-color: transparent; color: var(--v3-creme); font-family: var(--v3-texto);
+}
+[data-visual="3d"] .contador span { color: rgba(245, 239, 227, 0.78); font-weight: 600; }
+[data-visual="3d"] .contador:hover, [data-visual="3d"] .contador:focus-visible {
+  background: rgba(245, 239, 227, 0.14); border-color: rgba(217, 161, 91, 0.6); outline: none;
+}
+[data-visual="3d"] .contador-disponivel { border-left-color: #40c057; }
+[data-visual="3d"] .contador-trabalhando { border-left-color: #f4a261; }
+[data-visual="3d"] .contador-construindo { border-left-color: #748ffc; }
+[data-visual="3d"] .contador-dormindo { border-left-color: #868e96; }
+
+[data-visual="3d"] .topo-icone, [data-visual="3d"] .topo-triagem {
+  background: rgba(245, 239, 227, 0.08); border-color: rgba(245, 239, 227, 0.25); color: var(--v3-creme); font-family: var(--v3-texto);
+}
+[data-visual="3d"] .topo-triagem { border-color: var(--v3-caramelo); color: var(--v3-caramelo); }
+[data-visual="3d"] .topo-icone:hover, [data-visual="3d"] .topo-icone:focus-visible,
+[data-visual="3d"] .topo-triagem:hover, [data-visual="3d"] .topo-triagem:focus-visible {
+  background: rgba(245, 239, 227, 0.14); border-color: var(--v3-caramelo); color: var(--v3-caramelo); outline: none;
+}
+[data-visual="3d"] .topo-icone[aria-pressed="true"], [data-visual="3d"] .topo-voz.ligado {
+  background: var(--v3-caramelo); border-color: var(--v3-caramelo); color: var(--v3-verde);
+}
+[data-visual="3d"] .caixa-contador { background: var(--v3-caramelo); color: var(--v3-verde); }
+[data-visual="3d"] .caixa-contador.urgente { background: #e03131; color: #fff; }
+
+[data-visual="3d"] .topo-sessao { color: rgba(245, 239, 227, 0.85); }
+[data-visual="3d"] #usuario-logado { color: var(--v3-creme); }
+[data-visual="3d"] .sair { border-color: rgba(245, 239, 227, 0.3); color: var(--v3-creme); font-family: var(--v3-texto); font-weight: 600; }
+[data-visual="3d"] .sair:hover, [data-visual="3d"] .sair:focus-visible { border-color: var(--v3-caramelo); color: var(--v3-caramelo); }
+[data-visual="3d"] .conexao { font-family: var(--v3-texto); }
+[data-visual="3d"] .relogio { color: var(--v3-creme); font-family: var(--v3-texto); font-weight: 700; }
+
+/* ---------- Fase 2: tela de login (mesmo formulário, no branding 3D) ---------- */
+[data-visual="3d"] .login {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(217, 161, 91, 0.22), transparent 55%),
+    linear-gradient(180deg, #0b4a2a 0%, var(--v3-verde) 70%);
+  font-family: var(--v3-texto);
+}
+[data-visual="3d"] .login-cartao {
+  background: var(--v3-creme); color: var(--v3-tinta); border: 1px solid rgba(217, 161, 91, 0.55);
+  box-shadow: 0 24px 60px rgba(0, 20, 10, 0.45);
+}
+[data-visual="3d"] .login-logo { background: var(--v3-verde); border-color: var(--v3-caramelo); color: var(--v3-caramelo); font: 800 1.25rem var(--v3-titulo); }
+[data-visual="3d"] .login-marca h1 { font: 800 1.3rem var(--v3-titulo); color: var(--v3-verde); }
+[data-visual="3d"] .login-marca p { color: #5d6b62; font-size: 0.82rem; }
+[data-visual="3d"] .login .campo { color: var(--v3-verde); font-weight: 700; font-size: 0.8rem; }
+[data-visual="3d"] .login .campo input {
+  background: #fff; border: 1px solid rgba(0, 54, 27, 0.25); color: var(--v3-tinta); font-weight: 400;
+}
+[data-visual="3d"] .login .campo input:focus { border-color: var(--v3-caramelo); box-shadow: 0 0 0 2px rgba(217, 161, 91, 0.35); }
+[data-visual="3d"] .login-erro { color: #c92a2a; }
+[data-visual="3d"] .login .botao-primario { background: var(--v3-verde); color: var(--v3-creme); font-weight: 700; }
+[data-visual="3d"] .login .botao-primario:hover:not(:disabled),
+[data-visual="3d"] .login .botao-primario:focus-visible { background: var(--v3-caramelo); color: var(--v3-verde); filter: none; outline: none; }
+
+/* Celular: no 2D os ícones cobrem o título; no 3D a fileira de ícones rola para o lado (mesmos botões). */
+@media (max-width: 640px) {
+  [data-visual="3d"] .topo { grid-template-columns: auto minmax(0, 1fr); }
+  [data-visual="3d"] .topo-acoes { min-width: 0; overflow-x: auto; scrollbar-width: none; justify-content: flex-start; padding: 2px 0; }
+  [data-visual="3d"] .topo-acoes::-webkit-scrollbar { display: none; }
+  [data-visual="3d"] .topo-acoes > * { flex: none; }
+  [data-visual="3d"] .topo-titulo p { display: none; }
+}

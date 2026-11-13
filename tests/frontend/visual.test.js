@@ -11,16 +11,18 @@ const CODIGO = fs.readFileSync(path.join(__dirname, '..', '..', 'frontend', 'js'
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
 const token = (payload) => `${b64({ alg: 'none' })}.${b64(payload)}.x`;
 
-function carregar({ busca = '', tokenSalvo = null } = {}) {
+function carregar({ busca = '', tokenSalvo = null, visualSalvo = null } = {}) {
   const escritos = [];
+  const guardado = { veraneio_token: tokenSalvo, veraneio_visual: visualSalvo };
   const ctx = {
+    guardado,
     location: { search: busca },
-    localStorage: { getItem: () => tokenSalvo },
+    localStorage: { getItem: (k) => guardado[k] ?? null, setItem: (k, v) => { guardado[k] = String(v); } },
     atob: (s) => Buffer.from(s, 'base64').toString('latin1'),
     URLSearchParams,
     document: { documentElement: { dataset: {} }, write: (t) => escritos.push(t) },
   };
-  vm.runInNewContext(`${CODIGO}\nthis.VISUAL = VISUAL; this.visualDaSessao = visualDaSessao;`, ctx);
+  vm.runInNewContext(`${CODIGO}\nthis.VISUAL = VISUAL; this.visualDaSessao = visualDaSessao; this.lembrarVisual = lembrarVisual;`, ctx);
   return { ctx, escritos };
 }
 
@@ -51,4 +53,21 @@ test('quem entra depois do carregamento usa o mesmo critério', () => {
   const { ctx } = carregar();
   assert.strictEqual(ctx.visualDaSessao({ master: true }), '3d');
   assert.strictEqual(ctx.visualDaSessao({ master: false }), '2d');
+});
+
+test('sem sessão, o login usa o visual de quem entrou por último no navegador', () => {
+  assert.strictEqual(carregar({ visualSalvo: '3d' }).ctx.VISUAL, '3d');
+  assert.strictEqual(carregar({ visualSalvo: '2d' }).ctx.VISUAL, '2d');
+  assert.strictEqual(carregar({ visualSalvo: 'xyz' }).ctx.VISUAL, '2d');
+  assert.strictEqual(carregar({ busca: '?visual=2d', visualSalvo: '3d' }).ctx.VISUAL, '2d');
+  // com sessão salva, vale quem está logado, não a lembrança
+  assert.strictEqual(carregar({ visualSalvo: '3d', tokenSalvo: token({ sub: 'j' }) }).ctx.VISUAL, '2d');
+});
+
+test('quem entra fica lembrado para o próximo login', () => {
+  const { ctx } = carregar();
+  ctx.lembrarVisual({ master: true });
+  assert.strictEqual(ctx.guardado.veraneio_visual, '3d');
+  ctx.lembrarVisual({ master: false });
+  assert.strictEqual(ctx.guardado.veraneio_visual, '2d');
 });

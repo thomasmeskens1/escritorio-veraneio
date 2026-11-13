@@ -12,6 +12,23 @@ function visualDaSessao(s) {
   return VISUAL_PEDIDO || (s?.master ? '3d' : '2d');
 }
 
+// Sem sessão, a tela de login usa o visual de quem entrou por último neste navegador (Fase 2, 13/11/2026).
+const CHAVE_VISUAL = 'veraneio_visual';
+function lembrarVisual(s) {
+  try {
+    localStorage.setItem(CHAVE_VISUAL, s?.master ? '3d' : '2d');
+  } catch {
+    // sem storage: o login volta ao 2D
+  }
+}
+function visualLembrado() {
+  try {
+    return localStorage.getItem(CHAVE_VISUAL) === '3d' ? '3d' : '2d';
+  } catch {
+    return '2d';
+  }
+}
+
 const VISUAL = (() => {
   let payload = null;
   try {
@@ -21,7 +38,8 @@ const VISUAL = (() => {
   } catch {
     // sem sessão salva
   }
-  return visualDaSessao(payload ? { master: !!payload.master } : null);
+  if (payload) return visualDaSessao({ master: !!payload.master });
+  return VISUAL_PEDIDO || visualLembrado();
 })();
 
 document.documentElement.dataset.visual = VISUAL;

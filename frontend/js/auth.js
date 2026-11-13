@@ -94,6 +94,7 @@ async function entrar(evento) {
 
 function iniciarSessao(nova) {
   // Migração para o 3D: cada usuário abre no seu visual (js/visual.js); se a página carregou o outro, recarrega.
+  if (typeof lembrarVisual === 'function') lembrarVisual(nova);
   if (typeof visualDaSessao === 'function' && visualDaSessao(nova) !== VISUAL) {
     location.reload();
     return;
