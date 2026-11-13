@@ -1,0 +1,210 @@
+/* Escritório 3D, Fase 3: miolo das janelas gerais com o mesmo desenho do 2D, só com a paleta trocada
+   (protótipo, versões 7 e 9). Cobre perfil.css, registro.css, equipe.css e modelos.css, além de toasts,
+   triagem, insatisfações, formulário em pop-up e balão da Vera. Molduras (.janela, .janela-barra): fase3-chat. */
+
+[data-visual="3d"] {
+  --v3g-fundo: #0c1f15;
+  --v3g-painel: #11291c;
+  --v3g-cartao: #163323;
+  --v3g-linha: rgba(217, 161, 91, 0.22);
+  --v3g-linha-clara: rgba(245, 239, 227, 0.16);
+  --v3g-trilho: rgba(245, 239, 227, 0.1);
+  --v3g-texto: #f5efe3;
+  --v3g-suave: #9fb3a6;
+  --v3g-apagado: #7f9488;
+  --v3g-neutro: #4a5a50;
+  --v3g-perigo: #e0645a;
+}
+
+/* ---------- Botões ---------- */
+[data-visual="3d"] .botao-secundario { background: transparent; border-color: var(--v3-caramelo); color: var(--v3-caramelo); font-family: var(--v3-texto); }
+[data-visual="3d"] .botao-secundario:hover:not(:disabled),
+[data-visual="3d"] .botao-secundario:focus-visible { background: rgba(217, 161, 91, 0.16); }
+[data-visual="3d"] .janela-formulario .botao-primario,
+[data-visual="3d"] .janela-treino .botao-primario { background: var(--v3-caramelo); color: var(--v3-verde); font-family: var(--v3-texto); }
+[data-visual="3d"] .janela-formulario .botao-primario:focus-visible,
+[data-visual="3d"] .janela-treino .botao-primario:focus-visible { outline: 2px solid var(--v3g-texto); outline-offset: 2px; }
+
+/* ---------- Ficha do agente (perfil.css) ---------- */
+[data-visual="3d"] .perfil { background: var(--v3g-painel); border-bottom-color: var(--v3g-linha); color: var(--v3g-texto); font-family: var(--v3-texto); }
+[data-visual="3d"] .perfil-carregando { color: var(--v3g-suave); }
+[data-visual="3d"] .perfil-alternar { background: var(--v3g-painel); font-family: var(--v3-texto); }
+[data-visual="3d"] .perfil-alternar:hover,
+[data-visual="3d"] .perfil-alternar:focus-visible { background: var(--v3g-cartao); }
+[data-visual="3d"] .perfil-alternar-titulo,
+[data-visual="3d"] .perfil-alternar-resumo,
+[data-visual="3d"] .perfil-descricao { color: var(--v3g-suave); }
+[data-visual="3d"] .perfil-exemplo { background: var(--v3g-cartao); border-color: var(--v3g-linha-clara); font-family: var(--v3-texto); }
+[data-visual="3d"] .perfil-exemplo small { color: var(--v3g-suave); }
+[data-visual="3d"] .perfil-exemplo span { color: var(--v3g-texto); }
+[data-visual="3d"] .perfil-exemplo:hover,
+[data-visual="3d"] .perfil-exemplo:focus-visible { border-color: var(--v3-caramelo); }
+[data-visual="3d"] .perfil-fatos { color: var(--v3g-suave); }
+[data-visual="3d"] .perfil-fatos strong { color: var(--v3-caramelo); }
+[data-visual="3d"] .perfil-ajustes h4,
+[data-visual="3d"] .perfil-ajustes small,
+[data-visual="3d"] .perfil-rotinas h4 { color: var(--v3g-suave); }
+
+/* Rotinas agendadas */
+[data-visual="3d"] .perfil-rotinas ul { border-color: var(--v3g-linha); }
+[data-visual="3d"] .perfil-rotinas li + li { border-top-color: var(--v3g-linha); }
+[data-visual="3d"] .rotina-info strong { color: var(--v3-caramelo); }
+[data-visual="3d"] .rotina-tarefa { color: var(--v3g-texto); }
+[data-visual="3d"] .rotina-info small { color: var(--v3g-suave); }
+[data-visual="3d"] .rotinas-nota { background: var(--v3g-cartao); border-color: var(--v3g-linha-clara); color: var(--v3g-suave); }
+[data-visual="3d"] .rotinas-nota.erro { border-color: rgba(250, 82, 82, 0.4); color: #ffa8a8; }
+
+/* Conhecimento do Cérebro (rosa e cores das fontes iguais ao 2D) */
+[data-visual="3d"] .conhecimento-cartao { background: var(--v3g-cartao); }
+[data-visual="3d"] .conhecimento-cartao strong,
+[data-visual="3d"] .conhecimento-fontes strong { color: var(--v3g-texto); }
+[data-visual="3d"] .conhecimento-cartao span,
+[data-visual="3d"] .fonte-nome,
+[data-visual="3d"] .conhecimento-meta { color: var(--v3g-suave); }
+[data-visual="3d"] .fonte-barra { background: var(--v3g-trilho); }
+[data-visual="3d"] .conhecimento-dica { background: var(--v3g-cartao); color: var(--v3g-suave); }
+[data-visual="3d"] .conhecimento-dica:hover,
+[data-visual="3d"] .conhecimento-dica:focus-visible { background: var(--v3g-fundo); }
+
+/* Correções que viram regra */
+[data-visual="3d"] .correcao-item { background: var(--v3g-cartao); border-color: var(--v3g-linha); border-left-color: var(--v3-caramelo); }
+[data-visual="3d"] .correcao-meta,
+[data-visual="3d"] .correcao-antes summary,
+[data-visual="3d"] .correcao-regras summary,
+[data-visual="3d"] .correcao-antes p,
+[data-visual="3d"] .correcao-regra-ativa,
+[data-visual="3d"] .correcao-previa { color: var(--v3g-suave); }
+[data-visual="3d"] .correcao-regra { background: var(--v3g-fundo); border-color: var(--v3g-linha-clara); color: var(--v3g-texto); font-family: var(--v3-texto); }
+[data-visual="3d"] .correcao-linha { background: var(--v3g-cartao); border-color: var(--v3g-linha-clara); font-family: var(--v3-texto); }
+[data-visual="3d"] .correcao-linha:hover,
+[data-visual="3d"] .correcao-linha:focus-visible { border-color: var(--v3-caramelo); }
+
+/* Relatório do "Treinar agora" */
+[data-visual="3d"] .treino-corpo { font-family: var(--v3-texto); }
+[data-visual="3d"] .treino-bloco h3 { color: var(--v3-caramelo); }
+[data-visual="3d"] .treino-bloco h4 { color: var(--v3g-texto); }
+[data-visual="3d"] .treino-explica,
+[data-visual="3d"] .treino-lista { color: var(--v3g-suave); }
+[data-visual="3d"] .treino-porque { background: var(--v3g-cartao); color: var(--v3g-texto); }
+
+/* ---------- Registro de atividade (registro.css) ---------- */
+[data-visual="3d"] .registro-conteudo { color: var(--v3g-texto); font-family: var(--v3-texto); }
+[data-visual="3d"] .registro-cabecalho { color: var(--v3g-suave); border-bottom-color: var(--v3g-linha); }
+[data-visual="3d"] .registro-item { background: var(--v3g-cartao); border-color: var(--v3g-linha-clara); border-left-color: var(--v3g-neutro); }
+[data-visual="3d"] .registro-item.aberto { border-color: var(--v3g-linha); border-left-color: var(--v3g-neutro); }
+/* Status iguais ao 2D (reaplicados porque a regra acima redefine a borda) */
+[data-visual="3d"] .registro-item.registro-executando { border-left-color: #f4a261; }
+[data-visual="3d"] .registro-item.registro-concluida { border-left-color: #40c057; }
+[data-visual="3d"] .registro-item.registro-adiada { border-left-color: #748ffc; }
+[data-visual="3d"] .registro-item.registro-falhou { border-left-color: #fa5252; }
+[data-visual="3d"] .registro-linha { color: var(--v3g-texto); font-family: var(--v3-texto); }
+[data-visual="3d"] .registro-linha:hover,
+[data-visual="3d"] .registro-linha:focus-visible { background: var(--v3g-painel); }
+[data-visual="3d"] .registro-linha:focus-visible { box-shadow: inset 0 0 0 2px var(--v3-caramelo); }
+[data-visual="3d"] .reg-hora { color: var(--v3g-texto); }
+[data-visual="3d"] .reg-hora small,
+[data-visual="3d"] .reg-usuario,
+[data-visual="3d"] .reg-resumo,
+[data-visual="3d"] .reg-modelo,
+[data-visual="3d"] .reg-modelo-completo { color: var(--v3g-suave); }
+[data-visual="3d"] .reg-vazio { color: var(--v3g-apagado); }
+[data-visual="3d"] .chip-agente { background: rgba(217, 161, 91, 0.16); border-color: rgba(217, 161, 91, 0.35); color: var(--v3-caramelo); }
+[data-visual="3d"] .registro-detalhe { border-top-color: var(--v3g-linha); }
+[data-visual="3d"] .reg-fatos dt,
+[data-visual="3d"] .registro-detalhe h4,
+[data-visual="3d"] .registro-filtros label { color: var(--v3g-suave); }
+[data-visual="3d"] .evento { border-left-color: var(--v3g-linha); }
+[data-visual="3d"] .evento:last-child { border-left-color: transparent; }
+[data-visual="3d"] .evento::before { border-color: var(--v3g-cartao); }
+[data-visual="3d"] .evento-topo time,
+[data-visual="3d"] .evento-detalhe { color: var(--v3g-suave); }
+[data-visual="3d"] .reg-mensagem { background: var(--v3g-painel); border-color: var(--v3g-linha-clara); }
+[data-visual="3d"] .reg-mensagem strong { color: var(--v3g-suave); }
+[data-visual="3d"] .reg-mensagem p { color: var(--v3g-texto); }
+[data-visual="3d"] .reg-mensagem.reg-pedido { border-left-color: var(--v3-caramelo); }
+[data-visual="3d"] .reg-mensagem.reg-resposta { border-left-color: #2a9d8f; }
+[data-visual="3d"] .reg-grupo-n { background: var(--v3g-trilho); color: var(--v3g-texto); }
+
+/* ---------- Equipe (equipe.css); os filtros de período dos Modelos usam as mesmas classes ---------- */
+[data-visual="3d"] .equipe-filtros { border-bottom-color: var(--v3g-linha); }
+[data-visual="3d"] .equipe-filtro { background: var(--v3g-painel); border-color: var(--v3g-linha-clara); color: var(--v3g-suave); font-family: var(--v3-texto); }
+[data-visual="3d"] .equipe-filtro strong { background: var(--v3g-trilho); color: var(--v3g-texto); }
+[data-visual="3d"] .equipe-filtro:hover { border-color: rgba(217, 161, 91, 0.45); color: var(--v3g-texto); }
+[data-visual="3d"] .equipe-filtro:focus-visible { outline: 2px solid var(--v3-caramelo); outline-offset: 2px; }
+[data-visual="3d"] .equipe-filtro[aria-selected="true"] { background: var(--v3g-cartao); border-color: var(--cor-filtro, #d9a15b); color: var(--v3g-texto); }
+[data-visual="3d"] .filtro-todos { --cor-filtro: #d9a15b; }
+[data-visual="3d"] .equipe-conteudo { font-family: var(--v3-texto); }
+[data-visual="3d"] .equipe-andar h3 { color: var(--v3g-suave); }
+[data-visual="3d"] .equipe-cartao { background: var(--v3g-cartao); border-color: var(--v3g-linha-clara); border-left-color: var(--cor-status); }
+[data-visual="3d"] button.equipe-cartao:hover,
+[data-visual="3d"] button.equipe-cartao:focus-visible { border-color: rgba(217, 161, 91, 0.45); border-left-color: var(--cor-status); }
+[data-visual="3d"] button.equipe-cartao:focus-visible { outline: 2px solid var(--v3-caramelo); outline-offset: 2px; }
+[data-visual="3d"] .equipe-avatar { color: var(--v3g-fundo); }
+[data-visual="3d"] .equipe-nome { color: var(--v3g-texto); }
+[data-visual="3d"] .equipe-funcao,
+[data-visual="3d"] .equipe-descricao { color: var(--v3g-suave); }
+[data-visual="3d"] .equipe-status { background: var(--v3g-trilho); color: var(--v3g-texto); }
+[data-visual="3d"] .equipe-acao { color: var(--v3-caramelo); }
+
+/* ---------- Modelos de IA (modelos.css); barras ok/falha com as cores do 2D ---------- */
+[data-visual="3d"] .modelos-conteudo { color: var(--v3g-texto); font-family: var(--v3-texto); }
+[data-visual="3d"] .modelos-cartao { background: var(--v3g-cartao); border-color: var(--v3g-linha-clara); border-left-color: var(--v3g-neutro); }
+[data-visual="3d"] .modelos-cartao.modelos-ok { border-left-color: #40c057; }
+[data-visual="3d"] .modelos-cartao.modelos-ruim { border-left-color: #fa5252; }
+[data-visual="3d"] .modelos-cartao strong { color: var(--v3g-texto); }
+[data-visual="3d"] .modelos-cartao span,
+[data-visual="3d"] .modelos-secao h3,
+[data-visual="3d"] .modelos-coluna small,
+[data-visual="3d"] .modelos-legenda { color: var(--v3g-suave); }
+[data-visual="3d"] .modelos-grafico { background: var(--v3g-cartao); border-color: var(--v3g-linha-clara); }
+[data-visual="3d"] .modelos-tabela th,
+[data-visual="3d"] .modelos-tabela td { border-bottom-color: var(--v3g-linha); }
+[data-visual="3d"] .modelos-tabela th,
+[data-visual="3d"] .modelos-tabela td { color: var(--v3g-suave); }
+[data-visual="3d"] .modelos-linha-atencao td { color: var(--v3-caramelo); }
+[data-visual="3d"] .modelos-linha-ruim td { color: #ff8787; }
+[data-visual="3d"] .modelos-status { background: var(--v3g-trilho); }
+[data-visual="3d"] .status-modelo-pausa { color: var(--v3-caramelo); }
+
+/* ---------- Toasts ---------- */
+[data-visual="3d"] .toast {
+  background: var(--v3-verde); border-color: var(--v3g-linha); border-left-color: var(--v3-caramelo);
+  color: var(--v3g-texto); font-family: var(--v3-texto);
+}
+[data-visual="3d"] .toast:hover,
+[data-visual="3d"] .toast:focus-visible { background: #0b4a2a; }
+[data-visual="3d"] .toast:focus-visible { outline: 2px solid var(--v3-caramelo); outline-offset: 2px; }
+[data-visual="3d"] .toast span { color: var(--v3g-suave); }
+
+/* ---------- Formulário em pop-up, triagem e insatisfações ---------- */
+[data-visual="3d"] .formulario-corpo,
+[data-visual="3d"] .formulario-corpo .msg-formulario { font-family: var(--v3-texto); }
+[data-visual="3d"] .janela-formulario .form-titulo { color: var(--v3g-texto); }
+[data-visual="3d"] .janela-formulario .form-rotulo,
+[data-visual="3d"] .janela-formulario .form-multipla { color: var(--v3g-suave); }
+[data-visual="3d"] .janela-formulario .form-multipla input,
+[data-visual="3d"] .insatisfacao-opcao input { accent-color: var(--v3-caramelo); }
+[data-visual="3d"] .janela-formulario .form-entrada,
+[data-visual="3d"] .registro-filtros .form-entrada {
+  background: var(--v3g-fundo); border-color: var(--v3g-linha-clara); color: var(--v3g-texto); font-family: var(--v3-texto);
+}
+[data-visual="3d"] .janela-formulario .form-entrada::placeholder { color: var(--v3g-suave); }
+[data-visual="3d"] .janela-formulario .form-entrada:focus-visible,
+[data-visual="3d"] .registro-filtros .form-entrada:focus-visible { outline: 2px solid var(--v3-caramelo); outline-offset: 1px; }
+[data-visual="3d"] .triagem-dica,
+[data-visual="3d"] .triagem-funcao { color: var(--v3g-suave); }
+[data-visual="3d"] .insatisfacao-opcao { border-color: var(--v3g-linha-clara); }
+[data-visual="3d"] .insatisfacao-opcao:has(input:checked) { border-color: var(--v3-caramelo); background: rgba(217, 161, 91, 0.14); }
+[data-visual="3d"] .insatisfacao-texto { border-color: var(--v3g-linha-clara); background: var(--v3g-fundo); font-family: var(--v3-texto); }
+[data-visual="3d"] .insatisfacao-texto:focus-visible { outline: 2px solid var(--v3-caramelo); outline-offset: 1px; }
+[data-visual="3d"] .insatisfacao-item { border-color: var(--v3g-linha-clara); border-left-color: #e07a5f; }
+[data-visual="3d"] .insatisfacao-item.analisada { border-left-color: var(--v3g-linha-clara); }
+/* Abas Novas / Analisadas / Todas: sublinhado como no 2D, laranja trocado por caramelo */
+[data-visual="3d"] .janela-insatisfacoes .caixa-abas { border-bottom-color: var(--v3g-linha); }
+[data-visual="3d"] .janela-insatisfacoes .caixa-aba { color: var(--v3g-suave); font-family: var(--v3-texto); }
+[data-visual="3d"] .janela-insatisfacoes .caixa-aba:focus-visible { outline: 2px solid var(--v3-caramelo); outline-offset: -2px; }
+[data-visual="3d"] .janela-insatisfacoes .caixa-aba.ativa { border-bottom-color: var(--v3-caramelo); color: var(--v3g-texto); }
+
+/* ---------- Balão da Vera (voz) ---------- */
+[data-visual="3d"] .vera-balao { background: var(--v3g-fundo); border-color: var(--v3-caramelo); color: var(--v3g-texto); font-family: var(--v3-texto); }
+[data-visual="3d"] .vera-balao.vera-erro { border-color: var(--v3g-perigo); }

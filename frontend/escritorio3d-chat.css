@@ -1,0 +1,175 @@
+/* Escritório 3D, Fase 3: janela de conversa (chat.css e chat_extras.css) na paleta da Versão 7 do protótipo.
+   Mesmo desenho do 2D (linhas de terminal, monoespaçada, mesmo layout); só cores, bordas e fontes mudam.
+   Molduras: janela do agente e janelas de pop-up (.janela-formulario: triagem, formulário, insatisfações, treino, caixa). */
+
+[data-visual="3d"] {
+  --v3c-fundo: #0c1f15;
+  --v3c-painel: #11291c;
+  --v3c-cartao: #163323;
+  --v3c-linha: rgba(217, 161, 91, 0.22);
+  --v3c-linha2: rgba(245, 239, 227, 0.16);
+  --v3c-suave: #9fb3a6;
+  --v3c-perigo: #e0645a;
+}
+
+/* Fundo escurecido atrás das janelas */
+[data-visual="3d"] #modal,
+[data-visual="3d"] .modal-formulario { background: rgba(0, 12, 6, 0.6); }
+
+/* Moldura (#14161a → fundo, #343a40 → linha) */
+[data-visual="3d"] :is(.janela-agente, .janela.janela-formulario) {
+  background: var(--v3c-fundo); color: var(--v3-creme); border-color: var(--v3c-linha); font-family: var(--v3-texto);
+}
+[data-visual="3d"] :is(.janela-agente, .janela.janela-formulario) .janela-barra {
+  background: var(--v3c-painel); border-bottom-color: var(--v3c-linha); color: var(--v3-creme);
+}
+[data-visual="3d"] :is(.janela-agente, .janela.janela-formulario) .janela-luzes i { background: #3d5145; }
+[data-visual="3d"] :is(.janela-agente, .janela.janela-formulario) .janela-titulo h2 { color: var(--v3-creme); font-family: var(--v3-texto); }
+[data-visual="3d"] :is(.janela-agente, .janela.janela-formulario) .janela-titulo p { color: var(--v3c-suave); }
+
+/* Fechar (×) */
+[data-visual="3d"] :is(.janela-agente, .janela.janela-formulario) .fechar { color: var(--v3c-suave); }
+[data-visual="3d"] :is(.janela-agente, .janela.janela-formulario) .fechar:hover,
+[data-visual="3d"] :is(.janela-agente, .janela.janela-formulario) .fechar:focus-visible {
+  background: rgba(245, 239, 227, 0.08); color: var(--v3-creme); box-shadow: 0 0 0 2px var(--v3-caramelo);
+}
+
+/* Seta dos acordeões */
+[data-visual="3d"] .janela-agente .seta { border-color: var(--v3c-suave); }
+
+/* Botões: primário caramelo com texto verde; secundário transparente com borda e texto caramelo */
+[data-visual="3d"] :is(.janela-agente, .janela.janela-formulario) .botao-primario {
+  background: var(--v3-caramelo); color: var(--v3-verde); font-family: var(--v3-texto);
+}
+[data-visual="3d"] :is(.janela-agente, .janela.janela-formulario) .botao-secundario {
+  background: transparent; border-color: var(--v3-caramelo); color: var(--v3-caramelo); font-family: var(--v3-texto);
+}
+[data-visual="3d"] :is(.janela-agente, .janela.janela-formulario) .botao-secundario:hover:not(:disabled),
+[data-visual="3d"] :is(.janela-agente, .janela.janela-formulario) .botao-secundario:focus-visible {
+  background: rgba(217, 161, 91, 0.16); border-color: var(--v3-caramelo); color: var(--v3-caramelo);
+}
+
+/* Empresa da conversa (como no protótipo: contorno caramelo) */
+[data-visual="3d"] .janela-agente .seletor-empresa {
+  background: transparent; color: var(--v3-caramelo); border-color: var(--v3-caramelo); font-family: var(--v3-texto);
+}
+[data-visual="3d"] .janela-agente .seletor-empresa option { background: var(--v3c-painel); color: var(--v3-creme); }
+[data-visual="3d"] .janela-agente .seletor-empresa:invalid,
+[data-visual="3d"] .janela-agente .seletor-empresa[data-empresa=""] { border-color: #fa5252; }
+
+/* Aviso de produção restrita: cores de aviso do 2D */
+[data-visual="3d"] .janela-agente .aviso-restrito {
+  background: rgba(250, 176, 5, 0.1); border-color: rgba(250, 176, 5, 0.4); color: #ffe066; font-family: var(--v3-texto);
+}
+
+/* Histórico: registro de terminal (a monoespaçada continua) */
+[data-visual="3d"] .historico { color: var(--v3-creme); }
+[data-visual="3d"] .historico:empty::before { color: var(--v3c-suave); font-family: var(--v3-texto); }
+[data-visual="3d"] .msg { color: var(--v3-creme); }
+[data-visual="3d"] .msg-voce .msg-autor { color: #8ecae6; }
+[data-visual="3d"] .msg-agente .msg-autor { color: var(--v3-caramelo); }
+[data-visual="3d"] .msg-sistema { color: #e9a07a; font-style: italic; }
+[data-visual="3d"] .msg-sistema .msg-autor { color: var(--v3c-suave); }
+[data-visual="3d"] .msg-meta { color: var(--v3c-suave); }
+[data-visual="3d"] .msg-carregando,
+[data-visual="3d"] .msg-encerrado { color: var(--v3c-suave); }
+
+/* "pensando..." e Parar */
+[data-visual="3d"] .pensando { color: var(--v3-caramelo); }
+[data-visual="3d"] .botao-parar { border-color: var(--v3c-perigo); color: var(--v3c-perigo); }
+[data-visual="3d"] .botao-parar:hover,
+[data-visual="3d"] .botao-parar:focus-visible { background: rgba(224, 100, 90, 0.15); }
+
+/* Rodapé e caixa de texto */
+[data-visual="3d"] .janela-rodape { background: var(--v3c-fundo); border-top-color: var(--v3c-linha); }
+[data-visual="3d"] .janela-rodape textarea {
+  background: var(--v3c-fundo); border-color: var(--v3c-linha2); color: var(--v3-creme);
+}
+[data-visual="3d"] .janela-rodape textarea::placeholder { color: var(--v3c-suave); }
+[data-visual="3d"] .janela-rodape textarea:focus { border-color: var(--v3-caramelo); }
+
+/* Anexar e Modelos */
+[data-visual="3d"] .botao-anexar { border-color: var(--v3c-linha2); color: var(--v3c-suave); font-family: var(--v3-texto); }
+[data-visual="3d"] .botao-anexar:hover:not(:disabled),
+[data-visual="3d"] .botao-anexar:focus-visible { border-color: var(--v3-caramelo); color: var(--v3-caramelo); }
+
+/* Anexos antes de enviar */
+[data-visual="3d"] .anexo-chip { background: var(--v3c-painel); border-color: var(--v3c-linha2); }
+[data-visual="3d"] .anexo-icone-pdf { font-family: var(--v3-texto); }
+[data-visual="3d"] .anexo-nome { color: var(--v3-creme); }
+[data-visual="3d"] .anexo-tamanho { color: var(--v3c-suave); }
+[data-visual="3d"] .anexo-remover { color: var(--v3c-suave); }
+[data-visual="3d"] .anexo-remover:hover:not(:disabled),
+[data-visual="3d"] .anexo-remover:focus-visible { background: rgba(245, 239, 227, 0.08); color: var(--v3-creme); }
+[data-visual="3d"] .anexos-progresso { background: var(--v3c-linha2); }
+[data-visual="3d"] .anexos-progresso span { background: var(--v3-caramelo); }
+
+/* Aviso "parece ser da X" (laranja → caramelo) */
+[data-visual="3d"] .empresa-aviso { color: var(--v3-caramelo); }
+
+/* Anexos dentro das mensagens */
+[data-visual="3d"] .msg-anexo { color: var(--v3-creme); }
+[data-visual="3d"] .msg-anexo img { background: var(--v3c-painel); border-color: var(--v3c-linha2); }
+[data-visual="3d"] .msg-anexo:has(.anexo-icone-pdf) { background: var(--v3c-painel); border-color: var(--v3c-linha2); }
+[data-visual="3d"] .msg-anexo:hover,
+[data-visual="3d"] .msg-anexo:focus-visible { outline-color: var(--v3-caramelo); }
+
+/* Andamento da tarefa (painel ao lado, como no protótipo) */
+[data-visual="3d"] .andamento { background: var(--v3c-painel); border-left-color: var(--v3c-linha); color: var(--v3-creme); }
+[data-visual="3d"] .andamento h3 { color: var(--v3-caramelo); }
+[data-visual="3d"] .andamento-pedido,
+[data-visual="3d"] .andamento-progresso { color: var(--v3c-suave); }
+[data-visual="3d"] .andamento-estimativa { color: var(--v3-caramelo); background: rgba(217, 161, 91, 0.12); }
+[data-visual="3d"] .andamento-etapa { color: var(--v3-creme); }
+[data-visual="3d"] .andamento-sub,
+[data-visual="3d"] .etapa-concluida .andamento-sub,
+[data-visual="3d"] .etapa-andamento .andamento-sub { color: var(--v3c-suave); }
+[data-visual="3d"] .andamento-fase { color: var(--v3-creme); }
+/* Ícones: no 2D todos ficam laranja e pulsando, exceto o de falha (vermelho); aqui caramelo, pulso igual */
+[data-visual="3d"] .andamento-icone { color: var(--v3-caramelo); }
+[data-visual="3d"] .etapa-pendente { color: var(--v3c-suave); }
+[data-visual="3d"] .etapa-falhou,
+[data-visual="3d"] .etapa-falhou .andamento-icone { color: #ff8787; }
+[data-visual="3d"] .andamento-pode-fechar { color: var(--v3c-suave); }
+@media (max-width: 900px) {
+  [data-visual="3d"] .andamento { border-bottom-color: var(--v3c-linha); }
+}
+
+/* Formulário dentro da conversa (o do pop-up é do escritorio3d-gerais.css) */
+[data-visual="3d"] .historico .msg-formulario {
+  background: var(--v3c-cartao); border-color: var(--v3c-linha); border-left-color: var(--v3-caramelo); font-family: var(--v3-texto);
+}
+[data-visual="3d"] .historico .form-titulo { color: var(--v3-creme); }
+[data-visual="3d"] .historico .form-rotulo { color: var(--v3c-suave); }
+[data-visual="3d"] .historico .form-entrada { background: var(--v3c-fundo); border-color: var(--v3c-linha2); color: var(--v3-creme); }
+[data-visual="3d"] .historico .form-entrada:focus { border-color: var(--v3-caramelo); outline: none; }
+[data-visual="3d"] .historico .form-multipla { color: var(--v3-creme); }
+[data-visual="3d"] .historico input[type="checkbox"],
+[data-visual="3d"] .historico input[type="radio"] { accent-color: var(--v3-caramelo); }
+
+/* Tabela do planejamento (js/plano_tabela.js): linhas já usam currentColor; só o cabeçalho e o aviso */
+[data-visual="3d"] .plano-tabela th { color: var(--v3-caramelo); font-family: var(--v3-texto); }
+[data-visual="3d"] .plano-tabela .plano-aviso { color: var(--v3c-suave); }
+
+/* Conferência mecânica (js/conferencia.js): painel e trechos antes/depois */
+[data-visual="3d"] .msg-mecanico-painel strong { color: var(--v3-caramelo); }
+[data-visual="3d"] .msg-mecanico-painel pre { color: var(--v3-creme); }
+[data-visual="3d"] .msg-mecanico-painel li { color: var(--v3c-suave); }
+
+/* 👍/👎 */
+[data-visual="3d"] .msg-voto:hover,
+[data-visual="3d"] .msg-voto:focus-visible { background: rgba(245, 239, 227, 0.06); }
+[data-visual="3d"] .msg-voto.ativo { background: rgba(217, 161, 91, 0.25); border-color: rgba(217, 161, 91, 0.45); }
+
+/* Caixa de entrada (miolo; moldura acima) */
+[data-visual="3d"] .janela-caixa .caixa-abas { border-bottom-color: var(--v3c-linha); }
+[data-visual="3d"] .janela-caixa .caixa-aba { color: var(--v3c-suave); font-family: var(--v3-texto); }
+[data-visual="3d"] .janela-caixa .caixa-aba.ativa { border-bottom-color: var(--v3-caramelo); color: var(--v3-creme); }
+[data-visual="3d"] .janela-caixa .caixa-item {
+  background: rgba(245, 239, 227, 0.03); border-color: var(--v3c-linha); color: var(--v3-creme); font-family: var(--v3-texto);
+}
+[data-visual="3d"] .janela-caixa .caixa-item:hover,
+[data-visual="3d"] .janela-caixa .caixa-item:focus-visible { border-color: var(--v3-caramelo); }
+[data-visual="3d"] .janela-caixa .caixa-item.falhou { border-color: rgba(250, 82, 82, 0.45); }
+[data-visual="3d"] .janela-caixa .caixa-item-topo time,
+[data-visual="3d"] .janela-caixa .caixa-resumo { color: var(--v3c-suave); }

@@ -1,0 +1,199 @@
+/* Escritório 3D, Fase 3: painéis (painel.css, aprendizado.css, mapa.css, aprovacoes.css) no branding 3D.
+   Versão 7/9 do protótipo: o desenho do 2D idêntico, só a paleta (verde-escuro, caramelo, creme) e a família da fonte.
+   Cores de status e de gráfico ficam as do 2D. Vale só em html[data-visual="3d"]. */
+
+/* ---------- Janela base: Despachante, Equipe, Mapa, Modelos, Registro, Usuários e pop-ups de usuário/correção ---------- */
+[data-visual="3d"] .janela.janela-painel,
+[data-visual="3d"] .janela.janela-usuario {
+  background: #0c1f15; color: var(--v3-creme); border-color: rgba(217, 161, 91, 0.22); font-family: var(--v3-texto);
+}
+[data-visual="3d"] .janela-painel .janela-barra,
+[data-visual="3d"] .janela-usuario .janela-barra { background: #0c1f15; color: var(--v3-creme); border-bottom-color: rgba(217, 161, 91, 0.22); }
+[data-visual="3d"] .janela-painel .janela-luzes i,
+[data-visual="3d"] .janela-usuario .janela-luzes i { background: #3d5145; }
+[data-visual="3d"] .janela-painel .janela-titulo h2,
+[data-visual="3d"] .janela-usuario .janela-titulo h2 { font-family: var(--v3-texto); font-weight: 700; color: var(--v3-creme); }
+[data-visual="3d"] .janela-painel .janela-titulo p,
+[data-visual="3d"] .janela-usuario .janela-titulo p { color: #9fb3a6; }
+[data-visual="3d"] .janela-painel .fechar,
+[data-visual="3d"] .janela-usuario .fechar { color: #9fb3a6; }
+[data-visual="3d"] .janela-painel .fechar:hover, [data-visual="3d"] .janela-painel .fechar:focus-visible,
+[data-visual="3d"] .janela-usuario .fechar:hover, [data-visual="3d"] .janela-usuario .fechar:focus-visible {
+  background: rgba(245, 239, 227, 0.12); color: var(--v3-creme); box-shadow: 0 0 0 2px var(--v3-caramelo);
+}
+
+/* Botões: primário caramelo com texto verde; secundário transparente caramelo; perigo #e0645a */
+[data-visual="3d"] .janela-painel .botao-primario,
+[data-visual="3d"] .janela-usuario .botao-primario { background: var(--v3-caramelo); color: var(--v3-verde); font-family: var(--v3-texto); }
+[data-visual="3d"] .janela-painel .botao-secundario,
+[data-visual="3d"] .janela-usuario .botao-secundario,
+[data-visual="3d"] .aprovacao-item .botao-secundario {
+  background: transparent; border-color: var(--v3-caramelo); color: var(--v3-caramelo); font-family: var(--v3-texto);
+}
+[data-visual="3d"] .janela-painel .botao-secundario:hover:not(:disabled),
+[data-visual="3d"] .janela-painel .botao-secundario:focus-visible,
+[data-visual="3d"] .janela-usuario .botao-secundario:hover:not(:disabled),
+[data-visual="3d"] .janela-usuario .botao-secundario:focus-visible,
+[data-visual="3d"] .aprovacao-item .botao-secundario:hover:not(:disabled),
+[data-visual="3d"] .aprovacao-item .botao-secundario:focus-visible { background: rgba(217, 161, 91, 0.15); }
+[data-visual="3d"] .janela-painel .botao-perigo,
+[data-visual="3d"] .janela-usuario .botao-perigo { border-color: #e0645a; color: #e0645a; }
+[data-visual="3d"] .janela-painel .botao-perigo:hover:not(:disabled),
+[data-visual="3d"] .janela-painel .botao-perigo:focus-visible,
+[data-visual="3d"] .janela-usuario .botao-perigo:hover:not(:disabled),
+[data-visual="3d"] .janela-usuario .botao-perigo:focus-visible { background: rgba(224, 100, 90, 0.14); }
+
+/* Campos */
+[data-visual="3d"] .janela-painel .form-entrada,
+[data-visual="3d"] .janela-usuario .form-entrada,
+[data-visual="3d"] .aprovacao-item .form-entrada {
+  background: #0c1f15; border-color: rgba(245, 239, 227, 0.18); color: var(--v3-creme);
+}
+[data-visual="3d"] .janela-usuario .form-rotulo { color: #9fb3a6; }
+[data-visual="3d"] .janela-usuario input[type="checkbox"],
+[data-visual="3d"] .janela-usuario input[type="radio"] { accent-color: var(--v3-caramelo); }
+
+/* ---------- Painel do Despachante ---------- */
+[data-visual="3d"] .painel-conteudo h3,
+[data-visual="3d"] .painel-aviso { color: #9fb3a6; }
+
+[data-visual="3d"] .resumo-cartao { background: #11291c; border-color: rgba(245, 239, 227, 0.12); border-left-color: #3d5145; }
+[data-visual="3d"] .resumo-cartao strong { color: var(--v3-creme); }
+[data-visual="3d"] .resumo-cartao span { color: #9fb3a6; }
+/* faixas de status iguais ao 2D (repetidas para vencer a cor neutra acima) */
+[data-visual="3d"] .resumo-executando { border-left-color: #f4a261; }
+[data-visual="3d"] .resumo-concluida { border-left-color: #40c057; }
+[data-visual="3d"] .resumo-adiada { border-left-color: #748ffc; }
+[data-visual="3d"] .resumo-falhou { border-left-color: #fa5252; }
+[data-visual="3d"] .resumo-fila { border-left-color: #b197fc; }
+
+/* Crédito, Prova do Cérebro, Uso do Max, Atenção, Saúde dos modelos, Aprendizado */
+[data-visual="3d"] .credito { background: #11291c; border-color: rgba(245, 239, 227, 0.12); }
+[data-visual="3d"] .credito-valores { color: #9fb3a6; }
+[data-visual="3d"] .credito-valores strong { color: var(--v3-creme); }
+[data-visual="3d"] .credito-barra { background: rgba(245, 239, 227, 0.1); }
+[data-visual="3d"] .credito-uso { background: var(--v3-caramelo); }
+[data-visual="3d"] .credito-uso.no-limite { background: #fa5252; }
+[data-visual="3d"] .credito-marcador,
+[data-visual="3d"] .credito-ponto { background: var(--v3-creme); }
+[data-visual="3d"] .credito-legenda { color: #9fb3a6; }
+
+/* Tabela de tarefas (selos e estados ficam com as cores do 2D) */
+[data-visual="3d"] .tabela-tarefas th { color: #9fb3a6; border-bottom-color: rgba(217, 161, 91, 0.22); }
+[data-visual="3d"] .tabela-tarefas td { border-bottom-color: rgba(245, 239, 227, 0.08); }
+[data-visual="3d"] .tabela-tarefas small,
+[data-visual="3d"] .tabela-tarefas .col-texto,
+[data-visual="3d"] .tarefa-modelo { color: #9fb3a6; }
+[data-visual="3d"] .tabela-tarefas .vazia { color: #5f7568; }
+[data-visual="3d"] .tarefas-vazio { color: #9fb3a6; border-color: rgba(245, 239, 227, 0.16); }
+[data-visual="3d"] .tarefas-vazio strong { color: var(--v3-creme); }
+
+@media (max-width: 720px) {
+  [data-visual="3d"] .tabela-tarefas tr { background: #11291c; border-color: rgba(245, 239, 227, 0.12); }
+  [data-visual="3d"] .tabela-tarefas td::before { color: #9fb3a6; }
+}
+
+/* Saúde dos modelos (linhas de atenção e ruim com as cores do 2D) */
+[data-visual="3d"] .saude-modelos th,
+[data-visual="3d"] .saude-modelos td { border-bottom-color: rgba(245, 239, 227, 0.08); }
+[data-visual="3d"] .saude-modelos th,
+[data-visual="3d"] .saude-modelos td { color: #9fb3a6; }
+[data-visual="3d"] .saude-atencao td { color: #f4a261; }
+[data-visual="3d"] .saude-ruim td { color: #ff8787; }
+
+/* ---------- Toasts ---------- */
+[data-visual="3d"] .toast {
+  background: #11291c; color: var(--v3-creme); border-color: rgba(217, 161, 91, 0.22); border-left-color: var(--v3-caramelo);
+  font-family: var(--v3-texto);
+}
+[data-visual="3d"] .toast:hover,
+[data-visual="3d"] .toast:focus-visible { background: #163323; }
+[data-visual="3d"] .toast span { color: #9fb3a6; }
+
+/* ---------- Usuários (lista) ---------- */
+[data-visual="3d"] .usuarios-nota { color: #9fb3a6; }
+[data-visual="3d"] .usuario-item { background: #11291c; border-color: rgba(245, 239, 227, 0.12); }
+[data-visual="3d"] .usuario-item:hover,
+[data-visual="3d"] .usuario-item:focus-visible { border-color: var(--v3-caramelo); }
+[data-visual="3d"] .usuario-info strong { color: var(--v3-creme); }
+[data-visual="3d"] .usuario-info small,
+[data-visual="3d"] .usuario-resumo,
+[data-visual="3d"] .usuario-seta { color: #9fb3a6; }
+[data-visual="3d"] .usuario-selo { background: rgba(217, 161, 91, 0.15); color: var(--v3-caramelo); }
+[data-visual="3d"] .usuario-selo.inativo { background: rgba(250, 82, 82, 0.15); color: #ffa8a8; }
+[data-visual="3d"] .usuario-status { background: #4a5a50; box-shadow: 0 0 0 2px #0c1f15; }
+[data-visual="3d"] .usuario-status.ativo { background: #40c057; }
+[data-visual="3d"] .usuario-status.ausente { background: #fab005; }
+
+/* ---------- Pop-up do usuário e pop-ups de correção (janela-usuario) ---------- */
+[data-visual="3d"] .usuario-agentes { border-color: rgba(245, 239, 227, 0.14); }
+[data-visual="3d"] .usuario-andar strong { color: #9fb3a6; }
+[data-visual="3d"] .janela-usuario .reg-mensagem { background: #11291c; border-color: rgba(245, 239, 227, 0.12); }
+[data-visual="3d"] .janela-usuario .reg-mensagem strong { color: #9fb3a6; }
+[data-visual="3d"] .janela-usuario .reg-mensagem p { color: var(--v3-creme); }
+[data-visual="3d"] .janela-usuario .reg-pedido { border-left-color: var(--v3-caramelo); }
+[data-visual="3d"] .janela-usuario .reg-resposta { border-left-color: #2a9d8f; }
+[data-visual="3d"] .janela-usuario .rotinas-nota { background: #11291c; border-color: rgba(245, 239, 227, 0.2); color: #9fb3a6; }
+[data-visual="3d"] .janela-usuario .rotinas-nota.erro { border-color: rgba(250, 82, 82, 0.4); color: #ffa8a8; }
+
+/* ---------- Ratinho do Cérebro (o desenho SVG mantém as cores do 2D) ---------- */
+[data-visual="3d"] .aviso-cerebro { background: linear-gradient(135deg, #2b1f2a, #0c1f15); color: var(--v3-creme); font-family: var(--v3-texto); }
+[data-visual="3d"] .aviso-cerebro-texto small { color: #9fb3a6; }
+[data-visual="3d"] .aviso-cerebro-selo { box-shadow: 0 0 0 2px #0c1f15; }
+[data-visual="3d"] .aviso-cerebro-fechar { color: #9fb3a6; }
+[data-visual="3d"] .aviso-cerebro-fechar:hover { color: var(--v3-creme); }
+
+/* ---------- Aprendizado do Despachante ---------- */
+[data-visual="3d"] .aprendizado-resumo,
+[data-visual="3d"] .aprendizado-nota { color: #9fb3a6; }
+[data-visual="3d"] .aprendizado-resumo strong { color: var(--v3-creme); }
+[data-visual="3d"] .marco-trilho { background: rgba(245, 239, 227, 0.1); }
+[data-visual="3d"] .marco-trilho i { background: var(--v3-caramelo); }
+[data-visual="3d"] .marco.feito .marco-trilho i { background: #40c057; }
+[data-visual="3d"] .marco-rotulo { color: #9fb3a6; }
+[data-visual="3d"] .marco.atual .marco-rotulo { color: var(--v3-caramelo); }
+[data-visual="3d"] .marco.feito .marco-rotulo { color: #69db7c; }
+
+[data-visual="3d"] .aprendizado-modelo,
+[data-visual="3d"] .ajustes { background: #163323; border-color: rgba(245, 239, 227, 0.12); }
+[data-visual="3d"] .aprendizado-modelo small,
+[data-visual="3d"] .ajustes small,
+[data-visual="3d"] .aprendizado-modelo.sem-modelo { color: #9fb3a6; }
+[data-visual="3d"] .aprendizado-modelo.sem-modelo strong { color: var(--v3-creme); }
+[data-visual="3d"] .selo-modelo.inativo { color: #9fb3a6; }
+[data-visual="3d"] .acuracia { color: #9fb3a6; }
+[data-visual="3d"] .acuracia strong { color: var(--v3-creme); }
+[data-visual="3d"] .acuracia-barra { background: rgba(245, 239, 227, 0.1); }
+[data-visual="3d"] .do-modelo .acuracia-barra i { background: var(--v3-caramelo); }
+[data-visual="3d"] .ajustes h4 { color: var(--v3-creme); }
+[data-visual="3d"] .ajuste-seta { color: #9fb3a6; }
+
+/* ---------- Mapa do Cérebro (regras v9; cores das empresas, vindas do JS por atributo, iguais ao 2D) ---------- */
+[data-visual="3d"] .mapa-resumo { color: #9fb3a6; }
+[data-visual="3d"] .mapa-svg {
+  background:
+    linear-gradient(rgba(217, 161, 91, 0.05) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgba(217, 161, 91, 0.05) 1px, transparent 1px) 0 0 / 32px 32px,
+    radial-gradient(ellipse at center, #143223 0%, #06120c 75%);
+  border-color: rgba(217, 161, 91, 0.35); box-shadow: 0 0 24px rgba(217, 161, 91, 0.08) inset;
+}
+/* no 2D o CSS já vence o fill do JS nos rótulos; aqui o mesmo, em creme (a fonte segue monoespaçada) */
+[data-visual="3d"] .mapa-rotulo { fill: var(--v3-creme); stroke: #06120c; }
+[data-visual="3d"] .mapa-dica {
+  color: var(--v3-creme); background: rgba(6, 18, 12, 0.95); border-color: var(--v3-caramelo);
+  box-shadow: 0 0 12px rgba(217, 161, 91, 0.35);
+}
+
+/* ---------- Aprovações (Caixa de entrada) e ficha de pedido (tela do agente) ---------- */
+[data-visual="3d"] .aprovacao-item { border-color: rgba(245, 239, 227, 0.16); background: rgba(245, 239, 227, 0.03); }
+[data-visual="3d"] .aprovacao-item.vencido { border-color: rgba(250, 82, 82, 0.6); background: rgba(250, 82, 82, 0.08); }
+[data-visual="3d"] .aprovacao-item.informativo .caixa-motivo { color: #9fb3a6; }
+[data-visual="3d"] .aprovacao-texto { border-color: rgba(245, 239, 227, 0.16); background: #11291c; color: var(--v3-creme); }
+[data-visual="3d"] .aprovacao-campo small,
+[data-visual="3d"] .ficha-pedido small { color: #9fb3a6; }
+[data-visual="3d"] .ficha-pedido { border-color: rgba(245, 239, 227, 0.16); }
+[data-visual="3d"] .ficha-pedido h4,
+[data-visual="3d"] .ficha-pedido ul { color: var(--v3-creme); }
+[data-visual="3d"] .ficha-opcional li,
+[data-visual="3d"] .ficha-nota,
+[data-visual="3d"] .ficha-geral { color: #9fb3a6; }
