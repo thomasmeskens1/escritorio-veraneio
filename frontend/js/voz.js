@@ -90,6 +90,7 @@ let escuta = null;
 let escutaLigada = false;
 let falando = false;
 let esperando = null;            // { alvo, ate } depois de um "Olá Vera" sem pedido
+let inicioFala = null;           // performance.now() do começo da frase em andamento
 const chatsPorVoz = new Map();   // chave do chat -> pedido por voz até (ms)
 
 function veraBalao(texto, tipo = '') {
@@ -115,15 +116,18 @@ if (typeof window !== 'undefined' && window.speechSynthesis) {
 // Frases curtas: o Chrome corta falas longas no meio e às vezes nunca avisa o fim (a Vera ficava "falando" para sempre
 // e não ouvia mais nada; 13/11/2026). Por isso: frases de até ~200 caracteres, referência guardada e um prazo de segurança.
 let falasAtuais = [];
+let falaId = 0;
+// Primeiro a voz Kokoro do PC (js/voz_local.js); sem ela, a voz do navegador. Uma fala nova encerra a anterior sem
+// que o fim atrasado da antiga libere a escuta no meio da nova.
 function veraFalar(texto, depois) {
-  if (!texto || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  if (!vozEscolhida) escolherVoz();
+  if (!texto) return;
+  pararDeFalar();
+  const id = ++falaId;
   falando = true;
   try { escuta?.abort(); } catch { /* a escuta volta sozinha no fim da fala */ }
   let terminou = false;
   const fim = () => {
-    if (terminou) return;
+    if (terminou || id !== falaId) return;
     terminou = true;
     clearTimeout(prazo);
     falasAtuais = [];
@@ -131,8 +135,17 @@ function veraFalar(texto, depois) {
     if (escutaLigada) iniciarEscuta();
     depois?.();
   };
-  const prazo = setTimeout(fim, 2500 + texto.length * 85);
-  falasAtuais = dividirEmFrases(texto).map((frase) => {
+  const prazo = setTimeout(fim, 8000 + texto.length * 120);
+  veraBalao(`Vera: ${texto}`, 'vera-falando');
+  const frases = dividirEmFrases(texto);
+  const local = typeof falarLocal === 'function' ? falarLocal(frases, fim) : Promise.resolve(false);
+  local.then((ok) => { if (!ok && id === falaId) falarNoNavegador(frases, fim); });
+}
+
+function falarNoNavegador(frases, fim) {
+  if (!window.speechSynthesis) return fim();
+  if (!vozEscolhida) escolherVoz();
+  falasAtuais = frases.map((frase) => {
     const fala = new SpeechSynthesisUtterance(frase);
     fala.lang = 'pt-BR';
     if (vozEscolhida) fala.voice = vozEscolhida;
@@ -142,12 +155,12 @@ function veraFalar(texto, depois) {
   const ultima = falasAtuais[falasAtuais.length - 1];
   ultima.onend = fim;
   falasAtuais.forEach((f) => { f.onerror = fim; });
-  veraBalao(`Vera: ${texto}`, 'vera-falando');
   falasAtuais.forEach((f) => window.speechSynthesis.speak(f));
 }
 
 function pararDeFalar() {
   if (window.speechSynthesis?.speaking) window.speechSynthesis.cancel();
+  if (typeof pararFalaLocal === 'function') pararFalaLocal();
 }
 
 function agentesConhecidos() {
@@ -212,18 +225,32 @@ function executar(alvo, resto) {
   return pedidoParaVera(comando.texto);
 }
 
-function ouviu(transcricao) {
+// O texto do navegador decide SE a Vera foi chamada; o Whisper do PC decide O QUE foi pedido (vocabulário da casa).
+async function comWhisper(transcricao, inicio, nome, aguardando) {
+  if (typeof transcreverDesde !== 'function' || !inicio) return null;
+  veraBalao('Entendendo o pedido…', 'vera-falando');
+  const texto = await transcreverDesde(inicio);
+  if (!texto) return null;
+  if (aguardando) return texto; // depois do "Pois não?": a frase inteira é o pedido
+  return acharChamado(texto, nome)?.resto || null; // sem o chamado no texto do Whisper, vale o do navegador
+}
+
+async function ouviu(transcricao, inicio) {
   if (falando) return;
   pararDeFalar();
+  const nome = chatAberto ? document.getElementById('modal-nome')?.textContent : '';
   if (esperando && Date.now() < esperando.ate) {
     const { alvo } = esperando;
     esperando = null;
-    return executar(alvo, transcricao);
+    return executar(alvo, (await comWhisper(transcricao, inicio, nome, true)) || transcricao);
   }
   esperando = null;
-  const nome = chatAberto ? document.getElementById('modal-nome')?.textContent : '';
   const chamado = acharChamado(transcricao, nome);
-  if (chamado) return executar(chamado.alvo, chamado.resto);
+  if (chamado) {
+    const precisa = chamado.alvo === 'agente' || comandoVera(chamado.resto, agentesConhecidos()).tipo === 'pedido';
+    const resto = precisa && normalizarFala(chamado.resto) ? (await comWhisper(transcricao, inicio, nome, false)) || chamado.resto : chamado.resto;
+    return executar(chamado.alvo, resto);
+  }
   // Parecia um chamado e não bateu: mostra o que o navegador entendeu (sem isso, nada acontecia na tela).
   if (pareceChamado(transcricao)) {
     veraBalao(`Ouvi: “${transcricao.trim()}”. Para me chamar, comece com “Olá Vera”.`, 'vera-dica');
@@ -245,10 +272,13 @@ function iniciarEscuta() {
     escuta = new Reconhecimento();
     escuta.lang = 'pt-BR';
     escuta.continuous = true;
-    escuta.interimResults = false;
+    escuta.interimResults = true; // os parciais marcam o começo da frase, para recortar o áudio que vai ao Whisper
     escuta.onresult = (e) => {
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) ouviu(e.results[i][0].transcript);
+        if (!e.results[i].isFinal) { inicioFala ??= performance.now() - 1500; continue; }
+        const inicio = inicioFala ?? performance.now() - 6000;
+        inicioFala = null;
+        ouviu(e.results[i][0].transcript, inicio);
       }
     };
     escuta.onerror = (e) => {
@@ -273,11 +303,13 @@ function ligarEscuta(ligar) {
   botao?.classList.toggle('ligado', ligar);
   if (ligar) {
     iniciarEscuta();
+    if (typeof iniciarCaptura === 'function') iniciarCaptura();
     veraBalao('Ouvindo. Diga "Olá Vera" ou, num chat, "Olá" e o nome do agente.');
     setTimeout(() => { if (escutaLigada) veraBalao(''); }, 5000);
   } else {
     try { escuta?.abort(); } catch { /* nada a parar */ }
     pararDeFalar();
+    if (typeof pararCaptura === 'function') pararCaptura();
     veraBalao('');
   }
 }

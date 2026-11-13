@@ -11,3 +11,6 @@ python-multipart==0.0.32
 # painel analítico (Analista de Métricas): o código do painel importa o login do Google Ads
 google-auth==2.61.0
 google-auth-oauthlib==1.5.0
+# voz no PC (voz_local.py): transcrição com vocabulário e voz Kokoro
+faster-whisper==1.2.1
+kokoro-onnx==0.4.7

@@ -61,6 +61,7 @@ import saude
 import tarefas
 import triagem
 import vera
+import voz_local
 import uso_material
 import usuarios_admin
 from agents.perfis import empresa_da_escola
@@ -216,6 +217,7 @@ app.include_router(parar.rotas)
 app.include_router(avaliacoes.rotas)
 app.include_router(consolidacao_semanal.rotas)
 app.include_router(triagem.rotas)
+app.include_router(voz_local.rotas)  # Whisper com o vocabulário e voz Kokoro, no PC (13/11/2026)
 app.include_router(vera.rotas)  # "Olá Vera, abre o escritório": resumo do dia por voz (12/11/2026)
 app.include_router(caixa.rotas)
 app.include_router(insatisfacoes.rotas)
