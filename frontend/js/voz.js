@@ -19,9 +19,11 @@ const normalizarFala = (texto) => String(texto || '').normalize('NFD').replace(/
 // { alvo: 'vera' | 'agente', resto } quando a frase traz "olá vera" / "olá <agente>"; null quando não chama ninguém.
 function acharChamado(texto, nomeAgente = '') {
   const frase = normalizarFala(texto);
-  const nomes = [['vera', 'vera'], ...(nomeAgente ? [['agente', normalizarFala(nomeAgente)]] : [])];
+  // O reconhecimento às vezes troca "Vera" por "bera"/"vela" e "Olá" por "alô"/"hola"; "Vera, ..." no começo vale.
+  const nomes = [['vera', 'vera|bera|vela'], ...(nomeAgente ? [['agente', normalizarFala(nomeAgente)]] : [])];
   for (const [alvo, nome] of nomes) {
-    const m = frase.match(new RegExp(`(?:^|\\s)(?:ola|oi|alo)\\s+${nome}(?:\\s+(.*))?$`));
+    const m = frase.match(new RegExp(`(?:^|\\s)(?:ola|oi|alo|hola|ei|hey)\\s+(?:${nome})(?:\\s+(.*))?$`))
+      || (alvo === 'vera' && frase.match(/^vera(?:\s+(.*))?$/));
     if (m) return { alvo, resto: (m[1] || '').trim() };
   }
   return null;
@@ -167,8 +169,21 @@ function ouviu(transcricao) {
   esperando = null;
   const nome = chatAberto ? document.getElementById('modal-nome')?.textContent : '';
   const chamado = acharChamado(transcricao, nome);
-  if (chamado) executar(chamado.alvo, chamado.resto);
+  if (chamado) return executar(chamado.alvo, chamado.resto);
+  // Parecia um chamado e não bateu: mostra o que o navegador entendeu (sem isso, nada acontecia na tela).
+  if (pareceChamado(transcricao)) {
+    veraBalao(`Ouvi: “${transcricao.trim()}”. Para me chamar, comece com “Olá Vera”.`, 'vera-dica');
+    setTimeout(() => { if (escutaLigada && !falando) veraBalao(''); }, 6000);
+  }
 }
+
+const pareceChamado = (texto) => /\b(ola|oi|alo|hola|vera|bera|vela)\b/.test(normalizarFala(texto));
+
+const ERROS_VOZ = {
+  network: 'Sem conexão com o serviço de voz do navegador. Confira a internet e tente de novo.',
+  'audio-capture': 'Nenhum microfone encontrado. Confira se ele está conectado e liberado no Windows.',
+  'language-not-supported': 'Este navegador não reconhece português. Use o Chrome ou o Edge atualizados.',
+};
 
 function iniciarEscuta() {
   if (!Reconhecimento || falando) return;
@@ -178,14 +193,17 @@ function iniciarEscuta() {
     escuta.continuous = true;
     escuta.interimResults = false;
     escuta.onresult = (e) => {
-      const resultado = e.results[e.results.length - 1];
-      if (resultado.isFinal) ouviu(resultado[0].transcript);
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) ouviu(e.results[i][0].transcript);
+      }
     };
     escuta.onerror = (e) => {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         ligarEscuta(false);
         veraBalao('O navegador não deixou usar o microfone. Libere o microfone deste site e tente de novo.', 'vera-erro');
-      }
+      } else if (ERROS_VOZ[e.error]) {
+        veraBalao(ERROS_VOZ[e.error], 'vera-erro');
+      } // no-speech e aborted: silêncio ou pausa normal, a escuta volta sozinha
     };
     // O navegador encerra a escuta contínua de tempos em tempos: volta sozinha enquanto estiver ligada.
     escuta.onend = () => { if (escutaLigada && !falando) setTimeout(iniciarEscuta, 300); };

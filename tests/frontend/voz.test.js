@@ -16,6 +16,11 @@ test('chamado da Vera e do agente do chat', () => {
   assert.strictEqual(v.acharChamado('Olá Gestor, faça o post', ''), null); // fora do chat, só a Vera atende
   assert.deepStrictEqual(v.acharChamado('oi e-mail marketing', 'E-mail Marketing'), { alvo: 'agente', resto: '' });
   assert.strictEqual(v.acharChamado('a Vera disse olá ontem'), null);
+  // variações que o reconhecimento do navegador devolve
+  assert.deepStrictEqual(v.acharChamado('Vera, abre o escritório'), { alvo: 'vera', resto: 'abre o escritorio' });
+  assert.deepStrictEqual(v.acharChamado('alô Vera abre o escritório'), { alvo: 'vera', resto: 'abre o escritorio' });
+  assert.strictEqual(v.acharChamado('Oi bera').alvo, 'vera');
+  assert.strictEqual(v.acharChamado('Post da Casa Vero'), null);
   assert.strictEqual(v.acharChamado('verão chegando'), null);
 });
 
