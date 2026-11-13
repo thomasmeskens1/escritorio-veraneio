@@ -37,8 +37,7 @@ function atualizarRelogio() {
   }
 }
 
-// O Phaser escuta mousedown/touch na window: sem isto, clicar num botão de popup
-// ou da barra também "clica" no agente desenhado atrás dele.
+// Cliques nos pop-ups e na barra não passam para o prédio desenhado atrás deles.
 ['#topo', '#elevador', '.modal', '#toasts'].forEach((seletor) => {
   document.querySelectorAll(seletor).forEach((el) => {
     ['mousedown', 'mouseup', 'touchstart', 'touchend', 'pointerdown'].forEach((tipo) =>

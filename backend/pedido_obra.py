@@ -131,7 +131,7 @@ def montar(spec: dict, pedido_por: str, pedido: str = "") -> dict:
         f"**O que NÃO faz:** {nao_faz}",
         "",
         "## Peças a montar (molde do Sonoplasta, commit 1462535)",
-        "- mesa e setor (backend/estado.py e frontend/js/cenario/estacoes_setores.js);",
+        "- mesa e setor (backend/estado.py e frontend/js/escritorio3d/1_motor.js);",
         "- persona e método (backend/agents/perfis.py) e diretrizes (backend/agents/diretrizes.py);",
         "- manuais que ele lê e a ficha de pedido no manual 16;",
         "- gatilhos da triagem (backend/triagem.py) e formulário de pedido (frontend/js/modelos_pedido.js);",

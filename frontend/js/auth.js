@@ -93,11 +93,6 @@ async function entrar(evento) {
 }
 
 function iniciarSessao(nova) {
-  // Visual do escritório (js/visual.js): se a página carregou outro, recarrega.
-  if (typeof visualDaSessao === 'function' && visualDaSessao(nova) !== VISUAL) {
-    location.reload();
-    return;
-  }
   sessao = nova;
   formLogin.reset();
   mostrarErroLogin('');

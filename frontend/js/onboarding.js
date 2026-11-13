@@ -45,10 +45,7 @@ const PASSOS_ONBOARDING = [
     texto: 'Use o clipe do chat para enviar imagens e PDFs (até 15 MB). Para uma tarefa repetir sozinha, use o botão “Agendar tarefa” na ficha do agente. Qualquer dúvida, é só falar comigo ou com o Professor!' },
 ];
 
-const ZOOM_TOUR = 1.7;         // aproximação da câmera sobre ela (x enquadramento do andar)
 const MS_POR_LETRA = 22;
-const RITMO_TOUR = 0.55;      // caminhada 45% mais rápida que a dos estagiários (visitas.js)
-const SEGUIR_ACIMA = 40;       // a câmera mira o corpo, não os pés (px)
 
 let onboarding = null; // { passos, indice, geracao, raiz, foco, caixa, guia, timerTexto, completo }
 
@@ -105,7 +102,6 @@ function iniciarOnboarding() {
   };
   document.addEventListener('keydown', teclaOnboarding);
   window.addEventListener('resize', reposicionarFoco);
-  cena.events?.on('update', seguirGuia); // só no 2D (Phaser); no 3D, js/escritorio3d/tour.js
   irParaPasso(0);
 }
 
@@ -114,9 +110,6 @@ function encerrarOnboarding() {
   clearInterval(onboarding.timerTexto);
   if (chatAberto && typeof fecharChat === 'function') fecharChat();
   removerGuia();
-  cena?.events?.off('update', seguirGuia);
-  cena?.cameras?.main.stopFollow();
-  cena?.cameras?.main.zoomEffect.reset(); // interrompe uma aproximação em andamento (2D)
   onboarding.raiz.remove();
   onboarding = null;
   document.removeEventListener('keydown', teclaOnboarding);
@@ -175,89 +168,8 @@ function irParaPasso(indice) {
 }
 
 // ---------- A Recepcionista andando ----------
-
-// Lugar dela ao lado do agente do passo; no caso dela mesma, a própria mesa.
-function destinoAoLadoDe(agente) {
-  const pos = posicoesAndar[agente];
-  if (!pos) return { x: GRADE - 1.8, y: 1.45, sentido: -1 };
-  if (agente === 'recepcionista') return { x: pos.x + AGENTE_NO_TILE, y: pos.y + AGENTE_NO_TILE, sentido: 1 };
-  return lugarAoLado(agente, pos);
-}
-
-function criarGuia(inicio) {
-  const dados = dadosAgente('terreo', 'recepcionista');
-  const pes = isoParaTela(inicio.x, inicio.y);
-  const avatar = criarBoneco(cena, pes.x, pes.y, { ...dados, status: 'disponivel', escalaRotulo: 1,
-    rotuloAcima: ROTULO_VISITA }); // nome acima, sem cobrir o do agente ao lado
-  onboarding.guia = { avatar, g: { x: inicio.x, y: inicio.y }, tweens: [], alvo: { x: pes.x, y: pes.y - SEGUIR_ACIMA } };
-  ocultarRecepcionistaDaMesa();
-  focarCamera();
-  return onboarding.guia;
-}
-
-function removerGuia() {
-  const guia = onboarding?.guia;
-  if (!guia) return;
-  pararCaminhada(guia);
-  guia.avatar.objetos.forEach((o) => o.active && o.destroy());
-  onboarding.guia = null;
-}
-
-// No Térreo, a Recepcionista "de verdade" sai da mesa enquanto a guia anda.
-function ocultarRecepcionistaDaMesa() {
-  if (andarAtual === 'terreo') avatares.recepcionista?.objetos.forEach((o) => o.setVisible(false));
-}
-
-function focarCamera() {
-  const cam = cena.cameras.main;
-  cam.startFollow(onboarding.guia.alvo, false, 0.09, 0.09);
-  cam.zoomTo(Math.min(2.2, enquadrarCamera() * ZOOM_TOUR), 700);
-}
-
-// A câmera segue um ponto acima dos pés dela, atualizado a cada quadro.
-function seguirGuia() {
-  const guia = onboarding?.guia;
-  if (!guia) return;
-  const pes = isoParaTela(guia.g.x, guia.g.y);
-  guia.alvo.x = pes.x;
-  guia.alvo.y = pes.y - SEGUIR_ACIMA;
-}
-
-// Leva a guia até o agente: no mesmo andar, caminha; em outro, sai pelo elevador e entra no andar novo.
-function levarGuia(andar, agente, aoChegar) {
-  const geracao = onboarding.geracao;
-  const vivo = () => onboarding && geracao === onboarding.geracao;
-  const chegar = (destino) => {
-    if (!vivo()) return;
-    onboarding.guia.avatar.virar(destino.sentido);
-    aoChegar();
-  };
-  const entrarNoAndar = () => {
-    if (!vivo()) return;
-    removerGuia();
-    if (andar !== andarAtual) renderizarAndar(andar);
-    const destino = destinoAoLadoDe(agente);
-    const veioDoElevador = agente !== 'recepcionista' || onboarding.indice > 0;
-    const guia = criarGuia(veioDoElevador ? portaElevador() : destino);
-    if (!veioDoElevador) return chegar(destino);
-    guia.avatar.definirAlfa(0);
-    cena.tweens.add({ targets: guia.avatar.objetos, alpha: 1, duration: 200 });
-    caminhar(guia, [saidaElevador(), destino], () => chegar(destino), RITMO_TOUR);
-  };
-
-  const guia = onboarding.guia;
-  if (!guia || andar !== andarAtual) {
-    if (!guia) return entrarNoAndar();
-    // Sai pelo elevador do andar atual antes de aparecer no próximo.
-    return caminhar(guia, [saidaElevador(), portaElevador()], () => {
-      if (!vivo()) return;
-      cena.tweens.add({ targets: guia.avatar.objetos, alpha: 0, duration: 200, onComplete: entrarNoAndar });
-    }, RITMO_TOUR);
-  }
-  const destino = destinoAoLadoDe(agente);
-  focarCamera();
-  caminhar(guia, [destino], () => chegar(destino), RITMO_TOUR);
-}
+// No prédio 3D, a caminhada, o elevador e a câmera ficam em js/escritorio3d/tour.js (criarGuia, removerGuia,
+// levarGuia, focarCamera), carregado com a cena.
 
 // ---------- Fala (caixa de diálogo) ----------
 

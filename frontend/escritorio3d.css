@@ -1,5 +1,5 @@
 /* Escritório 3D (migração do visual, Fase 1, Thomas 13/11/2026). Vale só com o visual 3D (html[data-visual="3d"],
-   decidido por js/visual.js); quem está no 2D não vê diferença. Cores e fontes do protótipo aprovado. */
+   fixado no index.html; o 2D saiu em 13/11/2026). Cores e fontes do protótipo aprovado. */
 
 @font-face { font-family: "Mulish"; src: url("assets/fontes/mulish.woff2") format("woff2"); font-weight: 200 1000; font-style: normal; font-display: swap; }
 @font-face { font-family: "Playfair Display"; src: url("assets/fontes/playfair.woff2") format("woff2"); font-weight: 400 900; font-style: normal; font-display: swap; }

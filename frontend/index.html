@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-visual="3d">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -311,9 +311,9 @@
     <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
   </div>
 
-  <!-- Escritório 2D (Phaser) ou 3D (three.js), conforme o usuário: js/visual.js escreve os scripts certos aqui.
-       Phaser e three.js são servidos pelo próprio sistema (hash conferido): a CSP só aceita scripts locais. -->
-  <script src="js/visual.js"></script>
+  <!-- Escritório 3D (three.js, carregado depois do login por js/escritorio3d/estado.js). O three.js é servido pelo
+       próprio sistema (hash conferido): a CSP só aceita scripts locais. O 2D (Phaser) saiu em 13/11/2026. -->
+  <script src="js/escritorio3d/estado.js"></script>
   <script src="js/formularios.js"></script>
   <script src="js/modelos_pedido.js"></script>
   <script src="js/triagem.js"></script>

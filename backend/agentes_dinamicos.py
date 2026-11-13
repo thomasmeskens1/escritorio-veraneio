@@ -28,7 +28,7 @@ from estado import ANDARES, Agente, Aparencia, Status, andar_do_agente
 
 log = logging.getLogger(__name__)
 
-# Andar -> setor -> mesas que cabem na área do setor (mesmos ids de frontend/js/cenario/setores.js).
+# Andar -> setor -> mesas que cabem na área do setor (mesmos ids de frontend/js/escritorio3d/1_motor.js).
 # O frontend sempre mostra uma mesa vaga e acrescenta outra quando o setor lota (mesasComVaga), até
 # este limite; passou disso, o layout do andar precisa de ajuste.
 # Térreo e Cobertura (Cérebro e estagiários) não recebem agentes novos.

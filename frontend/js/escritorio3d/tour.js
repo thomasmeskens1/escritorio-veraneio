@@ -1,10 +1,9 @@
 // Tour da Recepcionista no prédio 3D (migração do visual, Fase 4, Thomas 13/11/2026).
-// Os passos, os textos, a caixa de diálogo, os destaques e as teclas são os do 2D (js/onboarding.js), sem mudança.
-// Aqui só se troca a parte que dependia do motor Phaser: a Recepcionista anda de verdade pelo prédio 3D (pelo
-// elevador) até ficar ao lado de cada agente, e a câmera vai junto com ela.
+// Os passos, os textos, a caixa de diálogo, os destaques e as teclas ficam em js/onboarding.js. Aqui fica a parte
+// do prédio: a Recepcionista anda pelo 3D (pelo elevador) até ficar ao lado de cada agente, e a câmera vai junto.
 // Ajustes do Thomas (13/11/2026): a câmera acompanha a caminhada; no tour ela anda mais rápido e o elevador é
 // mais curto; no passo do "!" vermelho, o agente mostra o "!" de exemplo enquanto ela explica.
-// Carregado depois da cena (estado.js, SCRIPTS_3D); as funções abaixo substituem as homônimas do onboarding.js.
+// Carregado depois da cena (estado.js, SCRIPTS_3D); o onboarding.js chama criarGuia, removerGuia, levarGuia e focarCamera.
 
 const TOUR_AO_LADO = new THREE.Vector3(0.75, 0, 0.35); // mesmo lugar ao lado do agente usado nas visitas
 const TOUR_ESPERA_CAMERA = reduzir ? 0 : 700;
@@ -44,15 +43,11 @@ function removerGuia() {
   else voltar();
 }
 
-function ocultarRecepcionistaDaMesa() {} // no 3D ela mesma sai da mesa (não há uma cópia)
-
 // A câmera se aproxima dela (o mesmo enquadramento de quando se clica num agente).
 function focarCamera() {
   const guia = onboarding?.guia;
   if (guia) window.E3D.irParaAgente(guia.avatar);
 }
-
-function seguirGuia() {}
 
 // Caminhada do tour, mais rápida que a das visitas.
 function andarNoTour(a, destino, rot, aoChegar) {

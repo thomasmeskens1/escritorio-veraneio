@@ -1,9 +1,8 @@
 // Escritório 3D (migração do visual, Fase 1, Thomas 13/11/2026): ponte entre a cena 3D (js/escritorio3d/1..6) e o
-// sistema. Mantém a MESMA API do escritório 2D (js/escritorio.js) que os outros módulos usam — ANDARES, andarAtual,
+// sistema. Mantém a MESMA API do antigo escritório 2D (removido em 13/11/2026) que os outros módulos usam — ANDARES, andarAtual,
 // estadoAgentes, cena, podeAcessar, dadosAgente, agenteBloqueado, renderizarAndar, aplicarEstado, configurarElevador,
 // atualizarPendencias, iniciarEscritorio e encerrarEscritorio — com as mesmas regras (acesso por andar, agentes
 // bloqueados, pendências, "Em uso", visitas). Só o desenho muda: nada de servidor, dados ou aprendizado é tocado.
-// Quem usa o 2D ou o 3D é decidido por js/visual.js.
 
 // Layout do 2D (nomes e setores locais como fallback); o resto vem do servidor.
 const ANDARES = {
@@ -33,10 +32,8 @@ const SCRIPTS_3D = ['vendor/three-0.158.0.min.js', 'js/escritorio3d/1_motor.js',
   'js/escritorio3d/tour.js'];
 
 let cena = null; // a cena 3D, depois de carregada (os outros módulos só conferem se ela existe)
-let jogo = null; // só existe no 2D (Phaser)
 let andarAtual = 'terreo';
 let estadoAgentes = {}; // último "estado": { andar: { id: {nome, funcao, status, tipo, aparencia, visitando, setor, visual, em_uso, bloqueado} } }
-let posicoesAndar = {}; // usado pelo tour do 2D; no 3D fica vazio
 let carregando3d = null;
 
 // ---------- Regras (iguais às do 2D, js/escritorio.js) ----------
@@ -254,19 +251,97 @@ function aparencia3d(ap, id) {
     a.roupa?.estilo || pega(PALETAS_3D.roupa, 9), cor(a.roupa?.cor, pega(PALETAS_3D.corRoupa, 12)), cor(a.calca, pega(PALETAS_3D.calca, 15)), a.acessorio || 'nenhum'];
 }
 
+// ---------- Mesas vagas (regra do 2D, mesasComVaga): sempre uma vaga por setor com estação ----------
+const chaveMesa = ([x, y]) => `${x},${y}`;
+
+// Na primeira vez, registra as mesas de cada setor e quais já têm estação desenhada (a da placa "Vaga").
+function prepararMesas(andar, g) {
+  if (g.userData.mesas) return;
+  g.userData.mesas = Object.fromEntries(andar.setores.map((s) => [s.id, [...(s.mesas || [])]]));
+  g.userData.comEstacao = new Set(andar.setores.filter((s) => g.userData.placas[s.id] && g.userData.livres[s.id]?.length)
+    .map((s) => chaveMesa(g.userData.livres[s.id][0])));
+}
+
+function montarEstacao(andar, g, setor, mesa) {
+  if (g.userData.comEstacao.has(chaveMesa(mesa))) return;
+  g.userData.comEstacao.add(chaveMesa(mesa));
+  const [x, z] = window.E3D.coord(andar, mesa[0] + 0.5, mesa[1] + 0.5);
+  estacao(g.userData.piso, setor.estacao === 'design' ? 'mesa' : setor.estacao, x, z);
+}
+
+// Mesma regra do 2D: segue o espaçamento da fileira e, no fim dela, abre uma fileira nova dentro da área.
+function acrescentarMesa(andar, g, setor) {
+  const mesas = g.userData.mesas[setor.id];
+  if (!mesas?.length) return false;
+  const [ax, ay, largura, profundidade] = setor.area;
+  const passo = mesas.length > 1 && mesas[1][0] > mesas[0][0] ? mesas[1][0] - mesas[0][0] : 2;
+  const [ux, uy] = mesas[mesas.length - 1];
+  let proxima = [ux + passo, uy];
+  if (proxima[0] > ax + largura - 1) proxima = [mesas[0][0], uy + 2];
+  const ocupadas = new Set(Object.values(g.userData.mesas).flat().map(chaveMesa));
+  andar.agentes.forEach((ag) => ag[5] && ocupadas.add(chaveMesa(ag[5])));
+  if (proxima[1] > ay + profundidade - 1 || ocupadas.has(chaveMesa(proxima))) {
+    console.warn(`Setor "${setor.nome}" sem espaço para mais uma mesa: ajuste o layout do andar.`);
+    return false;
+  }
+  mesas.push(proxima);
+  g.userData.livres[setor.id].push(proxima);
+  return true;
+}
+
+// Cada mesa livre do setor mostra a estação e a placa "Vaga", como no 2D; placas de mesas ocupadas somem.
+function textoVaga(c) {
+  c.fillStyle = '#f5efe3'; c.fillRect(0, 0, 128, 48);
+  c.fillStyle = '#00361b'; c.font = 'bold 26px Georgia'; c.textAlign = 'center'; c.fillText('Vaga', 64, 34);
+}
+function mostrarVaga(andar, g, setor) {
+  g.userData.placasVaga ||= {};
+  const livres = g.userData.livres[setor.id] || [];
+  const inicial = g.userData.placas[setor.id]; // a placa criada com o prédio (4_predio.js) fica com a 1ª vaga
+  if (inicial && !Object.values(g.userData.placasVaga).includes(inicial) && livres[0]) g.userData.placasVaga[`${setor.id}|${chaveMesa(livres[0])}`] = inicial;
+  const ativas = new Set(livres.map((m) => `${setor.id}|${chaveMesa(m)}`));
+  Object.entries(g.userData.placasVaga).forEach(([k, placa]) => { if (k.startsWith(`${setor.id}|`)) placa.visible = ativas.has(k); });
+  livres.forEach((mesa) => {
+    montarEstacao(andar, g, setor, mesa);
+    const k = `${setor.id}|${chaveMesa(mesa)}`;
+    if (g.userData.placasVaga[k]) return;
+    const placa = malha(new THREE.PlaneGeometry(0.5, 0.18), new THREE.MeshBasicMaterial({ map: textura(128, 48, textoVaga) }), 0, 0.95, 0, g.userData.piso, false);
+    placa.rotation.x = -0.4;
+    const [px, pz] = window.E3D.coord(andar, mesa[0] + 0.5, mesa[1] + 0.5);
+    placa.position.set(px, 0.95, pz + 0.95);
+    g.userData.placasVaga[k] = placa;
+  });
+}
+
+// Ao abrir o prédio: todo setor com estação tem ao menos uma vaga, e todas as mesas livres aparecem.
+function garantirVagas() {
+  const E = window.E3D;
+  ANDARES_3D.forEach((andar, n) => {
+    const g = E.grupos[n];
+    prepararMesas(andar, g);
+    andar.setores.filter((s) => s.estacao && s.estacao !== 'nenhuma' && s.mesas?.length).forEach((s) => {
+      if (!g.userData.livres[s.id].length) acrescentarMesa(andar, g, s);
+      mostrarVaga(andar, g, s);
+    });
+  });
+}
+
 function criarAgenteNovo(nivel, id) {
   const E = window.E3D;
   const n = ANDARES_3D.findIndex((x) => x.id === nivel);
   if (n < 0) return;
   const andar = ANDARES_3D[n], g = E.grupos[n], d = dadosAgente(nivel, id);
   AP[id] ||= aparencia3d(estadoAgentes[nivel][id].aparencia, id);
-  const setor = andar.setores.find((s) => s.id === d.setor && g.userData.livres[s.id]?.length)
-    || andar.setores.find((s) => g.userData.livres[s.id]?.length);
+  prepararMesas(andar, g);
+  let setor = andar.setores.find((s) => s.id === d.setor && s.estacao && s.estacao !== 'nenhuma');
+  if (setor && !g.userData.livres[setor.id].length) acrescentarMesa(andar, g, setor);
+  if (!setor || !g.userData.livres[setor.id].length) setor = andar.setores.find((s) => g.userData.livres[s.id]?.length);
   const lugar = setor ? g.userData.livres[setor.id].shift() : [andar.grade / 2, andar.grade / 2];
-  if (setor) { // a placa "Vaga" passa para a próxima mesa livre, ou some
-    const placa = g.userData.placas[setor.id];
-    const proxima = g.userData.livres[setor.id][0];
-    if (placa && proxima) { const [px, pz] = E.coord(andar, proxima[0] + 0.5, proxima[1] + 0.5); placa.position.set(px, 0.95, pz + 0.95); } else if (placa) placa.visible = false;
+  if (setor) {
+    montarEstacao(andar, g, setor, lugar);
+    // Sempre uma mesa vaga por setor, como no 2D (mesasComVaga): se esta era a última, acrescenta outra.
+    if (!g.userData.livres[setor.id].length) acrescentarMesa(andar, g, setor);
+    mostrarVaga(andar, g, setor);
   }
   const [x, z] = E.coord(andar, lugar[0] + 0.5, lugar[1] + 0.5);
   const a = E.avatar(id, d.nome, d.status, '', andar);
@@ -331,6 +406,7 @@ function iniciarEscritorio() {
   carregando3d = SCRIPTS_3D.reduce((fila, src) => fila.then(() => carregarScript(src)), Promise.resolve())
     .then(() => {
       cena = cena3d;
+      garantirVagas();
       sincronizar3d();
     })
     .catch((erro) => {
@@ -342,7 +418,6 @@ function iniciarEscritorio() {
 
 function encerrarEscritorio() {
   estadoAgentes = {};
-  posicoesAndar = {};
   pendenciasAgentes = new Set();
   clearInterval(timerPendencias);
   timerPendencias = null;
