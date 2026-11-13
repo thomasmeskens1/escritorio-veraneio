@@ -29,7 +29,8 @@ const CORES_STATUS = { dormindo: 0x868e96, disponivel: 0x40c057, trabalhando: 0x
 const TIPOS_AGENTE = ['ia', 'sistema', 'estagiario'];
 const VISUAIS = ['humano', 'cerebro'];
 const SCRIPTS_3D = ['vendor/three-0.158.0.min.js', 'js/escritorio3d/1_motor.js', 'js/escritorio3d/2_avatares.js',
-  'js/escritorio3d/3_moveis.js', 'js/escritorio3d/4_predio.js', 'js/escritorio3d/5_camera_reuniao.js', 'js/escritorio3d/6_interacao.js', 'js/escritorio3d/tour.js'];
+  'js/escritorio3d/3_moveis.js', 'js/escritorio3d/4_predio.js', 'js/escritorio3d/5_camera_reuniao.js', 'js/escritorio3d/6_interacao.js', 'js/escritorio3d/7_otimizar.js',
+  'js/escritorio3d/tour.js'];
 
 let cena = null; // a cena 3D, depois de carregada (os outros módulos só conferem se ela existe)
 let jogo = null; // só existe no 2D (Phaser)
@@ -274,6 +275,7 @@ function criarAgenteNovo(nivel, id) {
   g.userData.piso.add(a.raiz);
   a.casa = { x, z: z - 0.12, rot: 0, sentado: a.sentado };
   E.criarIndicadores(a);
+  E.juntarBoneco?.(a); // desempenho (7_otimizar.js)
   const el = document.createElement('button');
   el.type = 'button';
   el.className = 'etiqueta';
