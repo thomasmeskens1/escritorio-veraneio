@@ -170,7 +170,9 @@ CABECALHOS_SEGURANCA = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "same-origin",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    # Microfone só para o próprio site: comando de voz "Olá Vera" (js/voz.js). Com microphone=() o navegador recusava
+    # na hora, sem popup, mesmo com a permissão liberada nas configurações (13/11/2026).
+    "Permissions-Policy": "camera=(), microphone=(self), geolocation=()",
 }
 
 
