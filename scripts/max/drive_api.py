@@ -209,7 +209,9 @@ def sincronizar(banco: str | None = None, enviar=comum.enviar_ao_cerebro, remove
         except Exception as erro:
             falhas.append(f"{item['titulo']}: {erro}")
             continue
-        if texto and enviar([documento(item, texto, empresa)]):
+        if not texto.strip():
+            hashes[ref] = _hash(item)  # arquivo vazio: nada a enviar, e não exporta de novo até ele mudar
+        elif enviar([documento(item, texto, empresa)]):
             hashes[ref] = _hash(item)
             enviados += 1
     sumidos = [ref for ref in hashes if ref.startswith("drive/nativo/") and ref not in atuais]
