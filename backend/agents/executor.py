@@ -240,8 +240,13 @@ def _rodar_no_max(agente_id: str, descricao: str, esperado: str, limite_s: int, 
     etapa = re.search(r"Sua etapa \(\d+\): (.+)", descricao)  # projeto do Gestor: a pergunta é a etapa
     consulta = (etapa.group(1) if etapa else descricao)[:500]
     contexto_cerebro = cerebro.consultar(consulta, agente_id, tarefa_id) if agente_id != cerebro.ID else ""
-    prompt = max_texto.montar_prompt(PERFIS[agente_id], _diretrizes(agente_id, tarefa_id),
-                                     contexto_cerebro, descricao, esperado)
+    extras = _diretrizes(agente_id, tarefa_id)
+    # O Max não tem as ferramentas do painel: o sistema consulta os anúncios antes (tarefa 297, 16/11/2026).
+    tarefa = tarefas.obter(tarefa_id) if tarefa_id and not etapa else None
+    if tarefa and (numeros := ferramentas_painel.dados_para_max(
+            agente_id, tarefa_id, tarefa["texto"] or "", auth.ve_financeiro(tarefa["usuario"]))):
+        extras = "\n\n".join(filter(None, [extras, ferramentas_painel.instrucoes(), numeros]))
+    prompt = max_texto.montar_prompt(PERFIS[agente_id], extras, contexto_cerebro, descricao, esperado)
     trabalho = max_texto.reservar()
     if trabalho is None:
         raise MaxOcupado

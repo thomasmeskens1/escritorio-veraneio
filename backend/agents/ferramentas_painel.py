@@ -135,24 +135,30 @@ def ranking_publicacoes(empresa: str, dias: int = 30, limite: int = 10, metrica:
             "ela mesma, nunca números absolutos entre contas de tamanhos diferentes.\n\n" + "\n\n".join(blocos))
 
 
+def _consultar(nome: str, argumentos: dict, tarefa_id: int, agente_id: str, limite: int = MAX_SAIDA) -> str:
+    """Uma análise do painel (ferramenta ou pré-consulta do Max), registrada para o rodapé de procedência."""
+    chamada = ANALISES[nome][2]
+    try:
+        if chamada is None:  # ranking por conta: leitura do próprio escritório, na empresa da tarefa
+            import cerebro
+
+            resposta = ranking_publicacoes(cerebro.empresa_da_tarefa(tarefa_id), **argumentos)
+        else:
+            resposta = str(chamada(_db(), **argumentos))
+    except Exception as erro:
+        return f"Não foi possível ler o painel agora: {erro}"
+    if tarefa_id:  # quem consultou de fato (antes ficava sempre "analista_metricas")
+        tarefas.registrar_evento(tarefa_id, "consulta_painel", agente_id,
+                                 detalhe=f"{nome}({', '.join(f'{k}={v}' for k, v in argumentos.items())})")
+    return resposta[:limite] + ("\n[… resposta cortada: peça um período menor ou uma campanha específica]"
+                                if len(resposta) > limite else "")
+
+
 def _ferramenta(nome: str, descricao: str, parametros: dict, chamada, tarefa_id: int, agente_id: str) -> BaseTool:
     esquema = create_model(f"_{nome}", **parametros) if parametros else create_model(f"_{nome}")
 
     def _run(self, **argumentos) -> str:
-        try:
-            if chamada is None:  # ranking por conta: leitura do próprio escritório, na empresa da tarefa
-                import cerebro
-
-                resposta = ranking_publicacoes(cerebro.empresa_da_tarefa(tarefa_id), **argumentos)
-            else:
-                resposta = str(chamada(_db(), **argumentos))
-        except Exception as erro:
-            return f"Não foi possível ler o painel agora: {erro}"
-        if tarefa_id:  # quem consultou de fato (antes ficava sempre "analista_metricas")
-            tarefas.registrar_evento(tarefa_id, "consulta_painel", agente_id,
-                                     detalhe=f"{nome}({', '.join(f'{k}={v}' for k, v in argumentos.items())})")
-        return resposta[:MAX_SAIDA] + ("\n[… resposta cortada: peça um período menor ou uma campanha específica]"
-                                       if len(resposta) > MAX_SAIDA else "")
+        return _consultar(nome, argumentos, tarefa_id, agente_id)
 
     classe = type(f"Ferramenta_{nome}", (BaseTool,), {"__module__": __name__,
                                                       "__annotations__": {"name": str, "description": str,
@@ -196,3 +202,48 @@ def para(agente_id: str, tarefa_id: int = 0, financeiro: bool = False) -> list[B
     return [_ferramenta(nome, descricao, parametros, chamada, tarefa_id, agente_id)
             for nome, (descricao, parametros, chamada) in ANALISES.items()
             if nome in DO_AGENTE[agente_id] and (financeiro or nome not in FINANCEIRAS)]
+
+
+# ---------- Rota do Max (Thomas, 16/11/2026, tarefa 297) ----------
+# O Claude Code do PC não tem as ferramentas do painel: o Gestor de Tráfego respondia só com o resumo do Cérebro
+# (títulos e palavras, sem gasto, cliques nem conversões). Na rota do Max o próprio sistema faz as consultas de
+# anúncios antes e entrega os números junto com o pedido, com a mesma trava financeira das ferramentas.
+MAX_SAIDA_MAX = 30000  # o detalhe de uma campanha do Google passa de 20 mil caracteres; o Max tem contexto de sobra
+MAX_CAMPANHAS = 3
+DIAS_NO_PEDIDO = re.compile(r"(\d{1,3})\s*dias", re.I)
+_TIPO_CAMPANHA = re.compile(r"^- (.+?) \([A-Z_]+, ", re.M)  # linha do resumo: "- [AM] [S] Ano Novo (SEARCH, ativa…"
+
+
+def _palavras(texto: str) -> set[str]:
+    import unicodedata
+
+    sem_acento = unicodedata.normalize("NFKD", texto.lower()).encode("ascii", "ignore").decode()
+    return {p for p in re.findall(r"[a-z0-9]+", re.sub(r"\[[^\]]*\]", " ", sem_acento)) if len(p) >= 3}
+
+
+def campanhas_citadas(pedido: str, resumo_google: str) -> list[str]:
+    """Campanhas do Google Ads citadas no pedido, em qualquer ordem ("Férias e Feriados" = "[AM] [S] Feriados e
+    Férias"): todas as palavras do nome (sem as etiquetas entre colchetes) aparecem no pedido."""
+    no_pedido = _palavras(pedido)
+    citadas = []
+    for nome in _TIPO_CAMPANHA.findall(resumo_google):
+        palavras = _palavras(nome)
+        if palavras and palavras <= no_pedido and nome not in citadas:
+            citadas.append(nome)
+    return citadas[:MAX_CAMPANHAS]
+
+
+def dados_para_max(agente_id: str, tarefa_id: int, pedido: str, financeiro: bool) -> str:
+    """Números de anúncio do painel para o pedido do Max (Gestor de Tráfego, só Diretoria); "" se não se aplica."""
+    if agente_id != "gestor_trafego" or not financeiro or not disponivel():
+        return ""
+    achado = DIAS_NO_PEDIDO.search(pedido)
+    dias = min(90, max(7, int(achado.group(1)))) if achado else 30
+    consulta = lambda nome, **argumentos: _consultar(nome, argumentos, tarefa_id, agente_id, MAX_SAIDA_MAX)
+    resumo = consulta("analisar_google_ads", dias=dias, campanha="")
+    blocos = [consulta("analisar_trafego_pago", dias=dias, limite=15), resumo]
+    blocos += [consulta("analisar_google_ads", dias=dias, campanha=nome) for nome in campanhas_citadas(pedido, resumo)]
+    blocos += [consulta("analisar_impulsionamentos", dias=dias, limite=10), consulta("analisar_crm", dias=dias)]
+    return (f"NÚMEROS DO PAINEL ANALÍTICO (consultados agora pelo sistema, últimos {dias} dias). Use estes números; "
+            "se faltar algum recorte (outra campanha ou outro período), diga qual, sem estimar:\n\n"
+            + "\n\n".join(blocos))
