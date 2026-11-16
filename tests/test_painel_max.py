@@ -60,3 +60,18 @@ def test_consulta_pelo_id_sem_repetir_a_campanha(monkeypatch):
     fp.dados_para_max("gestor_trafego", 0, "Feriados e Férias, anúncio 200890088544~804132974582", financeiro=True)
     google = [a["campanha"] for n, a in feitas if n == "analisar_google_ads"]
     assert google == ["", "200890088544~804132974582"]
+
+
+def test_id_do_meta_no_pedido():  # anúncio do Meta pelo ID do Gerenciador (15 a 18 dígitos)
+    pedido = "Analise o anúncio 120251443202050431 (id 120251443202050431) e o 200890088544~804132974582; tel 11999998888"
+    assert fp.ids_meta_citados(pedido) == ["120251443202050431"]
+    assert fp.ids_citados(pedido) == ["200890088544~804132974582"]
+
+
+def test_consulta_o_anuncio_do_meta(monkeypatch):
+    feitas = []
+    monkeypatch.setattr(fp, "disponivel", lambda: True)
+    monkeypatch.setattr(fp, "_consultar", lambda nome, argumentos, *_a, **_k: feitas.append((nome, argumentos)) or "")
+    fp.dados_para_max("gestor_trafego", 0, "anúncio 120251443202050431 nos últimos 14 dias", financeiro=True)
+    assert ("analisar_anuncio_meta", {"ad_id": "120251443202050431", "dias": 14}) in feitas
+    assert "analisar_anuncio_meta" in fp.FINANCEIRAS

@@ -67,6 +67,11 @@ ANALISES = {
                             "pesquisa, cidades e oportunidades.",
                             {"dias": _DIAS, "campanha": (str, Field("", description="Id ou parte do nome da campanha, ou o ID de um anúncio (grupo~anúncio) ou grupo; vazio = todas"))},
                             lambda db, dias, campanha: db.ler_google_ads(dias, campanha)),
+    "analisar_anuncio_meta": ("Um anúncio do Meta pelo ID do Gerenciador (15 a 18 dígitos): campanha, conjunto, texto, "
+                              "números do período e desde o início, leads do CRM, comparação com os outros anúncios "
+                              "da campanha e dia a dia.",
+                              {"ad_id": (str, Field(description="ID do anúncio no Gerenciador do Meta")), "dias": _DIAS},
+                              lambda db, ad_id, dias: db.ler_anuncio_meta(ad_id, dias)),
     "analisar_crm": ("CRM (Monday): leads por origem e tipo, qualificação por campanha, vendas, receita via tráfego, "
                      "ROAS e ROI.", {"dias": _DIAS}, lambda db, dias: db.ler_crm(dias)),
     "analisar_brevo": ("E-mail marketing (Brevo): campanhas, entregues, abertura, cliques, descadastros e bounces.",
@@ -189,7 +194,8 @@ def instrucoes() -> str:
 
 # Vendas, receita, investimento em mídia, custo por resultado, ROAS/ROI: só a Diretoria (Thomas, 29/10/2026). As
 # métricas de redes sociais e de e-mail valem para todos.
-FINANCEIRAS = {"analisar_impulsionamentos", "analisar_trafego_pago", "analisar_google_ads", "analisar_crm"}
+FINANCEIRAS = {"analisar_impulsionamentos", "analisar_trafego_pago", "analisar_google_ads", "analisar_anuncio_meta",
+               "analisar_crm"}
 # Gestor de Tráfego (levantamento de 31/10/2026, gestor_trafego-01): os números de anúncio do painel, com a mesma trava
 # financeira. Abrir uma versão sem reais para a equipe depende da decisão 11 do Thomas (gestor_trafego-02).
 DO_AGENTE = {"analista_metricas": set(ANALISES), "gestor_trafego": FINANCEIRAS}
@@ -213,7 +219,9 @@ MAX_CAMPANHAS = 3
 DIAS_NO_PEDIDO = re.compile(r"(\d{1,3})\s*dias", re.I)
 _TIPO_CAMPANHA = re.compile(r"^- (.+?) \([A-Z_]+, ", re.M)  # linha do resumo: "- [AM] [S] Ano Novo (SEARCH, ativa…"
 # ID de anúncio do Google Ads como a plataforma mostra ("200890088544~804132974582") ou "ID 804132974582" (tarefa 298)
-ID_ANUNCIO = re.compile(r"\b\d{6,}~\d{6,}\b|(?<=\bid)[\s:#]*\d{9,}\b", re.I)
+ID_ANUNCIO = re.compile(r"\b\d{6,}~\d{6,}\b|(?<=\bid)[\s:#]*\d{9,14}\b", re.I)
+# ID de anúncio do Meta: 15 a 18 dígitos no Gerenciador (ex.: 120251443202050431); telefone e CNPJ têm menos
+ID_META = re.compile(r"(?<![\d~])\d{15,18}(?![\d~])")
 
 
 def _palavras(texto: str) -> set[str]:
@@ -245,6 +253,11 @@ def ids_citados(pedido: str) -> list[str]:
     return vistos
 
 
+def ids_meta_citados(pedido: str) -> list[str]:
+    """IDs de anúncio do Meta no pedido, na ordem, sem repetir."""
+    return list(dict.fromkeys(ID_META.findall(pedido)))
+
+
 def dados_para_max(agente_id: str, tarefa_id: int, pedido: str, financeiro: bool) -> str:
     """Números de anúncio do painel para o pedido do Max (Gestor de Tráfego, só Diretoria); "" se não se aplica."""
     if agente_id != "gestor_trafego" or not financeiro or not disponivel():
@@ -260,6 +273,7 @@ def dados_para_max(agente_id: str, tarefa_id: int, pedido: str, financeiro: bool
     blocos += por_id
     blocos += [consulta("analisar_google_ads", dias=dias, campanha=nome) for nome in campanhas_citadas(pedido, resumo)
                if not any(f"Google Ads · {nome} (" in b for b in por_id)]
+    blocos += [consulta("analisar_anuncio_meta", ad_id=i, dias=dias) for i in ids_meta_citados(pedido)[:MAX_CAMPANHAS]]
     blocos += [consulta("analisar_impulsionamentos", dias=dias, limite=10), consulta("analisar_crm", dias=dias)]
     return (f"NÚMEROS DO PAINEL ANALÍTICO (consultados agora pelo sistema, últimos {dias} dias). Use estes números; "
             "se faltar algum recorte (outra campanha ou outro período), diga qual, sem estimar:\n\n"
