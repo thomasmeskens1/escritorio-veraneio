@@ -292,7 +292,16 @@ def autorizar() -> None:
     print(f"Escolha a conta que vê o drive compartilhado '{RAIZ}' e aceite a permissão de LEITURA do Drive.")
     print("O Escritório usa este login SÓ para ler: nada é criado, alterado ou apagado no seu Drive.\n")
     credenciais = InstalledAppFlow.from_client_secrets_file(str(CLIENTE), [ESCOPO]).run_local_server(port=0)
-    drives = _get("drives", {"pageSize": 100}, credenciais.token).get("drives", [])
+    try:
+        drives = _get("drives", {"pageSize": 100}, credenciais.token).get("drives", [])
+    except RuntimeError as erro:
+        if "SERVICE_DISABLED" in str(erro) or "has not been used" in str(erro) or "disabled" in str(erro):
+            print("\nERRO: a API do Google Drive está desativada no projeto do painel. Ative em\n"
+                  "  https://console.cloud.google.com/apis/library/drive.googleapis.com\n"
+                  "(mesmo projeto do painel), espere 2 minutos e rode este comando de novo. Nada foi gravado.")
+        else:
+            print(f"\nERRO ao conferir o Drive: {erro}\nNada foi gravado.")
+        return
     if not any(d.get("name") == RAIZ for d in drives):
         print(f"\nERRO: esta conta não vê o drive '{RAIZ}'. Nada foi gravado; rode de novo com a conta certa.")
         return
