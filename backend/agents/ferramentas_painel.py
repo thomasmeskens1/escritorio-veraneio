@@ -65,7 +65,7 @@ ANALISES = {
     "analisar_google_ads": ("Google Ads a fundo (até 90 dias). Sem campanha: resumo por campanha com leads/vendas do CRM. "
                             "Com campanha (id ou parte do nome): grupos, anúncios, palavras-chave (QS), termos de "
                             "pesquisa, cidades e oportunidades.",
-                            {"dias": _DIAS, "campanha": (str, Field("", description="Id ou parte do nome; vazio = todas"))},
+                            {"dias": _DIAS, "campanha": (str, Field("", description="Id ou parte do nome da campanha, ou o ID de um anúncio (grupo~anúncio) ou grupo; vazio = todas"))},
                             lambda db, dias, campanha: db.ler_google_ads(dias, campanha)),
     "analisar_crm": ("CRM (Monday): leads por origem e tipo, qualificação por campanha, vendas, receita via tráfego, "
                      "ROAS e ROI.", {"dias": _DIAS}, lambda db, dias: db.ler_crm(dias)),
@@ -212,6 +212,8 @@ MAX_SAIDA_MAX = 30000  # o detalhe de uma campanha do Google passa de 20 mil car
 MAX_CAMPANHAS = 3
 DIAS_NO_PEDIDO = re.compile(r"(\d{1,3})\s*dias", re.I)
 _TIPO_CAMPANHA = re.compile(r"^- (.+?) \([A-Z_]+, ", re.M)  # linha do resumo: "- [AM] [S] Ano Novo (SEARCH, ativa…"
+# ID de anúncio do Google Ads como a plataforma mostra ("200890088544~804132974582") ou "ID 804132974582" (tarefa 298)
+ID_ANUNCIO = re.compile(r"\b\d{6,}~\d{6,}\b|(?<=\bid)[\s:#]*\d{9,}\b", re.I)
 
 
 def _palavras(texto: str) -> set[str]:
@@ -233,6 +235,16 @@ def campanhas_citadas(pedido: str, resumo_google: str) -> list[str]:
     return citadas[:MAX_CAMPANHAS]
 
 
+def ids_citados(pedido: str) -> list[str]:
+    """IDs de anúncio do Google Ads no pedido, na ordem, sem repetir."""
+    vistos = []
+    for achado in ID_ANUNCIO.findall(pedido):
+        i = achado.strip(" \t:#")
+        if i not in vistos:
+            vistos.append(i)
+    return vistos
+
+
 def dados_para_max(agente_id: str, tarefa_id: int, pedido: str, financeiro: bool) -> str:
     """Números de anúncio do painel para o pedido do Max (Gestor de Tráfego, só Diretoria); "" se não se aplica."""
     if agente_id != "gestor_trafego" or not financeiro or not disponivel():
@@ -242,7 +254,12 @@ def dados_para_max(agente_id: str, tarefa_id: int, pedido: str, financeiro: bool
     consulta = lambda nome, **argumentos: _consultar(nome, argumentos, tarefa_id, agente_id, MAX_SAIDA_MAX)
     resumo = consulta("analisar_google_ads", dias=dias, campanha="")
     blocos = [consulta("analisar_trafego_pago", dias=dias, limite=15), resumo]
-    blocos += [consulta("analisar_google_ads", dias=dias, campanha=nome) for nome in campanhas_citadas(pedido, resumo)]
+    # Anúncio citado pelo ID: o detalhe da campanha dele com o anúncio destacado (já cobre a campanha, sem repetir)
+    por_id = [consulta("analisar_google_ads", dias=dias, campanha=i)
+              for i in ids_citados(pedido)[:MAX_CAMPANHAS]]
+    blocos += por_id
+    blocos += [consulta("analisar_google_ads", dias=dias, campanha=nome) for nome in campanhas_citadas(pedido, resumo)
+               if not any(f"Google Ads · {nome} (" in b for b in por_id)]
     blocos += [consulta("analisar_impulsionamentos", dias=dias, limite=10), consulta("analisar_crm", dias=dias)]
     return (f"NÚMEROS DO PAINEL ANALÍTICO (consultados agora pelo sistema, últimos {dias} dias). Use estes números; "
             "se faltar algum recorte (outra campanha ou outro período), diga qual, sem estimar:\n\n"

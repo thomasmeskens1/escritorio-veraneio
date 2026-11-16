@@ -36,3 +36,27 @@ def test_consulta_campanha_citada_e_periodo_do_pedido(monkeypatch):
     assert {n for n, _ in feitas} == {"analisar_trafego_pago", "analisar_google_ads", "analisar_impulsionamentos",
                                       "analisar_crm"}
     assert "últimos 60 dias" in texto and "[analisar_crm]" in texto
+
+
+def test_id_do_anuncio_no_pedido():  # tarefa 298: anúncio citado pelo ID que o Google Ads mostra
+    pedido = "conjunto Feriados\nAnúncio responsivo 200890088544~804132974582 e o ID 804018350145, tel 48999998888"
+    assert fp.ids_citados(pedido) == ["200890088544~804132974582", "804018350145"]
+    assert fp.ids_citados("como vai a campanha de Ano Novo nos últimos 30 dias?") == []
+
+
+def test_consulta_pelo_id_sem_repetir_a_campanha(monkeypatch):
+    feitas = []
+
+    def consultar(nome, argumentos, tarefa_id, agente_id, limite=fp.MAX_SAIDA):
+        feitas.append((nome, argumentos))
+        if nome == "analisar_google_ads" and not argumentos.get("campanha"):
+            return RESUMO
+        if nome == "analisar_google_ads":
+            return "ANÚNCIO PEDIDO: ...\n\nGoogle Ads · [AM] [S] Feriados e Férias (SEARCH, ativa) ..."
+        return f"[{nome}]"
+
+    monkeypatch.setattr(fp, "disponivel", lambda: True)
+    monkeypatch.setattr(fp, "_consultar", consultar)
+    fp.dados_para_max("gestor_trafego", 0, "Feriados e Férias, anúncio 200890088544~804132974582", financeiro=True)
+    google = [a["campanha"] for n, a in feitas if n == "analisar_google_ads"]
+    assert google == ["", "200890088544~804132974582"]
