@@ -44,6 +44,7 @@ import pasta_referencias
 import pptx_diferenca
 import pptx_receita
 import planilha_lodges
+import drive_api
 import redes_empresas
 import site_casaveraneio
 import sites_empresas
@@ -939,6 +940,7 @@ def catalogo_em_segundo_plano() -> None:
             catalogo_lodges.rodar()
             acervo_marketing.rodar()  # LODGES por categoria e SABORES CV do MARKETING (Casa Veraneio)
             planilha_lodges.rodar()
+            drive_api.rodar()  # Docs e Planilhas nativos do Google (LODGES, MARKETING, CORPORATIVO), pela API
             sites_empresas.rodar()  # Corporativo e Casa Vero, cada um com a sua etiqueta de empresa
             catalogo_fotos_empresas.rodar()  # fotos da Casa Vero e do Corporativo (índices em CÉREBRO)
             redes_empresas.rodar()  # YouTube da Casa Vero (falas dos tours)
