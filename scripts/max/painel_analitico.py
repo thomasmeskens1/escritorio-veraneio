@@ -379,15 +379,22 @@ def _ficha_concorrente(banco: sqlite3.Connection, c: sqlite3.Row, empresa: str) 
 def concorrentes(banco: sqlite3.Connection) -> list[dict]:
     if not _tabela(banco, "concorrentes"):
         return []
+    # Um concorrente pode ser de mais de uma empresa (pedido de 18/11/2026): a tabela concorrentes_empresas (usuario,
+    # empresa) do painel manda; sem ela, vale a coluna concorrentes.empresa. Cada empresa recebe a sua própria ficha.
+    vinculos = defaultdict(set)
+    if _tabela(banco, "concorrentes_empresas"):
+        for v in banco.execute("SELECT usuario, empresa FROM concorrentes_empresas"):
+            vinculos[v["usuario"]].add(v["empresa"])
     documentos, por_empresa = [], defaultdict(list)
     for c in banco.execute("SELECT * FROM concorrentes ORDER BY usuario"):
-        empresa = EMPRESA_CONCORRENTE.get(c["empresa"] or "veraneio")
-        if not empresa:
-            continue
-        por_empresa[empresa].append(c)
-        documentos.append(_doc(empresa, f"analytics/concorrentes/{c['usuario']}",
-                               f"Concorrente: {c['nome'] or c['usuario']} (@{c['usuario']})",
-                               _ficha_concorrente(banco, c, empresa)))
+        for chave in sorted(vinculos.get(c["usuario"]) or {c["empresa"] or "veraneio"}):
+            empresa = EMPRESA_CONCORRENTE.get(chave)
+            if not empresa:
+                continue
+            por_empresa[empresa].append(c)
+            documentos.append(_doc(empresa, f"analytics/concorrentes/{c['usuario']}",
+                                   f"Concorrente: {c['nome'] or c['usuario']} (@{c['usuario']})",
+                                   _ficha_concorrente(banco, c, empresa)))
     for empresa, lista in por_empresa.items():
         documentos.append(_doc(empresa, "analytics/concorrentes", "Concorrentes monitorados",
                                f"Lista oficial dos concorrentes de {NOME_EMPRESA[empresa]} acompanhados no painel (cadastro "

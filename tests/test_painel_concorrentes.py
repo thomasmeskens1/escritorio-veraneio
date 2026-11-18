@@ -73,6 +73,19 @@ def test_ficha_e_indice_por_empresa():
     assert "Casas de Praia (@casasdepraia)" in indice and "Eventos X" not in indice
 
 
+def test_concorrente_de_duas_empresas():
+    p = _modulo()
+    b = _banco()
+    b.execute("CREATE TABLE concorrentes_empresas (usuario TEXT, empresa TEXT)")
+    b.executemany("INSERT INTO concorrentes_empresas VALUES (?, ?)",
+                  [("casasdepraia", "veraneio"), ("casasdepraia", "vero"), ("eventosx", "corp")])
+    refs = {d["fonte_ref"]: d for d in p.concorrentes(b)}
+    assert "analytics/casa_veraneio/concorrentes/casasdepraia" in refs
+    vero = refs["analytics/casa_vero/concorrentes/casasdepraia"]
+    assert vero["empresa"] == "casa_vero" and "CONCORRENTE de Casa Vero Imóveis" in vero["conteudo"]
+    assert "Casas de Praia" in refs["analytics/casa_vero/concorrentes"]["conteudo"]
+
+
 def test_concorrente_removido_sai_do_cerebro(tmp_path):
     p = _modulo()
     arquivo = tmp_path / "concorrentes.json"
