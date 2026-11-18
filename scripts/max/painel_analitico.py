@@ -6,6 +6,8 @@ pelas APIs oficiais (Instagram e Meta Ads com o token da Meta, YouTube, Google A
 - Cada publicação do Instagram vira um documento (legenda + métricas), na empresa da conta. Fonte "rede".
 - Resumos por empresa (fonte "dados"): desempenho do Instagram e do YouTube, tráfego pago (Meta e Google Ads, com
   os textos de anúncio e as buscas que convertem), CRM (leads e vendas por mês, só números) e e-mail marketing.
+- Concorrentes cadastrados no Laboratório (18/11/2026): uma ficha por concorrente e um índice, na empresa de quem ele é
+  concorrente; quem sai do painel sai do Cérebro.
 Nada pessoal entra no Cérebro: sem nomes, e-mails ou telefones de leads e clientes (só contagens e somas).
 Marcas (regras do painel, INSTRUCOES_AGENTE.md): Corporativo = conta "Casa Corp", campanhas com "Corp" no nome,
 leads do tipo "Corporativo" e o Funil Corp; impulsionamento = conta do Instagram do post.
@@ -300,10 +302,127 @@ def email(banco: sqlite3.Connection) -> list[dict]:
     return documentos
 
 
+# --- Concorrentes (Marketing › Laboratório › Concorrentes) -------------------------------------------------------
+# Pedido do Thomas em 18/11/2026: cada concorrente cadastrado no painel vira conhecimento da empresa de quem ele é
+# concorrente. Um documento por concorrente (perfil, ritmo, o que engaja e anúncios no ar) e um índice por empresa.
+# Removido no painel → desativado no Cérebro (refs enviadas ficam em ARQUIVO_CONCORRENTES).
+EMPRESA_CONCORRENTE = {"veraneio": "casa_veraneio", "corp": "cv_corporativo", "vero": "casa_vero"}
+ARQUIVO_CONCORRENTES = comum.DADOS / "concorrentes_no_cerebro.json"
+DIAS_RITMO = 30
+
+
+def _tabela(banco: sqlite3.Connection, nome: str) -> bool:
+    return bool(banco.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (nome,)).fetchone())
+
+
+def _engajamento(p) -> int:
+    return (p["curtidas"] or 0) + (p["comentarios"] or 0)
+
+
+def _ficha_concorrente(banco: sqlite3.Connection, c: sqlite3.Row, empresa: str) -> str:
+    u = c["usuario"]
+    partes = [f"CONCORRENTE de {NOME_EMPRESA[empresa]} (NÃO é uma empresa do grupo; é referência de mercado). "
+              f"Monitorado no painel desde {(c['adicionado_em'] or '')[:10]}.",
+              f"Perfil: {c['nome'] or u} · Instagram https://www.instagram.com/{u}/"
+              + (f" · site {c['site']}" if c["site"] else "")]
+    if c["biografia"]:
+        partes.append(f"Bio do Instagram: {_legenda(c['biografia'], 400)}")
+    dias = banco.execute("SELECT data, seguidores, posts FROM concorrentes_diario WHERE usuario = ? ORDER BY data",
+                         (u,)).fetchall()
+    if dias:
+        ultimo = dias[-1]
+        linha = f"Seguidores em {ultimo['data']}: {_n(ultimo['seguidores'])} · {_n(ultimo['posts'])} posts no perfil"
+        antes = next((d for d in dias if d["data"] >= (date.fromisoformat(ultimo["data"][:10]) - timedelta(days=30)).isoformat()), None)
+        if antes and antes is not ultimo and antes["seguidores"] is not None and ultimo["seguidores"] is not None:
+            linha += f" (desde {antes['data']}: {ultimo['seguidores'] - antes['seguidores']:+,}".replace(",", ".") + " seguidores)"
+        partes.append(linha + ".")
+    posts = banco.execute("SELECT * FROM concorrentes_posts WHERE usuario = ? ORDER BY publicado_em DESC", (u,)).fetchall()
+    if posts:
+        recentes = [p for p in posts if (p["publicado_em"] or "") >= (date.today() - timedelta(days=DIAS_RITMO)).isoformat()]
+        formatos = defaultdict(list)
+        for p in posts:
+            formatos[p["tipo"] or "—"].append(p)
+        partes.append(f"Ritmo: {len(recentes)} posts nos últimos {DIAS_RITMO} dias (amostra lida: os {len(posts)} mais "
+                      f"recentes, de {posts[-1]['publicado_em'][:10]} a {posts[0]['publicado_em'][:10]}).")
+        partes.append("Por formato (posts · média de curtidas+comentários" + (" · média de visualizações" if any(
+            p["visualizacoes"] for p in posts) else "") + "): " + "; ".join(
+            f"{tipo} {len(l)} · {_n(sum(map(_engajamento, l)) / len(l))}"
+            + (f" · {_n(sum(p['visualizacoes'] or 0 for p in l) / len(l))}" if any(p["visualizacoes"] for p in l) else "")
+            for tipo, l in sorted(formatos.items(), key=lambda par: -len(par[1]))))
+        partes.append("Posts que mais engajaram (curtidas+comentários):\n" + "\n".join(
+            f"- {p['publicado_em'][:10]} {p['tipo']}: {_n(_engajamento(p))} — \"{_legenda(p['legenda'], 160)}\" ({p['link']})"
+            for p in sorted(posts, key=_engajamento, reverse=True)[:6]))
+    if _tabela(banco, "concorrentes_anuncios"):
+        anuncios, vistos = [], set()
+        for a in banco.execute("SELECT * FROM concorrentes_anuncios WHERE usuario = ? AND ativo = 1 "
+                               "ORDER BY COALESCE(inicio, '9999')", (u,)):
+            chave = (a["plataforma"], a["titulo"], a["texto"])  # o mesmo anúncio em várias variações conta uma vez
+            if chave not in vistos:
+                vistos.add(chave)
+                anuncios.append(a)
+        if anuncios:
+            plataformas = defaultdict(int)
+            for a in anuncios:
+                plataformas[a["plataforma"]] += 1
+            partes.append("Anúncios no ar na última leitura (" + ", ".join(
+                f"{'Meta' if k == 'meta' else 'Google'}: {v}" for k, v in plataformas.items()) + "). Os mais antigos no ar "
+                "(anúncio que dura costuma ser o que funciona):\n" + "\n".join(
+                f"- {'Meta' if a['plataforma'] == 'meta' else 'Google'} {a['formato'] or ''}, desde {(a['inicio'] or '?')[:10]}"
+                + (f" ({a['dias_exibido']} dias)" if a["dias_exibido"] else "")
+                + f": {_legenda(' · '.join(t for t in (a['titulo'], a['texto'], a['chamada']) if t), 240)}"
+                + (f" → {a['destino']}" if a["destino"] else "") for a in anuncios[:8]))
+        elif c["meta_page_id"] or c["google_dominio"]:
+            partes.append("Anúncios: nenhum no ar na última leitura.")
+    return "\n".join(partes)
+
+
+def concorrentes(banco: sqlite3.Connection) -> list[dict]:
+    if not _tabela(banco, "concorrentes"):
+        return []
+    documentos, por_empresa = [], defaultdict(list)
+    for c in banco.execute("SELECT * FROM concorrentes ORDER BY usuario"):
+        empresa = EMPRESA_CONCORRENTE.get(c["empresa"] or "veraneio")
+        if not empresa:
+            continue
+        por_empresa[empresa].append(c)
+        documentos.append(_doc(empresa, f"analytics/concorrentes/{c['usuario']}",
+                               f"Concorrente: {c['nome'] or c['usuario']} (@{c['usuario']})",
+                               _ficha_concorrente(banco, c, empresa)))
+    for empresa, lista in por_empresa.items():
+        documentos.append(_doc(empresa, "analytics/concorrentes", "Concorrentes monitorados",
+                               f"Lista oficial dos concorrentes de {NOME_EMPRESA[empresa]} acompanhados no painel (cadastro "
+                               "do Thomas no Laboratório). Use estes nomes ao comparar com o mercado; cada um tem uma ficha "
+                               "\"Concorrente: ...\" com posts e anúncios.\n" + "\n".join(
+                                   f"- {c['nome'] or c['usuario']} (@{c['usuario']})" + (f" · {c['site']}" if c["site"] else "")
+                                   for c in lista)))
+    return documentos
+
+
+def _refs_concorrentes(lista: list[dict]) -> set[str]:
+    return {d["fonte_ref"] for d in lista if "/concorrentes" in d["fonte_ref"]}
+
+
+def remover_concorrentes_antigos(atuais: set[str], arquivo: Path = ARQUIVO_CONCORRENTES, remover=None) -> None:
+    """Desativa no Cérebro os concorrentes (ou índices de empresa) que saíram do painel desde o último envio."""
+    remover = remover or comum.remover_do_cerebro
+    try:
+        antes = set(comum.json.loads(arquivo.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        antes = set()
+    sumiram = sorted(antes - atuais)
+    if sumiram and not remover("dados", sumiram):
+        return  # tenta de novo no próximo ciclo, sem esquecer as refs
+    arquivo.parent.mkdir(parents=True, exist_ok=True)
+    arquivo.write_text(comum.json.dumps(sorted(atuais), ensure_ascii=False), encoding="utf-8")
+    if sumiram:
+        log(f"Painel analítico: {len(sumiram)} concorrente(s) removido(s) do Cérebro.")
+
+
 def documentos() -> list[dict]:
     banco = _banco()
     try:
-        return [*instagram(banco), *youtube(banco), *meta_ads(banco), *google_ads(banco), *crm(banco), *email(banco)]
+        return [*instagram(banco), *youtube(banco), *meta_ads(banco), *google_ads(banco), *crm(banco), *email(banco),
+                *concorrentes(banco)]
     finally:
         banco.close()
 
@@ -318,6 +437,8 @@ def rodar() -> None:
         log(f"Painel analítico: não foi possível ler o banco ({erro}).")
         return
     enviados = all([comum.enviar_ao_cerebro(lista[i:i + LOTE]) for i in range(0, len(lista), LOTE)])
+    if enviados:
+        remover_concorrentes_antigos(_refs_concorrentes(lista))
     log(f"Painel analítico: {len(lista)} documento(s) para o Cérebro{'' if enviados else ' (envio adiado)'}.")
 
 
